@@ -1,6 +1,6 @@
 # Electronic Catalog Maker
 
-[![Author: alexandrkotov](https://img.shields.io/badge/Author-alexandrkotov-blueviolet)](https://github.com/alexandrkotov)
+[![Author](https://img.shields.io/badge/Author-Alexander%20Kotov-181717?logo=github&logoColor=white)](https://github.com/alexandrkotov)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
