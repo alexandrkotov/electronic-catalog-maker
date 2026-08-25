@@ -8,6 +8,7 @@ import {
   createEmptyCatalog,
   deleteLink,
   exportCatalog,
+  findLinkConflicts,
   initSqlite,
   listImages,
   listLinksForImage,
@@ -16,10 +17,10 @@ import {
   readMeta,
   updateLink,
   updateLinkPosition,
-  UniquenessError,
   type CatalogImage,
   type CatalogLink,
   type Database,
+  type LinkConflict,
   type SqlJsStatic,
 } from "@ecm/shared";
 import { slugify } from "./slugify";
@@ -46,6 +47,17 @@ let openedFileHandle: FileSystemFileHandle | null = null;
 // render() can restore the pan position instead of losing it on every
 // unrelated update (adding a hotspot, editing a link, zooming, ...).
 let lastRenderedImageId: number | null = null;
+// In-app replacement for window.confirm(): browsers can silently auto-deny
+// confirm()/alert() after a page has shown several of them without a fresh
+// user gesture in between (Chrome's dialog-spam guard), which made "Save
+// anyway?" fail silently with no visible error. This never touches the
+// browser's native dialog API, so it can't be suppressed that way.
+let pendingConfirmation: { message: string; onConfirm: () => void } | null = null;
+
+function askConfirm(message: string, onConfirm: () => void) {
+  pendingConfirmation = { message, onConfirm };
+  render();
+}
 
 async function boot() {
   app.innerHTML = `<p style="padding:1rem">Loading SQLite (sql.js)…</p>`;
@@ -310,48 +322,78 @@ function centerOnHotspot(linkId: number) {
     ?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
 }
 
+/** A repeated name/url is legitimate (the same part drawn at several positions on one diagram). */
+function conflictMessage(conflicts: LinkConflict[]): string {
+  const lines = conflicts.map(
+    (c) => `${c.field === "name" ? "Name" : "URL"} "${c.value}" is already used by another hotspot in this catalog.`,
+  );
+  return `${lines.join("\n")}\n\nThis is fine if it's the same part drawn again elsewhere. Save anyway?`;
+}
+
 function actionAddLink(name: string, url: string) {
   if (!db || activeImageId === null || !pendingHotspot) return;
-  try {
-    addLink(db, {
-      imageId: activeImageId,
-      name,
-      url,
-      top: pendingHotspot.top,
-      left: pendingHotspot.left,
-    });
-    pendingHotspot = null;
-    setStatus(`Link "${name}" added.`);
-  } catch (err) {
-    if (err instanceof UniquenessError) {
-      setStatus(`Error: ${err.message}`);
-    } else {
-      throw err;
+  const imageId = activeImageId;
+  const top = pendingHotspot.top;
+  const left = pendingHotspot.left;
+  const conflicts = findLinkConflicts(db, name, url);
+
+  const doAdd = () => {
+    if (!db) return;
+    try {
+      addLink(db, { imageId, name, url, top, left });
+      pendingHotspot = null;
+      setStatus(`Link "${name}" added.`);
+    } catch (err) {
+      setStatus(`Could not add link: ${(err as Error).message}`);
     }
+  };
+
+  if (conflicts.length > 0) {
+    askConfirm(conflictMessage(conflicts), doAdd);
+  } else {
+    doAdd();
   }
 }
 
 function actionUpdateLink(name: string, url: string) {
   if (!db || editingLinkId === null) return;
-  try {
-    updateLink(db, editingLinkId, { name, url });
-    editingLinkId = null;
-    setStatus(`Link "${name}" updated.`);
-  } catch (err) {
-    if (err instanceof UniquenessError) {
-      setStatus(`Error: ${err.message}`);
-    } else {
-      throw err;
+  const linkId = editingLinkId;
+  const conflicts = findLinkConflicts(db, name, url, linkId);
+
+  const doUpdate = () => {
+    if (!db) return;
+    try {
+      updateLink(db, linkId, { name, url });
+      editingLinkId = null;
+      setStatus(`Link "${name}" updated.`);
+    } catch (err) {
+      setStatus(`Could not update link: ${(err as Error).message}`);
     }
+  };
+
+  if (conflicts.length > 0) {
+    askConfirm(conflictMessage(conflicts), doUpdate);
+  } else {
+    doUpdate();
   }
 }
 
 function actionDeleteLink() {
   if (!db || editingLinkId === null) return;
-  if (!confirm("Delete this link? Its data row (if any) is deleted too. This can't be undone.")) return;
-  deleteLink(db, editingLinkId);
-  editingLinkId = null;
-  setStatus("Link deleted.");
+  const linkId = editingLinkId;
+  askConfirm(
+    "Delete this hotspot? Its data row is deleted too, unless another hotspot still shares it. This can't be undone.",
+    () => {
+      if (!db) return;
+      try {
+        deleteLink(db, linkId);
+        editingLinkId = null;
+        setStatus("Link deleted.");
+      } catch (err) {
+        setStatus(`Could not delete link: ${(err as Error).message}`);
+      }
+    },
+  );
 }
 
 function actionCancelEditLink() {
@@ -462,12 +504,14 @@ function render() {
     </div>
 
     <div class="inspector">
-      ${activeImage ? renderLinkForm() : ""}
+      ${activeImage ? renderLinkForm(links) : ""}
       ${activeImage ? renderEditLinkForm(editingLink) : ""}
       ${activeImage ? renderLinksSection(links, editingLinkId) : ""}
       ${activeImage ? renderRowForm(availableLinks) : ""}
       ${activeImage ? renderRowsSection(rows) : ""}
     </div>
+
+    ${renderConfirmOverlay()}
   `;
 
   if (savedScroll) {
@@ -492,12 +536,30 @@ function renderZoomControls(): string {
   `;
 }
 
+function renderConfirmOverlay(): string {
+  if (!pendingConfirmation) return "";
+  return `
+    <div class="confirm-overlay">
+      <div class="confirm-box">
+        <p>${escapeHtml(pendingConfirmation.message)}</p>
+        <div class="confirm-actions">
+          <button id="btn-confirm-no">Cancel</button>
+          <button id="btn-confirm-yes">OK</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function hotspotHtml(l: CatalogLink): string {
   const editing = l.id === editingLinkId ? " editing" : "";
   return `<div class="hotspot${editing}" data-id="${l.id}" style="top:${l.top}px;left:${l.left}px" title="${escapeHtml(l.url)} — drag to reposition, click to edit">${escapeHtml(l.name)}</div>`;
 }
 
-function renderLinkForm(): string {
+function renderLinkForm(links: CatalogLink[]): string {
+  // One option per distinct url already on this image — for pointing a new
+  // hotspot at a part that's already drawn elsewhere (same bolt, another spot).
+  const reusable = Array.from(new Map(links.map((l) => [l.url, l])).values());
   return `
     <section>
       <h2>New link (hotspot)</h2>
@@ -505,8 +567,18 @@ function renderLinkForm(): string {
         pendingHotspot
           ? `<p class="hint">Position: top=${pendingHotspot.top}, left=${pendingHotspot.left}</p>
              <form id="form-link">
+               ${
+                 reusable.length > 0
+                   ? `<div class="field"><label>Same part as an existing hotspot? (optional)</label>
+                        <select id="reuse-link-select">
+                          <option value="">— new part —</option>
+                          ${reusable.map((l) => `<option value="${escapeHtml(l.url)}" data-name="${escapeHtml(l.name)}">${escapeHtml(l.name)} (${escapeHtml(l.url)})</option>`).join("")}
+                        </select>
+                      </div>`
+                   : ""
+               }
                <div class="field"><label>Link name</label><input name="name" required /></div>
-               <div class="field"><label>Address (url), unique across the whole catalog</label><input name="url" required /></div>
+               <div class="field"><label>Address (url)</label><input name="url" required /></div>
                <button type="submit">Add link</button>
              </form>`
           : `<p class="hint">Click on the image to place a hotspot.</p>`
@@ -591,6 +663,16 @@ function renderRowsSection(rows: ReturnType<typeof listRowsForImage>): string {
 }
 
 function wireEvents(links: CatalogLink[]) {
+  document.getElementById("btn-confirm-yes")?.addEventListener("click", () => {
+    const cb = pendingConfirmation?.onConfirm;
+    pendingConfirmation = null;
+    cb?.();
+  });
+  document.getElementById("btn-confirm-no")?.addEventListener("click", () => {
+    pendingConfirmation = null;
+    render();
+  });
+
   document.getElementById("btn-new")?.addEventListener("click", actionNewCatalog);
 
   const fileOpen = document.getElementById("file-open") as HTMLInputElement;
@@ -649,12 +731,22 @@ function wireEvents(links: CatalogLink[]) {
   if (linkForm) {
     const nameInput = linkForm.querySelector<HTMLInputElement>('input[name="name"]');
     const urlInput = linkForm.querySelector<HTMLInputElement>('input[name="url"]');
+    const reuseSelect = document.getElementById("reuse-link-select") as HTMLSelectElement | null;
     let urlEditedByHand = false;
     urlInput?.addEventListener("input", () => {
       urlEditedByHand = true;
     });
     nameInput?.addEventListener("input", () => {
       if (urlInput && !urlEditedByHand) urlInput.value = `#${slugify(nameInput.value)}`;
+    });
+    reuseSelect?.addEventListener("change", () => {
+      const option = reuseSelect.selectedOptions[0];
+      if (!option || !option.value) return; // "— new part —"
+      if (nameInput) nameInput.value = option.dataset.name ?? "";
+      if (urlInput) {
+        urlInput.value = option.value;
+        urlEditedByHand = true; // stop the auto-slug from overwriting the reused url
+      }
     });
   }
   linkForm?.addEventListener("submit", (evt) => {

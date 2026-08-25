@@ -10,11 +10,16 @@ export interface CatalogImage {
 }
 
 export interface CatalogLink {
+  /** the hotspot's own identity — always unique, this is what a click centers on */
   id: number;
   imageId: number;
-  /** label shown on the image at the hotspot; unique across the whole catalog */
+  /** label shown on the image at the hotspot; not required to be unique */
   name: string;
-  /** join key against CatalogRow.url; unique across the whole catalog */
+  /**
+   * join key against CatalogRow.url. Not required to be unique — multiple hotspots
+   * legitimately share one url when the same part is drawn at several positions on
+   * one exploded diagram (common in the legacy .sch catalogs this format succeeds).
+   */
   url: string;
   top: number;
   left: number;
@@ -40,10 +45,14 @@ export interface CatalogMeta {
   createdAt: string;
 }
 
-/** Thrown when a link name/url (or row url) would collide with an existing one. */
-export class UniquenessError extends Error {
-  constructor(public readonly field: "name" | "url", public readonly value: string) {
-    super(`"${value}" is already used as a link ${field} elsewhere in this catalog`);
-    this.name = "UniquenessError";
-  }
+/**
+ * A non-fatal heads-up that a link's name/url matches another hotspot elsewhere in
+ * the catalog. Not an error — this is legitimate (see CatalogLink.url), so callers
+ * surface it as a confirmable warning rather than blocking the save.
+ */
+export interface LinkConflict {
+  field: "name" | "url";
+  value: string;
+  /** id of the other, already-existing link that shares this name/url */
+  conflictingLinkId: number;
 }

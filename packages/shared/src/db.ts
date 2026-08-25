@@ -1,7 +1,6 @@
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 import { CATALOG_SCHEMA_META_DEFAULTS, CATALOG_SCHEMA_SQL } from "./schema.js";
-import type { CatalogImage, CatalogLink, CatalogMeta, CatalogRow } from "./types.js";
-import { UniquenessError } from "./types.js";
+import type { CatalogImage, CatalogLink, CatalogMeta, CatalogRow, LinkConflict } from "./types.js";
 
 let sqlJsPromise: Promise<SqlJsStatic> | null = null;
 
@@ -36,7 +35,42 @@ export function createEmptyCatalog(SQL: SqlJsStatic, catalogName = "Untitled cat
 
 /** Opens an existing catalog file (bytes from disk/fetch). */
 export function openCatalog(SQL: SqlJsStatic, bytes: Uint8Array): Database {
-  return new SQL.Database(bytes);
+  const db = new SQL.Database(bytes);
+  migrateLegacySchema(db);
+  return db;
+}
+
+/**
+ * A catalog's schema is baked into the file at CREATE TABLE time — reopening
+ * an old file does NOT pick up schema changes made in newer code. Catalogs
+ * created before hotspots were allowed to share a url/name (see schema.ts)
+ * still have `UNIQUE` on links.name/links.url, so adding a legitimate
+ * duplicate (the same part drawn again) throws a raw SQLite constraint error
+ * instead of the friendly in-app warning. Detect and rebuild the table
+ * without those constraints, preserving every row's data and id.
+ */
+function migrateLegacySchema(db: Database): void {
+  const ddlRows = db.exec("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'links'");
+  const ddl = ddlRows[0]?.values[0]?.[0];
+  if (typeof ddl !== "string" || !/UNIQUE/i.test(ddl)) return; // already on the current schema
+
+  db.run(`
+    ALTER TABLE links RENAME TO links_pre_migration;
+    CREATE TABLE links (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      image_id  INTEGER NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+      name      TEXT NOT NULL,
+      url       TEXT NOT NULL,
+      top       REAL NOT NULL,
+      left      REAL NOT NULL,
+      font_size INTEGER NOT NULL DEFAULT 12
+    );
+    INSERT INTO links (id, image_id, name, url, top, left, font_size)
+      SELECT id, image_id, name, url, top, left, font_size FROM links_pre_migration;
+    DROP TABLE links_pre_migration;
+    CREATE INDEX IF NOT EXISTS idx_links_image_id ON links(image_id);
+    CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
+  `);
 }
 
 /** Serializes the catalog back to bytes, ready to download or fetch elsewhere. */
@@ -142,19 +176,31 @@ function rowFromRecord(r: Record<string, unknown>): CatalogRow {
   };
 }
 
-/** Throws UniquenessError if `name` or `url` is already used by another link in the catalog. */
-export function assertLinkIsUnique(db: Database, name: string, url: string, excludeLinkId?: number): void {
+/**
+ * Non-fatal check: does `name` or `url` already belong to a *different* hotspot
+ * anywhere in the catalog? Returns the conflicts found (0, 1, or 2) instead of
+ * throwing — a repeated name/url is legitimate (the same part drawn at several
+ * positions), so callers surface this as a confirmable warning, not a hard block.
+ */
+export function findLinkConflicts(
+  db: Database,
+  name: string,
+  url: string,
+  excludeLinkId?: number,
+): LinkConflict[] {
+  const conflicts: LinkConflict[] = [];
+
   const nameStmt = db.prepare("SELECT id FROM links WHERE name = ? AND id != ?");
   nameStmt.bind([name, excludeLinkId ?? -1]);
-  const nameTaken = nameStmt.step();
+  if (nameStmt.step()) conflicts.push({ field: "name", value: name, conflictingLinkId: Number(nameStmt.getAsObject().id) });
   nameStmt.free();
-  if (nameTaken) throw new UniquenessError("name", name);
 
   const urlStmt = db.prepare("SELECT id FROM links WHERE url = ? AND id != ?");
   urlStmt.bind([url, excludeLinkId ?? -1]);
-  const urlTaken = urlStmt.step();
+  if (urlStmt.step()) conflicts.push({ field: "url", value: url, conflictingLinkId: Number(urlStmt.getAsObject().id) });
   urlStmt.free();
-  if (urlTaken) throw new UniquenessError("url", url);
+
+  return conflicts;
 }
 
 export interface AddImageInput {
@@ -184,9 +230,11 @@ export interface AddLinkInput {
   fontSize?: number;
 }
 
-/** Inserts a hotspot link. Throws UniquenessError if name/url already exist elsewhere. */
+/**
+ * Inserts a hotspot link. Does not enforce name/url uniqueness — call
+ * findLinkConflicts() first if you want to warn the user before saving.
+ */
 export function addLink(db: Database, input: AddLinkInput): number {
-  assertLinkIsUnique(db, input.name, input.url);
   const stmt = db.prepare(
     "INSERT INTO links (image_id, name, url, top, left, font_size) VALUES (?, ?, ?, ?, ?, ?)",
   );
@@ -201,10 +249,11 @@ export interface UpdateLinkInput {
 }
 
 /**
- * Renames a link and/or moves it to a new url. Throws UniquenessError if the
- * new name/url collide with a different link elsewhere in the catalog. If the
- * url actually changes, the matching data row (if any) is repointed to the
- * new url too, so the image-row pairing never silently breaks.
+ * Renames a link and/or moves it to a new url. Does not enforce name/url
+ * uniqueness — call findLinkConflicts() first if you want to warn the user
+ * before saving. If the url actually changes, the matching data row (if any,
+ * and if no *other* link still uses the old url) is repointed to the new url
+ * too, so the image-row pairing never silently breaks.
  */
 export function updateLink(db: Database, linkId: number, input: UpdateLinkInput): void {
   const sel = db.prepare("SELECT url FROM links WHERE id = ?");
@@ -212,18 +261,23 @@ export function updateLink(db: Database, linkId: number, input: UpdateLinkInput)
   const oldUrl = sel.step() ? String(sel.getAsObject().url) : null;
   sel.free();
 
-  assertLinkIsUnique(db, input.name, input.url, linkId);
-
   const stmt = db.prepare("UPDATE links SET name = ?, url = ? WHERE id = ?");
   stmt.run([input.name, input.url, linkId]);
   stmt.free();
 
-  if (oldUrl !== null && oldUrl !== input.url) {
+  // Only follow the row over to the new url if this was the *last* hotspot
+  // using the old one (siblings still need it where it is), and only if the
+  // new url doesn't already have its own row (rows.url is unique — merging
+  // two rows' data is out of scope here).
+  if (oldUrl !== null && oldUrl !== input.url && !linkExistsForUrl(db, oldUrl) && !rowExistsForUrl(db, input.url)) {
     db.run("UPDATE rows SET url = ? WHERE url = ?", [input.url, oldUrl]);
   }
 }
 
-/** Deletes a link and its matching data row, if any (sql.js doesn't enforce the FK/cascade itself). */
+/**
+ * Deletes a link. Its matching data row is deleted too, but only if no other
+ * hotspot still shares that url (sql.js doesn't enforce the FK/cascade itself).
+ */
 export function deleteLink(db: Database, linkId: number): void {
   const sel = db.prepare("SELECT url FROM links WHERE id = ?");
   sel.bind([linkId]);
@@ -231,7 +285,26 @@ export function deleteLink(db: Database, linkId: number): void {
   sel.free();
 
   db.run("DELETE FROM links WHERE id = ?", [linkId]);
-  if (url !== null) db.run("DELETE FROM rows WHERE url = ?", [url]);
+
+  if (url !== null && !linkExistsForUrl(db, url)) {
+    db.run("DELETE FROM rows WHERE url = ?", [url]);
+  }
+}
+
+function linkExistsForUrl(db: Database, url: string): boolean {
+  const stmt = db.prepare("SELECT id FROM links WHERE url = ?");
+  stmt.bind([url]);
+  const exists = stmt.step();
+  stmt.free();
+  return exists;
+}
+
+function rowExistsForUrl(db: Database, url: string): boolean {
+  const stmt = db.prepare("SELECT id FROM rows WHERE url = ?");
+  stmt.bind([url]);
+  const exists = stmt.step();
+  stmt.free();
+  return exists;
 }
 
 export interface AddRowInput {

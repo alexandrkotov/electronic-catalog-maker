@@ -20,7 +20,11 @@ const app = document.getElementById("app")!;
 let SQL: SqlJsStatic;
 let db: Database | null = null;
 let activeImageId: number | null = null;
-let selectedUrl: string | null = null;
+// The hotspot's own id, not its url — several hotspots can share one url
+// (the same part drawn at multiple positions on one diagram), so centering
+// on "whichever hotspot happens to match this url" would jump to the wrong
+// one. The url derived from this link is still what highlights the row.
+let selectedLinkId: number | null = null;
 let zoom = 1;
 let statusMessage = "";
 // render() replaces #app's innerHTML wholesale, which recreates #stage-scroll
@@ -63,7 +67,7 @@ function openBytes(bytes: Uint8Array) {
   db = openCatalog(SQL, bytes);
   const meta = readMeta(db);
   activeImageId = listImages(db)[0]?.id ?? null;
-  selectedUrl = null;
+  selectedLinkId = null;
   zoom = 1;
   statusMessage = `Opened catalog "${meta.catalogName}".`;
   render();
@@ -81,20 +85,49 @@ async function actionOpenFile(file: File) {
 
 function actionSelectImage(id: number) {
   activeImageId = id;
-  selectedUrl = null;
+  selectedLinkId = null;
   zoom = 1;
   render();
 }
 
-function actionSelectLink(url: string) {
-  selectedUrl = url;
+/** Clicking a hotspot directly: we know exactly which physical instance was clicked. */
+function actionSelectHotspot(linkId: number) {
+  selectedLinkId = linkId;
   render();
-  document.querySelector(`tr[data-url="${cssEscape(url)}"]`)?.scrollIntoView({ block: "nearest" });
-  // Center the picture on the selected hotspot, whether it was clicked
-  // directly or selected via its row in the table.
-  document
-    .querySelector(`.hotspot[data-url="${cssEscape(url)}"]`)
-    ?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+  centerSelection();
+}
+
+/**
+ * Clicking a table row: several hotspots may share this row's url (same part,
+ * drawn several times), so pick the first one on this image to center on —
+ * all of them still get highlighted together on the image either way. The
+ * instance-nav control (see renderInstanceNav) lets the user step through
+ * the rest of them from there.
+ */
+function actionSelectRowByUrl(url: string) {
+  if (!db || activeImageId === null) return;
+  const link = listLinksForImage(db, activeImageId).find((l) => l.url === url);
+  if (link) actionSelectHotspot(link.id);
+}
+
+/** Steps to the next/previous hotspot sharing the current selection's url, wrapping around. */
+function actionCycleInstance(delta: number) {
+  if (!db || activeImageId === null || selectedLinkId === null) return;
+  const links = listLinksForImage(db, activeImageId);
+  const current = links.find((l) => l.id === selectedLinkId);
+  if (!current) return;
+  const siblings = links.filter((l) => l.url === current.url).sort((a, b) => a.id - b.id);
+  const index = siblings.findIndex((l) => l.id === selectedLinkId);
+  if (index === -1) return;
+  const next = siblings[(index + delta + siblings.length) % siblings.length];
+  if (next) actionSelectHotspot(next.id);
+}
+
+function centerSelection() {
+  const hotspotEl = document.querySelector(`.hotspot[data-id="${selectedLinkId}"]`);
+  hotspotEl?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+  const url = hotspotEl?.getAttribute("data-url");
+  if (url) document.querySelector(`tr[data-url="${cssEscape(url)}"]`)?.scrollIntoView({ block: "nearest" });
 }
 
 /** Press-and-drag anywhere on the image to pan it (cursor turns into a grabbing hand). */
@@ -134,6 +167,14 @@ function render() {
   const activeImage = images.find((i) => i.id === activeImageId) ?? null;
   const links = db && activeImage ? listLinksForImage(db, activeImage.id) : [];
   const rows = db && activeImage ? listRowsForImage(db, activeImage.id) : [];
+  // Every hotspot sharing this url is highlighted together (they're the same
+  // part), while centering (see actionSelectHotspot) targets the one actually
+  // clicked.
+  const selectedUrl = links.find((l) => l.id === selectedLinkId)?.url ?? null;
+  const instances = selectedUrl
+    ? links.filter((l) => l.url === selectedUrl).sort((a, b) => a.id - b.id)
+    : [];
+  const instanceIndex = instances.findIndex((l) => l.id === selectedLinkId);
 
   // Preserve the current pan position across a re-render of the *same*
   // image (rebuilding #app.innerHTML recreates #stage-scroll from scratch,
@@ -173,12 +214,13 @@ function render() {
           activeImage
             ? `<div class="stage-inner" style="transform: scale(${zoom})">
                  <img id="stage-img" src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
-                 ${links.map((l) => hotspotHtml(l)).join("")}
+                 ${links.map((l) => hotspotHtml(l, selectedUrl, selectedLinkId)).join("")}
                </div>`
             : `<p class="hint" style="padding:2rem">No image selected.</p>`
         }
       </div>
       ${activeImage ? renderZoomControls() : ""}
+      ${instances.length > 1 ? renderInstanceNav(instanceIndex, instances.length) : ""}
     </div>
 
     <div class="table-panel">
@@ -186,7 +228,7 @@ function render() {
         activeImage
           ? `<table>
                <thead><tr><th>Name</th><th>SKU</th><th>Description</th><th>Extra</th></tr></thead>
-               <tbody>${rows.map((r) => rowHtml(r)).join("")}</tbody>
+               <tbody>${rows.map((r) => rowHtml(r, selectedUrl)).join("")}</tbody>
              </table>`
           : ""
       }
@@ -215,12 +257,27 @@ function renderZoomControls(): string {
   `;
 }
 
-function hotspotHtml(l: CatalogLink): string {
-  const selected = l.url === selectedUrl ? "selected" : "";
-  return `<div class="hotspot ${selected}" style="top:${l.top}px;left:${l.left}px;font-size:${l.fontSize}px" data-url="${escapeHtml(l.url)}" title="${escapeHtml(l.url)}">${escapeHtml(l.name)}</div>`;
+function renderInstanceNav(index: number, total: number): string {
+  return `
+    <div class="instance-nav">
+      <button id="btn-instance-prev" title="Previous occurrence of this part">‹</button>
+      <span>${index + 1} of ${total}</span>
+      <button id="btn-instance-next" title="Next occurrence of this part">›</button>
+    </div>
+  `;
 }
 
-function rowHtml(r: CatalogRow): string {
+function hotspotHtml(l: CatalogLink, selectedUrl: string | null, selectedLinkId: number | null): string {
+  // .selected: this hotspot's part is the one showing in the table (may be several).
+  // .current: this is the *specific* instance centering targets — distinct so
+  // stepping through duplicates with the instance-nav is visually obvious.
+  const classes = ["hotspot"];
+  if (l.url === selectedUrl) classes.push("selected");
+  if (l.id === selectedLinkId) classes.push("current");
+  return `<div class="${classes.join(" ")}" data-id="${l.id}" data-url="${escapeHtml(l.url)}" style="top:${l.top}px;left:${l.left}px;font-size:${l.fontSize}px" title="${escapeHtml(l.url)}">${escapeHtml(l.name)}</div>`;
+}
+
+function rowHtml(r: CatalogRow, selectedUrl: string | null): string {
   const selected = r.url === selectedUrl ? "selected" : "";
   const extra = Object.entries(r.extra)
     .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`)
@@ -244,6 +301,9 @@ function wireEvents() {
   document.getElementById("btn-zoom-out")?.addEventListener("click", () => actionSetZoom(zoom / 1.25));
   document.getElementById("btn-zoom-reset")?.addEventListener("click", () => actionSetZoom(1));
 
+  document.getElementById("btn-instance-prev")?.addEventListener("click", () => actionCycleInstance(-1));
+  document.getElementById("btn-instance-next")?.addEventListener("click", () => actionCycleInstance(1));
+
   document.getElementById("stage-scroll")?.addEventListener(
     "wheel",
     (evt) => {
@@ -260,12 +320,12 @@ function wireEvents() {
     stageImg.addEventListener("mousedown", (evt) => startImagePan(evt, stageScroll));
   }
 
-  document.querySelectorAll<HTMLDivElement>(".hotspot[data-url]").forEach((el) => {
-    el.addEventListener("click", () => actionSelectLink(el.dataset.url!));
+  document.querySelectorAll<HTMLDivElement>(".hotspot[data-id]").forEach((el) => {
+    el.addEventListener("click", () => actionSelectHotspot(Number(el.dataset.id)));
   });
 
   document.querySelectorAll<HTMLTableRowElement>("tr[data-url]").forEach((tr) => {
-    tr.addEventListener("click", () => actionSelectLink(tr.dataset.url!));
+    tr.addEventListener("click", () => actionSelectRowByUrl(tr.dataset.url!));
   });
 
   void findRowByUrl; // used indirectly via listRowsForImage today; kept for future direct-lookup use

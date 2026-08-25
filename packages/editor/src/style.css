@@ -274,3 +274,36 @@ td {
   color: #b91c1c;
   font-size: 0.8rem;
 }
+
+/* In-app confirm dialog — deliberately not window.confirm(), which browsers
+   can silently auto-deny after a page has shown several native dialogs
+   without a fresh user gesture in between. */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.confirm-box {
+  background: var(--bg-page);
+  border-radius: 8px;
+  padding: 1.25rem;
+  max-width: 26rem;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+}
+
+.confirm-box p {
+  margin: 0 0 1rem;
+  white-space: pre-line;
+  font-size: 0.9rem;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
