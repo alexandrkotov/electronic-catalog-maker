@@ -1,5 +1,5 @@
 /**
- * SQLite schema for an Electronic Catalog Maker "semantic set" — a single .ecat
+ * SQLite schema for an Electronic Catalog Maker "semantic set" — a single .ecatm
  * file (a SQLite database under the hood) that is the entire catalog: images
  * with clickable hotspot links, and one data table of rows per image, joined
  * by `url`.
@@ -21,8 +21,13 @@
 
 export const CATALOG_SCHEMA_VERSION = 1;
 
-/** File extension (no dot) used for catalog files — a SQLite database under the hood. */
-export const CATALOG_FILE_EXTENSION = "ecat";
+/**
+ * File extension (no dot) used for catalog files — a SQLite database under the hood.
+ * Deliberately not "ecat": that (and "xcat") collide with real medical-imaging PET
+ * scan formats. Short extensions ending in "-cat" specifically are a landmine — CAT
+ * scan terminology has claimed that suffix pattern.
+ */
+export const CATALOG_FILE_EXTENSION = "ecatm";
 
 export const CATALOG_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta (

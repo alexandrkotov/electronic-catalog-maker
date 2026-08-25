@@ -2,7 +2,7 @@
 
 Build and view interactive image-hotspot catalogs — a schematic picture with
 clickable positions linked to a data table (name, SKU, characteristics) —
-packaged as a single portable `.ecat` file (a SQLite database under the hood). No backend, no install: open the
+packaged as a single portable `.ecatm` file (a SQLite database under the hood). No backend, no install: open the
 file in the viewer and it just works, the same way the whole lineage of tools
 this project continues has worked for the last decade.
 
@@ -22,7 +22,7 @@ disk file) and share.
 
 ## Catalog file format
 
-One `.ecat` file (a SQLite database under the hood) = one catalog ("semantic set"). Tables:
+One `.ecatm` file (a SQLite database under the hood) = one catalog ("semantic set"). Tables:
 
 - `images` — one row per schematic picture (name, embedded image data, size)
 - `links` — one row per clickable hotspot on an image (name, url, pixel
@@ -46,7 +46,7 @@ pnpm dev:viewer   # http://localhost:5174 (or next free port)
 ## Status
 
 Early scaffold — functional end-to-end (create a catalog, place hotspots,
-add rows, export/reopen the `.ecat`, view + highlight-on-click), but UI and
+add rows, export/reopen the `.ecatm`, view + highlight-on-click), but UI and
 feature parity with the legacy desktop tools (bulk link import, reverse
 search, exploded-view pan/zoom, embeddable viewer as a Web Component) are not
 built yet.
