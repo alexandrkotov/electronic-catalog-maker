@@ -1,6 +1,7 @@
 import "./style.css";
 import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import {
+  CATALOG_FILE_EXTENSION,
   findRowByUrl,
   initSqlite,
   listImages,
@@ -18,13 +19,12 @@ const app = document.getElementById("app")!;
 
 let SQL: SqlJsStatic;
 let db: Database | null = null;
-let catalogLabel = "";
 let activeImageId: number | null = null;
 let selectedUrl: string | null = null;
 let statusMessage = "";
 
 async function boot() {
-  app.innerHTML = `<p style="padding:1rem">Загружаю SQLite (sql.js)…</p>`;
+  app.innerHTML = `<p style="padding:1rem">Loading SQLite (sql.js)…</p>`;
   SQL = await initSqlite(wasmUrl);
 
   const params = new URLSearchParams(location.search);
@@ -43,7 +43,7 @@ async function loadFromUrl(url: string) {
     const bytes = new Uint8Array(await res.arrayBuffer());
     openBytes(bytes);
   } catch (err) {
-    statusMessage = `Не удалось загрузить «${url}»: ${(err as Error).message}`;
+    statusMessage = `Could not load "${url}": ${(err as Error).message}`;
     render();
   }
 }
@@ -51,10 +51,9 @@ async function loadFromUrl(url: string) {
 function openBytes(bytes: Uint8Array) {
   db = openCatalog(SQL, bytes);
   const meta = readMeta(db);
-  catalogLabel = meta.catalogName;
   activeImageId = listImages(db)[0]?.id ?? null;
   selectedUrl = null;
-  statusMessage = `Открыт каталог «${meta.catalogName}».`;
+  statusMessage = `Opened catalog "${meta.catalogName}".`;
   render();
 }
 
@@ -63,7 +62,7 @@ async function actionOpenFile(file: File) {
   try {
     openBytes(bytes);
   } catch (err) {
-    statusMessage = `Не удалось открыть файл: ${(err as Error).message}`;
+    statusMessage = `Could not open file: ${(err as Error).message}`;
     render();
   }
 }
@@ -78,6 +77,11 @@ function actionSelectLink(url: string) {
   selectedUrl = url;
   render();
   document.querySelector(`tr[data-url="${cssEscape(url)}"]`)?.scrollIntoView({ block: "nearest" });
+  // Center the picture on the selected hotspot, whether it was clicked
+  // directly or selected via its row in the table.
+  document
+    .querySelector(`.hotspot[data-url="${cssEscape(url)}"]`)
+    ?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
 }
 
 function cssEscape(s: string): string {
@@ -96,17 +100,17 @@ function render() {
 
   app.innerHTML = `
     <div class="toolbar">
-      <h1>Electronic Catalog Maker — просмотрщик</h1>
-      <button id="btn-open">Открыть каталог…</button>
-      <input type="file" id="file-open" accept=".sqlite,.db" style="display:none" />
+      <h1>Electronic Catalog — Viewer</h1>
+      <button id="btn-open">Open catalog…</button>
+      <input type="file" id="file-open" accept=".${CATALOG_FILE_EXTENSION}" style="display:none" />
       <span class="spacer"></span>
-      <span class="hint">${escapeHtml(catalogLabel)} ${escapeHtml(statusMessage)}</span>
+      <span class="hint">${escapeHtml(statusMessage)}</span>
     </div>
 
     <div class="panel-images">
       ${
         images.length === 0
-          ? `<p class="hint">Откройте .sqlite-файл каталога.</p>`
+          ? `<p class="hint">Open a .${CATALOG_FILE_EXTENSION} catalog file.</p>`
           : `<ul>${images
               .map(
                 (img) =>
@@ -123,7 +127,7 @@ function render() {
                <img src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
                ${links.map((l) => hotspotHtml(l)).join("")}
              </div>`
-          : `<p class="hint" style="padding:2rem">Нет выбранной картинки.</p>`
+          : `<p class="hint" style="padding:2rem">No image selected.</p>`
       }
     </div>
 
@@ -131,7 +135,7 @@ function render() {
       ${
         activeImage
           ? `<table>
-               <thead><tr><th>Название</th><th>Артикул</th><th>Описание</th><th>Доп.</th></tr></thead>
+               <thead><tr><th>Name</th><th>SKU</th><th>Description</th><th>Extra</th></tr></thead>
                <tbody>${rows.map((r) => rowHtml(r)).join("")}</tbody>
              </table>`
           : ""

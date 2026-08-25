@@ -1,18 +1,22 @@
 /**
- * SQLite schema for an Electronic Catalog Maker "semantic set" (смысловой набор) —
- * a single .sqlite file that is the entire catalog: images with clickable hotspot
- * links, and one data table of rows per image, joined by `url`.
+ * SQLite schema for an Electronic Catalog Maker "semantic set" — a single .ecat
+ * file (a SQLite database under the hood) that is the entire catalog: images
+ * with clickable hotspot links, and one data table of rows per image, joined
+ * by `url`.
  *
  * Design notes (see project memory for the full rationale):
  * - One catalog file = many images, each image has many links (hotspots) and many rows.
  * - `links.name` and `links.url` are unique across the WHOLE catalog, not just per image.
  * - `rows.url` matches a `links.url` to know which row to highlight on hotspot click.
- * - Per-row characteristics that vary by catalog/image (вес, материал, ...) live in
+ * - Per-row characteristics that vary by catalog/image (weight, material, ...) live in
  *   `rows.extra` as a JSON object rather than as dynamic columns, to keep the editor
  *   and viewer schema-agnostic.
  */
 
 export const CATALOG_SCHEMA_VERSION = 1;
+
+/** File extension (no dot) used for catalog files — a SQLite database under the hood. */
+export const CATALOG_FILE_EXTENSION = "ecat";
 
 export const CATALOG_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta (

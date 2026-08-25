@@ -4,7 +4,9 @@ import {
   addImage,
   addLink,
   addRow,
+  CATALOG_FILE_EXTENSION,
   createEmptyCatalog,
+  deleteLink,
   exportCatalog,
   initSqlite,
   listImages,
@@ -12,23 +14,38 @@ import {
   listRowsForImage,
   openCatalog,
   readMeta,
+  updateLink,
+  updateLinkPosition,
   UniquenessError,
   type CatalogImage,
   type CatalogLink,
   type Database,
   type SqlJsStatic,
 } from "@ecm/shared";
+import { slugify } from "./slugify";
 
 const app = document.getElementById("app")!;
+
+const CATALOG_PICKER_TYPE: FilePickerAcceptType = {
+  description: "Electronic catalog",
+  accept: { "application/x-sqlite3": [`.${CATALOG_FILE_EXTENSION}`] },
+};
 
 let SQL: SqlJsStatic;
 let db: Database | null = null;
 let activeImageId: number | null = null;
 let pendingHotspot: { top: number; left: number } | null = null;
+let editingLinkId: number | null = null;
 let statusMessage = "";
+// Set when the catalog was opened (or first saved) via the File System
+// Access API, so subsequent Save calls can overwrite it in place.
+let openedFileHandle: FileSystemFileHandle | null = null;
+// Set right after a hotspot drag/click ends, so the mouseup's synthetic click
+// on the stage image doesn't get misread as "place a new hotspot here".
+let suppressNextStageClick = false;
 
 async function boot() {
-  app.innerHTML = `<p style="padding:1rem">Загружаю SQLite (sql.js)…</p>`;
+  app.innerHTML = `<p style="padding:1rem">Loading SQLite (sql.js)…</p>`;
   SQL = await initSqlite(wasmUrl);
   render();
 }
@@ -42,48 +59,125 @@ function setStatus(message: string) {
   render();
 }
 
-// ---------- actions ----------
+function resetTransientEditState() {
+  pendingHotspot = null;
+  editingLinkId = null;
+}
+
+// ---------- actions: catalog lifecycle ----------
 
 function actionNewCatalog() {
-  const name = prompt("Название нового каталога:", "Untitled catalog");
+  const name = prompt("New catalog name:", "Untitled catalog");
   if (name === null) return;
   db = createEmptyCatalog(SQL, name || "Untitled catalog");
   activeImageId = null;
-  pendingHotspot = null;
-  setStatus(`Создан новый каталог «${name}».`);
+  openedFileHandle = null;
+  resetTransientEditState();
+  setStatus(`Created new catalog "${name}".`);
 }
 
-async function actionOpenCatalog(file: File) {
-  const bytes = new Uint8Array(await file.arrayBuffer());
+async function openCatalogFromBytes(bytes: Uint8Array, handle: FileSystemFileHandle | null) {
   try {
     db = openCatalog(SQL, bytes);
     const meta = readMeta(db);
     activeImageId = currentImages()[0]?.id ?? null;
-    pendingHotspot = null;
-    setStatus(`Открыт каталог «${meta.catalogName}».`);
+    openedFileHandle = handle;
+    resetTransientEditState();
+    setStatus(`Opened catalog "${meta.catalogName}".`);
   } catch (err) {
-    setStatus(`Не удалось открыть файл: ${(err as Error).message}`);
+    setStatus(`Could not open file: ${(err as Error).message}`);
   }
 }
 
-function actionExportCatalog() {
-  if (!db) return;
-  const bytes = exportCatalog(db);
+async function actionOpenCatalogClicked(fallbackInput: HTMLInputElement) {
+  if (window.showOpenFilePicker) {
+    try {
+      const [handle] = await window.showOpenFilePicker({ types: [CATALOG_PICKER_TYPE] });
+      if (!handle) return;
+      const file = await handle.getFile();
+      await openCatalogFromBytes(new Uint8Array(await file.arrayBuffer()), handle);
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") {
+        setStatus(`Could not open file: ${(err as Error).message}`);
+      }
+    }
+    return;
+  }
+  // Browsers without the File System Access API (Firefox, Safari): fall
+  // back to a plain <input type=file>. We won't get a writable handle, so
+  // Save will prompt like Save As the first time.
+  fallbackInput.click();
+}
+
+function suggestedFileName(): string {
+  const meta = db ? readMeta(db) : null;
+  const base = meta?.catalogName.replace(/[^\w\-]+/g, "_") || "catalog";
+  return `${base}.${CATALOG_FILE_EXTENSION}`;
+}
+
+function downloadBytes(bytes: Uint8Array) {
   const blob = new Blob([bytes as BlobPart], { type: "application/x-sqlite3" });
-  const meta = readMeta(db);
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `${meta.catalogName.replace(/[^\w\-]+/g, "_") || "catalog"}.sqlite`;
+  a.download = suggestedFileName();
   a.click();
   URL.revokeObjectURL(a.href);
 }
+
+/** Always downloads a fresh copy — never touches whatever file was opened. */
+function actionExportCatalog() {
+  if (!db) return;
+  downloadBytes(exportCatalog(db));
+}
+
+/**
+ * Saves in place: overwrites the previously opened/saved file if the browser
+ * supports the File System Access API (prompting for a location the first
+ * time, like a native app's Save/Save As). Falls back to a plain download in
+ * browsers that don't support it (Firefox, Safari).
+ */
+async function actionSave() {
+  if (!db) return;
+  const bytes = exportCatalog(db);
+
+  if (!openedFileHandle && window.showSaveFilePicker) {
+    try {
+      openedFileHandle = await window.showSaveFilePicker({
+        suggestedName: suggestedFileName(),
+        types: [CATALOG_PICKER_TYPE],
+      });
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") {
+        setStatus(`Could not choose a save location: ${(err as Error).message}`);
+      }
+      return;
+    }
+  }
+
+  if (openedFileHandle) {
+    try {
+      const writable = await openedFileHandle.createWritable();
+      await writable.write(bytes as BufferSource);
+      await writable.close();
+      setStatus(`Saved "${openedFileHandle.name}".`);
+    } catch (err) {
+      setStatus(`Could not save: ${(err as Error).message}`);
+    }
+    return;
+  }
+
+  downloadBytes(bytes);
+  setStatus('Downloaded a copy (this browser can\'t save in place — "Open catalog…" it again next time).');
+}
+
+// ---------- actions: images ----------
 
 async function actionAddImage(file: File) {
   if (!db) return;
   const dataUrl = await fileToDataUrl(file);
   const [, mimeType, base64] = dataUrl.match(/^data:([^;]+);base64,(.*)$/s) ?? [];
   if (!base64) {
-    setStatus("Не удалось прочитать изображение.");
+    setStatus("Could not read the image.");
     return;
   }
   const { width, height } = await imageDimensions(dataUrl);
@@ -96,21 +190,81 @@ async function actionAddImage(file: File) {
     sortOrder: currentImages().length,
   });
   activeImageId = id;
-  pendingHotspot = null;
-  setStatus(`Добавлена картинка «${file.name}».`);
+  resetTransientEditState();
+  setStatus(`Added image "${file.name}".`);
 }
 
 function actionSelectImage(id: number) {
   activeImageId = id;
-  pendingHotspot = null;
+  resetTransientEditState();
   render();
 }
 
+// ---------- actions: hotspots (links) ----------
+
 function actionStageClick(evt: MouseEvent, img: HTMLImageElement) {
+  if (suppressNextStageClick) {
+    suppressNextStageClick = false;
+    return;
+  }
   const rect = img.getBoundingClientRect();
   const left = Math.round(evt.clientX - rect.left);
   const top = Math.round(evt.clientY - rect.top);
   pendingHotspot = { top, left };
+  editingLinkId = null;
+  render();
+}
+
+/**
+ * One gesture, two outcomes: drag an existing hotspot to reposition it, or
+ * click it (no real movement) to open it for editing.
+ */
+function startDragHotspot(evt: MouseEvent, link: CatalogLink, el: HTMLElement, img: HTMLImageElement) {
+  evt.preventDefault();
+  evt.stopPropagation();
+  const rect = img.getBoundingClientRect();
+  const startX = evt.clientX;
+  const startY = evt.clientY;
+  let top = link.top;
+  let left = link.left;
+  let moved = false;
+  el.classList.add("dragging");
+
+  function onMove(moveEvt: MouseEvent) {
+    if (Math.abs(moveEvt.clientX - startX) > 3 || Math.abs(moveEvt.clientY - startY) > 3) moved = true;
+    top = Math.round(moveEvt.clientY - rect.top);
+    left = Math.round(moveEvt.clientX - rect.left);
+    el.style.top = `${top}px`;
+    el.style.left = `${left}px`;
+  }
+
+  function onUp() {
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mouseup", onUp);
+    // Only guards against a spurious click firing on the image as part of
+    // *this* mouseup — must not linger, or it would silently eat some
+    // unrelated later click on the image (e.g. after editing via the table).
+    suppressNextStageClick = true;
+    setTimeout(() => {
+      suppressNextStageClick = false;
+    }, 0);
+    if (moved) {
+      if (db) updateLinkPosition(db, link.id, top, left);
+      render();
+    } else {
+      editingLinkId = link.id;
+      pendingHotspot = null;
+      render();
+    }
+  }
+
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+}
+
+function actionEditLink(linkId: number) {
+  editingLinkId = linkId;
+  pendingHotspot = null;
   render();
 }
 
@@ -125,14 +279,42 @@ function actionAddLink(name: string, url: string) {
       left: pendingHotspot.left,
     });
     pendingHotspot = null;
-    setStatus(`Ссылка «${name}» добавлена.`);
+    setStatus(`Link "${name}" added.`);
   } catch (err) {
     if (err instanceof UniquenessError) {
-      setStatus(`Ошибка: ${err.message}`);
+      setStatus(`Error: ${err.message}`);
     } else {
       throw err;
     }
   }
+}
+
+function actionUpdateLink(name: string, url: string) {
+  if (!db || editingLinkId === null) return;
+  try {
+    updateLink(db, editingLinkId, { name, url });
+    editingLinkId = null;
+    setStatus(`Link "${name}" updated.`);
+  } catch (err) {
+    if (err instanceof UniquenessError) {
+      setStatus(`Error: ${err.message}`);
+    } else {
+      throw err;
+    }
+  }
+}
+
+function actionDeleteLink() {
+  if (!db || editingLinkId === null) return;
+  if (!confirm("Delete this link? Its data row (if any) is deleted too. This can't be undone.")) return;
+  deleteLink(db, editingLinkId);
+  editingLinkId = null;
+  setStatus("Link deleted.");
+}
+
+function actionCancelEditLink() {
+  editingLinkId = null;
+  render();
 }
 
 function actionAddRow(url: string, name: string, sku: string, description: string, extraText: string) {
@@ -142,12 +324,12 @@ function actionAddRow(url: string, name: string, sku: string, description: strin
     try {
       extra = JSON.parse(extraText);
     } catch {
-      setStatus("Поле «доп. характеристики» должно быть валидным JSON-объектом.");
+      setStatus('The "extra characteristics" field must be a valid JSON object.');
       return;
     }
   }
   addRow(db, { imageId: activeImageId, url, name, sku, description, extra });
-  setStatus(`Строка для «${url}» добавлена.`);
+  setStatus(`Row for "${url}" added.`);
 }
 
 // ---------- helpers ----------
@@ -183,16 +365,18 @@ function render() {
   const rows = db && activeImage ? listRowsForImage(db, activeImage.id) : [];
   const usedUrls = new Set(rows.map((r) => r.url));
   const availableLinks = links.filter((l) => !usedUrls.has(l.url));
+  const editingLink = links.find((l) => l.id === editingLinkId) ?? null;
 
   app.innerHTML = `
     <div class="toolbar">
-      <h1>Electronic Catalog Maker — редактор</h1>
-      <button id="btn-new">Новый каталог</button>
-      <button id="btn-open">Открыть каталог…</button>
-      <input type="file" id="file-open" accept=".sqlite,.db" style="display:none" />
-      <button id="btn-export" ${db ? "" : "disabled"}>Экспорт .sqlite</button>
-      <button id="btn-add-image" ${db ? "" : "disabled"}>Добавить картинку…</button>
+      <h1>Electronic Catalog — Editor</h1>
+      <button id="btn-new">New catalog</button>
+      <button id="btn-open">Open catalog…</button>
+      <input type="file" id="file-open" accept=".${CATALOG_FILE_EXTENSION}" style="display:none" />
+      <button id="btn-add-image" ${db ? "" : "disabled"}>Add image…</button>
       <input type="file" id="file-image" accept="image/*" style="display:none" />
+      <button id="btn-save" ${db ? "" : "disabled"} title="Save in place (overwrites the opened file where your browser supports it)">Save</button>
+      <button id="btn-export" ${db ? "" : "disabled"} title="Always downloads a new copy">Export .${CATALOG_FILE_EXTENSION}</button>
       <span class="spacer"></span>
       <span class="hint">${escapeHtml(statusMessage)}</span>
     </div>
@@ -200,7 +384,7 @@ function render() {
     <div class="panel-images">
       ${
         images.length === 0
-          ? `<p class="hint">${db ? "В каталоге пока нет картинок." : "Создайте или откройте каталог."}</p>`
+          ? `<p class="hint">${db ? "No images in this catalog yet." : "Create or open a catalog."}</p>`
           : `<ul>${images
               .map(
                 (img) =>
@@ -216,55 +400,82 @@ function render() {
           ? `<div class="stage-inner" id="stage-inner">
                <img id="stage-img" src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
                ${links.map((l) => hotspotHtml(l)).join("")}
-               ${pendingHotspot ? `<div class="hotspot pending" style="top:${pendingHotspot.top}px;left:${pendingHotspot.left}px">новая…</div>` : ""}
+               ${pendingHotspot ? `<div class="hotspot pending" style="top:${pendingHotspot.top}px;left:${pendingHotspot.left}px">new…</div>` : ""}
              </div>`
-          : `<p class="hint" style="padding:2rem">Выберите картинку слева, либо добавьте новую.</p>`
+          : `<p class="hint" style="padding:2rem">Select an image on the left, or add a new one.</p>`
       }
     </div>
 
     <div class="inspector">
       ${activeImage ? renderLinkForm() : ""}
-      ${activeImage ? renderLinksSection(links) : ""}
+      ${activeImage ? renderEditLinkForm(editingLink) : ""}
+      ${activeImage ? renderLinksSection(links, editingLinkId) : ""}
       ${activeImage ? renderRowForm(availableLinks) : ""}
       ${activeImage ? renderRowsSection(rows) : ""}
     </div>
   `;
 
-  wireEvents(activeImage);
+  wireEvents(links);
 }
 
 function hotspotHtml(l: CatalogLink): string {
-  return `<div class="hotspot" style="top:${l.top}px;left:${l.left}px" title="${escapeHtml(l.url)}">${escapeHtml(l.name)}</div>`;
+  const editing = l.id === editingLinkId ? " editing" : "";
+  return `<div class="hotspot${editing}" data-id="${l.id}" style="top:${l.top}px;left:${l.left}px" title="${escapeHtml(l.url)} — drag to reposition, click to edit">${escapeHtml(l.name)}</div>`;
 }
 
 function renderLinkForm(): string {
   return `
     <section>
-      <h2>Новая ссылка (хотспот)</h2>
+      <h2>New link (hotspot)</h2>
       ${
         pendingHotspot
-          ? `<p class="hint">Позиция: top=${pendingHotspot.top}, left=${pendingHotspot.left}</p>
+          ? `<p class="hint">Position: top=${pendingHotspot.top}, left=${pendingHotspot.left}</p>
              <form id="form-link">
-               <div class="field"><label>Имя ссылки</label><input name="name" required /></div>
-               <div class="field"><label>Адрес (url), уникален по всему каталогу</label><input name="url" required /></div>
-               <button type="submit" class="primary">Добавить ссылку</button>
+               <div class="field"><label>Link name</label><input name="name" required /></div>
+               <div class="field"><label>Address (url), unique across the whole catalog</label><input name="url" required /></div>
+               <button type="submit">Add link</button>
              </form>`
-          : `<p class="hint">Кликните по картинке, чтобы поставить хотспот.</p>`
+          : `<p class="hint">Click on the image to place a hotspot.</p>`
       }
     </section>
   `;
 }
 
-function renderLinksSection(links: CatalogLink[]): string {
+function renderEditLinkForm(link: CatalogLink | null): string {
+  if (!link) return "";
   return `
     <section>
-      <h2>Ссылки на этой картинке (${links.length})</h2>
+      <h2>Edit link</h2>
+      <p class="hint">Position: top=${link.top}, left=${link.left} (drag the hotspot on the image to move it)</p>
+      <form id="form-edit-link">
+        <div class="field"><label>Link name</label><input name="name" value="${escapeHtml(link.name)}" required /></div>
+        <div class="field"><label>Address (url), unique across the whole catalog</label><input name="url" value="${escapeHtml(link.url)}" required /></div>
+        <div style="display:flex; gap:0.5rem; align-items:center">
+          <button type="submit">Save changes</button>
+          <button type="button" id="btn-cancel-edit">Cancel</button>
+          <button type="button" id="btn-delete-link" style="margin-left:auto; color:#b91c1c; border-color:#b91c1c">Delete</button>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function renderLinksSection(links: CatalogLink[], editingLinkId: number | null): string {
+  return `
+    <section>
+      <h2>Links on this image (${links.length})</h2>
       <table>
-        <thead><tr><th>Имя</th><th>URL</th></tr></thead>
+        <thead><tr><th>Name</th><th>URL</th></tr></thead>
         <tbody>
-          ${links.map((l) => `<tr><td>${escapeHtml(l.name)}</td><td>${escapeHtml(l.url)}</td></tr>`).join("")}
+          ${links
+            .map(
+              (l) =>
+                `<tr data-link-id="${l.id}" class="clickable-row${l.id === editingLinkId ? " editing" : ""}"><td>${escapeHtml(l.name)}</td><td>${escapeHtml(l.url)}</td></tr>`,
+            )
+            .join("")}
         </tbody>
       </table>
+      <p class="hint">Click a row (or its hotspot on the image) to edit or delete it.</p>
     </section>
   `;
 }
@@ -272,19 +483,19 @@ function renderLinksSection(links: CatalogLink[]): string {
 function renderRowForm(availableLinks: CatalogLink[]): string {
   return `
     <section>
-      <h2>Новая строка таблицы</h2>
+      <h2>New table row</h2>
       ${
         availableLinks.length === 0
-          ? `<p class="hint">Сначала добавьте ссылку без строки данных.</p>`
+          ? `<p class="hint">Add a link with no data row first.</p>`
           : `<form id="form-row">
-               <div class="field"><label>URL (совпадает со ссылкой)</label>
+               <div class="field"><label>URL (matches a link)</label>
                  <select name="url">${availableLinks.map((l) => `<option value="${escapeHtml(l.url)}">${escapeHtml(l.url)} (${escapeHtml(l.name)})</option>`).join("")}</select>
                </div>
-               <div class="field"><label>Название</label><input name="name" /></div>
-               <div class="field"><label>Артикул</label><input name="sku" /></div>
-               <div class="field"><label>Описание</label><input name="description" /></div>
-               <div class="field"><label>Доп. характеристики (JSON)</label><textarea name="extra" rows="3" placeholder='{"вес": "2.3 кг"}'></textarea></div>
-               <button type="submit" class="primary">Добавить строку</button>
+               <div class="field"><label>Name</label><input name="name" /></div>
+               <div class="field"><label>SKU</label><input name="sku" /></div>
+               <div class="field"><label>Description</label><input name="description" /></div>
+               <div class="field"><label>Extra characteristics (JSON)</label><textarea name="extra" rows="3" placeholder='{"weight": "2.3 kg"}'></textarea></div>
+               <button type="submit">Add row</button>
              </form>`
       }
     </section>
@@ -294,9 +505,9 @@ function renderRowForm(availableLinks: CatalogLink[]): string {
 function renderRowsSection(rows: ReturnType<typeof listRowsForImage>): string {
   return `
     <section>
-      <h2>Таблица (${rows.length} строк)</h2>
+      <h2>Table (${rows.length} rows)</h2>
       <table>
-        <thead><tr><th>URL</th><th>Название</th><th>Артикул</th></tr></thead>
+        <thead><tr><th>URL</th><th>Name</th><th>SKU</th></tr></thead>
         <tbody>
           ${rows.map((r) => `<tr><td>${escapeHtml(r.url)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.sku)}</td></tr>`).join("")}
         </tbody>
@@ -305,16 +516,17 @@ function renderRowsSection(rows: ReturnType<typeof listRowsForImage>): string {
   `;
 }
 
-function wireEvents(activeImage: CatalogImage | null) {
+function wireEvents(links: CatalogLink[]) {
   document.getElementById("btn-new")?.addEventListener("click", actionNewCatalog);
 
   const fileOpen = document.getElementById("file-open") as HTMLInputElement;
-  document.getElementById("btn-open")?.addEventListener("click", () => fileOpen.click());
+  document.getElementById("btn-open")?.addEventListener("click", () => void actionOpenCatalogClicked(fileOpen));
   fileOpen.addEventListener("change", () => {
     const file = fileOpen.files?.[0];
-    if (file) void actionOpenCatalog(file);
+    if (file) void file.arrayBuffer().then((buf) => openCatalogFromBytes(new Uint8Array(buf), null));
   });
 
+  document.getElementById("btn-save")?.addEventListener("click", () => void actionSave());
   document.getElementById("btn-export")?.addEventListener("click", actionExportCatalog);
 
   const fileImage = document.getElementById("file-image") as HTMLInputElement;
@@ -331,11 +543,42 @@ function wireEvents(activeImage: CatalogImage | null) {
   const stageImg = document.getElementById("stage-img") as HTMLImageElement | null;
   stageImg?.addEventListener("click", (evt) => actionStageClick(evt, stageImg));
 
-  document.getElementById("form-link")?.addEventListener("submit", (evt) => {
+  if (stageImg) {
+    document.querySelectorAll<HTMLDivElement>(".hotspot[data-id]").forEach((el) => {
+      const link = links.find((l) => l.id === Number(el.dataset.id));
+      if (link) el.addEventListener("mousedown", (evt) => startDragHotspot(evt, link, el, stageImg));
+    });
+  }
+
+  document.querySelectorAll<HTMLTableRowElement>("tr[data-link-id]").forEach((tr) => {
+    tr.addEventListener("click", () => actionEditLink(Number(tr.dataset.linkId)));
+  });
+
+  const linkForm = document.getElementById("form-link");
+  if (linkForm) {
+    const nameInput = linkForm.querySelector<HTMLInputElement>('input[name="name"]');
+    const urlInput = linkForm.querySelector<HTMLInputElement>('input[name="url"]');
+    let urlEditedByHand = false;
+    urlInput?.addEventListener("input", () => {
+      urlEditedByHand = true;
+    });
+    nameInput?.addEventListener("input", () => {
+      if (urlInput && !urlEditedByHand) urlInput.value = `#${slugify(nameInput.value)}`;
+    });
+  }
+  linkForm?.addEventListener("submit", (evt) => {
     evt.preventDefault();
     const fd = new FormData(evt.target as HTMLFormElement);
     actionAddLink(String(fd.get("name") ?? ""), String(fd.get("url") ?? ""));
   });
+
+  document.getElementById("form-edit-link")?.addEventListener("submit", (evt) => {
+    evt.preventDefault();
+    const fd = new FormData(evt.target as HTMLFormElement);
+    actionUpdateLink(String(fd.get("name") ?? ""), String(fd.get("url") ?? ""));
+  });
+  document.getElementById("btn-cancel-edit")?.addEventListener("click", actionCancelEditLink);
+  document.getElementById("btn-delete-link")?.addEventListener("click", actionDeleteLink);
 
   document.getElementById("form-row")?.addEventListener("submit", (evt) => {
     evt.preventDefault();
@@ -348,8 +591,6 @@ function wireEvents(activeImage: CatalogImage | null) {
       String(fd.get("extra") ?? ""),
     );
   });
-
-  void activeImage; // reserved for future per-image controls
 }
 
 void boot();

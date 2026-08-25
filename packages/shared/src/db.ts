@@ -195,6 +195,45 @@ export function addLink(db: Database, input: AddLinkInput): number {
   return lastInsertRowId(db);
 }
 
+export interface UpdateLinkInput {
+  name: string;
+  url: string;
+}
+
+/**
+ * Renames a link and/or moves it to a new url. Throws UniquenessError if the
+ * new name/url collide with a different link elsewhere in the catalog. If the
+ * url actually changes, the matching data row (if any) is repointed to the
+ * new url too, so the image-row pairing never silently breaks.
+ */
+export function updateLink(db: Database, linkId: number, input: UpdateLinkInput): void {
+  const sel = db.prepare("SELECT url FROM links WHERE id = ?");
+  sel.bind([linkId]);
+  const oldUrl = sel.step() ? String(sel.getAsObject().url) : null;
+  sel.free();
+
+  assertLinkIsUnique(db, input.name, input.url, linkId);
+
+  const stmt = db.prepare("UPDATE links SET name = ?, url = ? WHERE id = ?");
+  stmt.run([input.name, input.url, linkId]);
+  stmt.free();
+
+  if (oldUrl !== null && oldUrl !== input.url) {
+    db.run("UPDATE rows SET url = ? WHERE url = ?", [input.url, oldUrl]);
+  }
+}
+
+/** Deletes a link and its matching data row, if any (sql.js doesn't enforce the FK/cascade itself). */
+export function deleteLink(db: Database, linkId: number): void {
+  const sel = db.prepare("SELECT url FROM links WHERE id = ?");
+  sel.bind([linkId]);
+  const url = sel.step() ? String(sel.getAsObject().url) : null;
+  sel.free();
+
+  db.run("DELETE FROM links WHERE id = ?", [linkId]);
+  if (url !== null) db.run("DELETE FROM rows WHERE url = ?", [url]);
+}
+
 export interface AddRowInput {
   imageId: number;
   url: string;
@@ -219,6 +258,13 @@ export function addRow(db: Database, input: AddRowInput): number {
   ]);
   stmt.free();
   return lastInsertRowId(db);
+}
+
+/** Moves an existing hotspot to a new pixel position (e.g. after dragging it in the editor). */
+export function updateLinkPosition(db: Database, linkId: number, top: number, left: number): void {
+  const stmt = db.prepare("UPDATE links SET top = ?, left = ? WHERE id = ?");
+  stmt.run([top, left, linkId]);
+  stmt.free();
 }
 
 function lastInsertRowId(db: Database): number {

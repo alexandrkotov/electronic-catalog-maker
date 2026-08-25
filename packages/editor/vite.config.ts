@@ -1,7 +1,8 @@
 import { defineConfig } from "vite";
 
-export default defineConfig({
-  // sql.js ships its own wasm binary that we load via an explicit ?url import,
-  // so it doesn't need to go through esbuild's dependency pre-bundling.
-  optimizeDeps: { exclude: ["sql.js"] },
-});
+// Note: sql.js's package.json "browser" export (dist/sql-wasm-browser.js) is a
+// CJS/UMD file with no real `export default`. Vite's dev pre-bundler (esbuild)
+// synthesizes that default export via its CJS interop, but only if sql.js is
+// NOT excluded from optimizeDeps — so don't exclude it here, even though the
+// wasm binary itself is loaded separately via an explicit `?url` import.
+export default defineConfig({});

@@ -29,7 +29,7 @@ export interface CatalogRow {
   name: string;
   sku: string;
   description: string;
-  /** free-form characteristics that vary per catalog/image, e.g. { "вес": "2.3 кг" } */
+  /** free-form characteristics that vary per catalog/image, e.g. { "weight": "2.3 kg" } */
   extra: Record<string, string>;
 }
 
