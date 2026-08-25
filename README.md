@@ -43,6 +43,22 @@ One `.ecatm` file (a SQLite database under the hood) = one catalog ("semantic se
 See [`packages/shared/src/schema.ts`](packages/shared/src/schema.ts) for the
 exact DDL.
 
+## Sharing a catalog via link
+
+The viewer can load a catalog straight from a URL instead of a local file —
+open it as `https://your-viewer/?src=<url-to-a-.ecatm-file>` and it fetches
+and opens that file automatically. This needs no server of its own: host the
+viewer once as a static site, put the `.ecatm` file wherever it's reachable
+by URL (a GitHub repo's raw content, a public object storage bucket, etc.),
+and send people the link.
+
+The one real requirement: the file's host must send a CORS header
+(`Access-Control-Allow-Origin`) allowing the browser to fetch it from the
+viewer's origin — `raw.githubusercontent.com` and most object storage
+services (S3, R2, ...) do this by default, but some file-sharing hosts
+(e.g. a plain Google Drive share link) do not, and the fetch will fail with
+a CORS error rather than a clear "access denied" message.
+
 ## Development
 
 ```bash
