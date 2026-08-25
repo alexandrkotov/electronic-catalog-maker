@@ -67,6 +67,15 @@ copy to start editing, not a live link back to that URL — the first Save
 prompts for a location, same as it would for any catalog that didn't come
 from a local file.
 
+## Reverse search
+
+Both apps have a **"Search…"** button that searches every row in the
+catalog at once — not just the ones on the currently open image. Narrow it
+to one field (Name, SKU, Description, or any key that shows up in some
+row's free-form `extra` data) with the dropdown next to the search box.
+Clicking a result jumps straight to the image it's on and centers the
+matching hotspot; in the editor it also opens that hotspot for editing.
+
 ## Development
 
 ```bash

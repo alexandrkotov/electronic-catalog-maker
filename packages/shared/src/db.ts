@@ -150,6 +150,17 @@ export function listRowsForImage(db: Database, imageId: number): CatalogRow[] {
   return out;
 }
 
+/** Every row in the catalog, across all images — for catalog-wide search. */
+export function listAllRows(db: Database): CatalogRow[] {
+  const stmt = db.prepare("SELECT id, image_id, url, name, sku, description, extra FROM rows ORDER BY id");
+  const out: CatalogRow[] = [];
+  while (stmt.step()) {
+    out.push(rowFromRecord(stmt.getAsObject()));
+  }
+  stmt.free();
+  return out;
+}
+
 export function findRowByUrl(db: Database, url: string): CatalogRow | null {
   const stmt = db.prepare("SELECT id, image_id, url, name, sku, description, extra FROM rows WHERE url = ?");
   stmt.bind([url]);

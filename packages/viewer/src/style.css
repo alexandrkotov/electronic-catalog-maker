@@ -66,6 +66,7 @@ body {
 
 .toolbar {
   grid-area: toolbar;
+  position: relative; /* anchors .search-panel, see below */
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -350,4 +351,74 @@ button:disabled {
 .error {
   color: var(--danger);
   font-size: 0.8rem;
+}
+
+/* Reverse search — a non-blocking dropdown anchored under the toolbar
+   (unlike the confirm/open-remote dialogs, it has no backdrop, since the
+   user is meant to browse/click results while keeping the rest visible). */
+.search-panel {
+  position: absolute;
+  top: 100%;
+  right: 12px;
+  z-index: 50;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+  padding: 0.75rem;
+  width: 26rem;
+  max-width: calc(100vw - 2rem);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.search-controls {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.search-controls input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: inherit;
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.search-controls select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: inherit;
+  background: var(--bg-elevated);
+  color: var(--text);
+  max-width: 10rem;
+}
+
+.search-results {
+  overflow-y: auto;
+}
+
+.search-results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.search-results li {
+  padding: 0.4rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.search-results li:hover {
+  background: var(--bg-panel);
 }

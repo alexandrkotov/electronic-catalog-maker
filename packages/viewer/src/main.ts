@@ -2,8 +2,10 @@ import "./style.css";
 import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import {
   CATALOG_FILE_EXTENSION,
+  collectExtraKeys,
   findRowByUrl,
   initSqlite,
+  listAllRows,
   listImages,
   listLinksForImage,
   listRowsForImage,
@@ -13,9 +15,11 @@ import {
   applyTheme,
   currentTheme,
   toggleTheme,
+  searchRows,
   type CatalogLink,
   type CatalogRow,
   type Database,
+  type SearchField,
   type SqlJsStatic,
 } from "@ecm/shared";
 
@@ -40,6 +44,13 @@ let remoteDialogOpen = false;
 let remoteUrlValue = "";
 let remoteLoading = false;
 let remoteError: string | null = null;
+// Reverse search — a catalog-wide dropdown (not scoped to the active image),
+// see packages/shared/src/search.ts. Results are refreshed by directly
+// patching #search-results on every keystroke rather than a full render(),
+// so the search input never loses focus mid-type.
+let searchOpen = false;
+let searchQuery = "";
+let searchField: SearchField = "all";
 // render() replaces #app's innerHTML wholesale, which recreates #stage-scroll
 // from scratch (a fresh element always starts scrolled to 0,0) — tracked so
 // render() can restore the pan position instead of losing it on every
@@ -178,6 +189,27 @@ function actionCycleInstance(delta: number) {
   if (next) actionSelectHotspot(next.id);
 }
 
+/** Clicking a search result: unlike actionSelectRowByUrl, this may switch images first. */
+function actionGoToSearchResult(imageId: number, url: string) {
+  if (!db) return;
+  searchOpen = false;
+  activeImageId = imageId;
+  zoom = 1;
+  const link = listLinksForImage(db, imageId).find((l) => l.url === url);
+  selectedLinkId = link ? link.id : null;
+  render();
+  if (link) centerSelection();
+}
+
+function actionToggleSearch() {
+  searchOpen = !searchOpen;
+  if (searchOpen) {
+    searchQuery = "";
+    searchField = "all";
+  }
+  render();
+}
+
 function centerSelection() {
   const hotspotEl = document.querySelector(`.hotspot[data-id="${selectedLinkId}"]`);
   hotspotEl?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
@@ -247,9 +279,11 @@ function render() {
       <button id="btn-open">Open catalog…</button>
       <input type="file" id="file-open" accept=".${CATALOG_FILE_EXTENSION}" style="display:none" />
       <button id="btn-open-remote" title="Open a catalog hosted at a URL">Open remote catalog…</button>
+      <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
       <span class="spacer"></span>
       <button id="btn-theme" title="Toggle light/dark theme">${currentTheme() === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
       <span class="hint">${escapeHtml(statusMessage)}</span>
+      ${searchOpen ? renderSearchPanel() : ""}
     </div>
 
     <div class="panel-images">
@@ -347,6 +381,62 @@ function renderInstanceNav(index: number, total: number): string {
   `;
 }
 
+function renderSearchPanel(): string {
+  if (!db) return "";
+  const extraKeys = collectExtraKeys(listAllRows(db));
+  return `
+    <div class="search-panel" id="search-panel">
+      <div class="search-controls">
+        <input type="text" id="search-input" value="${escapeHtml(searchQuery)}" placeholder="Search every row…" />
+        <select id="search-field">
+          <option value="all" ${searchField === "all" ? "selected" : ""}>All fields</option>
+          <option value="name" ${searchField === "name" ? "selected" : ""}>Name</option>
+          <option value="sku" ${searchField === "sku" ? "selected" : ""}>SKU</option>
+          <option value="description" ${searchField === "description" ? "selected" : ""}>Description</option>
+          ${extraKeys
+            .map(
+              (k) =>
+                `<option value="extra:${escapeHtml(k)}" ${searchField === `extra:${k}` ? "selected" : ""}>Extra: ${escapeHtml(k)}</option>`,
+            )
+            .join("")}
+        </select>
+      </div>
+      <div class="search-results" id="search-results">${renderSearchResultsList()}</div>
+    </div>
+  `;
+}
+
+function renderSearchResultsList(): string {
+  if (!db) return "";
+  if (!searchQuery.trim()) return `<p class="hint">Type to search across every image's table.</p>`;
+  const results = searchRows(listAllRows(db), searchQuery, searchField).slice(0, 30);
+  if (results.length === 0) return `<p class="hint">No matches.</p>`;
+  const imageNameById = new Map(listImages(db).map((i) => [i.id, i.name]));
+  return `<ul>${results
+    .map(
+      (r) =>
+        `<li data-image-id="${r.imageId}" data-url="${escapeHtml(r.url)}">
+           <strong>${escapeHtml(r.name || r.url)}</strong>${r.sku ? ` · ${escapeHtml(r.sku)}` : ""}<br>
+           <span class="hint">${escapeHtml(imageNameById.get(r.imageId) ?? "")}${r.description ? ` — ${escapeHtml(r.description)}` : ""}</span>
+         </li>`,
+    )
+    .join("")}</ul>`;
+}
+
+/** Re-renders just the results list (not the whole app) so the search input never loses focus mid-type. */
+function refreshSearchResults() {
+  const el = document.getElementById("search-results");
+  if (!el) return;
+  el.innerHTML = renderSearchResultsList();
+  wireSearchResultClicks();
+}
+
+function wireSearchResultClicks() {
+  document.querySelectorAll<HTMLLIElement>("#search-results li[data-url]").forEach((li) => {
+    li.addEventListener("click", () => actionGoToSearchResult(Number(li.dataset.imageId), li.dataset.url!));
+  });
+}
+
 function hotspotHtml(l: CatalogLink, selectedUrl: string | null, selectedLinkId: number | null): string {
   // .selected: this hotspot's part is the one showing in the table (may be several).
   // .current: this is the *specific* instance centering targets — distinct so
@@ -396,6 +486,25 @@ function wireEvents() {
     openUrlInput?.focus();
     openUrlInput?.setSelectionRange(openUrlInput.value.length, openUrlInput.value.length);
   }
+
+  document.getElementById("btn-search")?.addEventListener("click", actionToggleSearch);
+  const searchInput = document.getElementById("search-input") as HTMLInputElement | null;
+  searchInput?.addEventListener("input", () => {
+    searchQuery = searchInput.value;
+    refreshSearchResults();
+  });
+  searchInput?.addEventListener("keydown", (evt) => {
+    if (evt.key === "Escape") {
+      searchOpen = false;
+      render();
+    }
+  });
+  document.getElementById("search-field")?.addEventListener("change", (evt) => {
+    searchField = (evt.target as HTMLSelectElement).value as SearchField;
+    refreshSearchResults();
+  });
+  wireSearchResultClicks();
+  if (searchOpen) searchInput?.focus();
 
   document.querySelectorAll<HTMLLIElement>(".panel-images li[data-id]").forEach((li) => {
     li.addEventListener("click", () => actionSelectImage(Number(li.dataset.id)));
