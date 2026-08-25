@@ -34,6 +34,12 @@ let activeImageId: number | null = null;
 let selectedLinkId: number | null = null;
 let zoom = 1;
 let statusMessage = "";
+// "Open remote catalog…" dialog state — a URL alternative to the local file
+// picker, for opening a catalog someone shared as a link (see loadFromUrl).
+let remoteDialogOpen = false;
+let remoteUrlValue = "";
+let remoteLoading = false;
+let remoteError: string | null = null;
 // render() replaces #app's innerHTML wholesale, which recreates #stage-scroll
 // from scratch (a fresh element always starts scrolled to 0,0) — tracked so
 // render() can restore the pan position instead of losing it on every
@@ -58,14 +64,55 @@ async function boot() {
   }
 }
 
-async function loadFromUrl(url: string) {
+/** Never throws — returns an error message on failure, or null on success. */
+async function loadFromUrl(url: string): Promise<string | null> {
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const bytes = new Uint8Array(await res.arrayBuffer());
     openBytes(bytes);
+    // Reflect the source into the address bar so the resulting page is
+    // itself a shareable link (see README, "Sharing a catalog via link") —
+    // matters most when the URL was typed into the dialog rather than
+    // already present on load.
+    history.replaceState(null, "", `?src=${encodeURIComponent(url)}`);
+    return null;
   } catch (err) {
-    statusMessage = `Could not load "${url}": ${(err as Error).message}`;
+    const message = (err as Error).message;
+    statusMessage = `Could not load "${url}": ${message}`;
+    render();
+    return message;
+  }
+}
+
+function actionOpenRemote() {
+  remoteDialogOpen = true;
+  remoteUrlValue = "";
+  remoteError = null;
+  render();
+}
+
+function actionCancelRemote() {
+  if (remoteLoading) return; // let an in-flight request settle rather than leaving stale state
+  remoteDialogOpen = false;
+  render();
+}
+
+async function actionSubmitRemote() {
+  if (remoteLoading) return;
+  const url = remoteUrlValue.trim();
+  if (!url) return;
+  remoteLoading = true;
+  remoteError = null;
+  render();
+  const error = await loadFromUrl(url);
+  // On success, openBytes() already closed the dialog and re-rendered —
+  // nothing left to do. On failure, keep the dialog open and show the
+  // error right next to the field: closing it and leaving only a small
+  // status hint in the toolbar corner reads as "nothing happened".
+  remoteLoading = false;
+  if (error) {
+    remoteError = error;
     render();
   }
 }
@@ -77,6 +124,7 @@ function openBytes(bytes: Uint8Array) {
   selectedLinkId = null;
   zoom = 1;
   statusMessage = `Opened catalog "${meta.catalogName}".`;
+  remoteDialogOpen = false;
   render();
 }
 
@@ -198,6 +246,7 @@ function render() {
       <h1>Electronic Catalog — Viewer</h1>
       <button id="btn-open">Open catalog…</button>
       <input type="file" id="file-open" accept=".${CATALOG_FILE_EXTENSION}" style="display:none" />
+      <button id="btn-open-remote" title="Open a catalog hosted at a URL">Open remote catalog…</button>
       <span class="spacer"></span>
       <button id="btn-theme" title="Toggle light/dark theme">${currentTheme() === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
       <span class="hint">${escapeHtml(statusMessage)}</span>
@@ -241,6 +290,29 @@ function render() {
           : ""
       }
     </div>
+
+    ${
+      remoteDialogOpen
+        ? `<div class="open-overlay" id="open-overlay">
+             <div class="open-box">
+               <h2>Open remote catalog</h2>
+               <div class="field">
+                 <label for="open-url-input">URL to a .${CATALOG_FILE_EXTENSION} file</label>
+                 <input type="text" id="open-url-input" value="${escapeHtml(remoteUrlValue)}" placeholder="https://example.com/catalog.${CATALOG_FILE_EXTENSION}" ${remoteLoading ? "disabled" : ""} />
+               </div>
+               ${
+                 remoteError
+                   ? `<p class="error">${escapeHtml(remoteError)}</p>`
+                   : `<p class="hint">The file's host must allow cross-origin requests (CORS), or loading will fail.</p>`
+               }
+               <div class="open-actions">
+                 <button id="open-url-cancel" ${remoteLoading ? "disabled" : ""}>Cancel</button>
+                 <button id="open-url-submit" ${remoteLoading || !remoteUrlValue.trim() ? "disabled" : ""}>${remoteLoading ? "Opening…" : "Open"}</button>
+               </div>
+             </div>
+           </div>`
+        : ""
+    }
   `;
 
   if (savedScroll) {
@@ -305,6 +377,25 @@ function wireEvents() {
     const file = fileOpen.files?.[0];
     if (file) void actionOpenFile(file);
   });
+
+  document.getElementById("btn-open-remote")?.addEventListener("click", actionOpenRemote);
+  document.getElementById("open-url-cancel")?.addEventListener("click", actionCancelRemote);
+  document.getElementById("open-url-submit")?.addEventListener("click", () => void actionSubmitRemote());
+  const openUrlInput = document.getElementById("open-url-input") as HTMLInputElement | null;
+  const openUrlSubmit = document.getElementById("open-url-submit") as HTMLButtonElement | null;
+  openUrlInput?.addEventListener("input", () => {
+    remoteUrlValue = openUrlInput.value;
+    if (openUrlSubmit) openUrlSubmit.disabled = remoteLoading || !openUrlInput.value.trim();
+  });
+  openUrlInput?.addEventListener("keydown", (evt) => {
+    if (evt.key === "Enter" && !openUrlInput.value.trim()) return;
+    if (evt.key === "Enter") void actionSubmitRemote();
+    if (evt.key === "Escape") actionCancelRemote();
+  });
+  if (remoteDialogOpen && !remoteLoading) {
+    openUrlInput?.focus();
+    openUrlInput?.setSelectionRange(openUrlInput.value.length, openUrlInput.value.length);
+  }
 
   document.querySelectorAll<HTMLLIElement>(".panel-images li[data-id]").forEach((li) => {
     li.addEventListener("click", () => actionSelectImage(Number(li.dataset.id)));

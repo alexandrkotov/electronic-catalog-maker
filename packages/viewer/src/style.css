@@ -13,6 +13,7 @@
   --text: #1a1a1a;
   --muted: #666666;
   --accent: #2563eb;
+  --danger: #b91c1c;
   --highlight: #fef08a;
   --stage-a: #eeeeee;
   --stage-b: #fafafa;
@@ -32,6 +33,7 @@
   --text: #e5e7eb;
   --muted: #9aa1ac;
   --accent: #60a5fa;
+  --danger: #f87171;
   --highlight: #78350f;
   --stage-a: #1a1c22;
   --stage-b: #202329;
@@ -279,7 +281,73 @@ button:focus-visible:not(:disabled) {
   outline: none;
 }
 
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .hint {
   font-size: 0.75rem;
   color: var(--muted);
+}
+
+/* "Open remote catalog…" dialog — same visual pattern as the editor's
+   in-app confirm modal (deliberately not window.prompt(), which shares
+   window.confirm()'s dialog-spam auto-deny problem in Chrome). */
+.open-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.open-box {
+  background: var(--bg-page);
+  border-radius: 8px;
+  padding: 1.25rem;
+  width: 24rem;
+  max-width: calc(100vw - 2rem);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.open-box h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.field label {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.field input {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: inherit;
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.open-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.error {
+  color: var(--danger);
+  font-size: 0.8rem;
 }

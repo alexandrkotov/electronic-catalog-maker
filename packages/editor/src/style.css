@@ -334,6 +334,16 @@ td {
   font-size: 0.9rem;
 }
 
+.confirm-box h2 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.confirm-box .field {
+  width: 22rem;
+  max-width: 100%;
+}
+
 .confirm-actions {
   display: flex;
   justify-content: flex-end;

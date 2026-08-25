@@ -60,6 +60,15 @@ let lastRenderedImageId: number | null = null;
 // anyway?" fail silently with no visible error. This never touches the
 // browser's native dialog API, so it can't be suppressed that way.
 let pendingConfirmation: { message: string; onConfirm: () => void } | null = null;
+// "Copy remote catalog…" dialog state — fetches a catalog hosted at a URL
+// and opens it with no file handle attached (openCatalogFromBytes(bytes,
+// null)), so it behaves exactly like a freshly-imported copy: editable
+// right away, but Save prompts for a location the first time, same as it
+// would for any catalog that didn't come from a local file.
+let remoteDialogOpen = false;
+let remoteUrlValue = "";
+let remoteLoading = false;
+let remoteError: string | null = null;
 
 function askConfirm(message: string, onConfirm: () => void) {
   pendingConfirmation = { message, onConfirm };
@@ -135,6 +144,46 @@ async function actionOpenCatalogClicked(fallbackInput: HTMLInputElement) {
   // back to a plain <input type=file>. We won't get a writable handle, so
   // Save will prompt like Save As the first time.
   fallbackInput.click();
+}
+
+function actionOpenRemoteDialog() {
+  remoteDialogOpen = true;
+  remoteUrlValue = "";
+  remoteError = null;
+  render();
+}
+
+function actionCancelRemoteDialog() {
+  if (remoteLoading) return; // let an in-flight fetch settle rather than leaving stale state
+  remoteDialogOpen = false;
+  render();
+}
+
+async function actionSubmitRemoteDialog() {
+  if (remoteLoading) return;
+  const url = remoteUrlValue.trim();
+  if (!url) return;
+  remoteLoading = true;
+  remoteError = null;
+  render();
+
+  let bytes: Uint8Array;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    bytes = new Uint8Array(await res.arrayBuffer());
+  } catch (err) {
+    // Keep the dialog open and show the error right by the field — closing
+    // it and leaving only a small status hint in the toolbar corner reads
+    // as "nothing happened" (see viewer's identical fix for the same issue).
+    remoteLoading = false;
+    remoteError = (err as Error).message;
+    render();
+    return;
+  }
+  remoteLoading = false;
+  remoteDialogOpen = false;
+  await openCatalogFromBytes(bytes, null); // no file handle — a "copy", not opened in place
 }
 
 function suggestedFileName(): string {
@@ -474,6 +523,7 @@ function render() {
       <button id="btn-new">New catalog</button>
       <button id="btn-open">Open catalog…</button>
       <input type="file" id="file-open" accept=".${CATALOG_FILE_EXTENSION}" style="display:none" />
+      <button id="btn-copy-remote" title="Fetch a copy of a catalog hosted at a URL to start editing">Copy remote catalog…</button>
       <button id="btn-add-image" ${db ? "" : "disabled"}>Add image…</button>
       <input type="file" id="file-image" accept="image/*" style="display:none" />
       <button id="btn-save" ${db ? "" : "disabled"} title="Save in place (overwrites the opened file where your browser supports it)">Save</button>
@@ -520,6 +570,7 @@ function render() {
     </div>
 
     ${renderConfirmOverlay()}
+    ${renderRemoteDialog()}
   `;
 
   if (savedScroll) {
@@ -553,6 +604,30 @@ function renderConfirmOverlay(): string {
         <div class="confirm-actions">
           <button id="btn-confirm-no">Cancel</button>
           <button id="btn-confirm-yes">OK</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderRemoteDialog(): string {
+  if (!remoteDialogOpen) return "";
+  return `
+    <div class="confirm-overlay">
+      <div class="confirm-box">
+        <h2>Copy remote catalog</h2>
+        <div class="field">
+          <label for="remote-url-input">URL to a .${CATALOG_FILE_EXTENSION} file</label>
+          <input type="text" id="remote-url-input" value="${escapeHtml(remoteUrlValue)}" placeholder="https://example.com/catalog.${CATALOG_FILE_EXTENSION}" ${remoteLoading ? "disabled" : ""} />
+        </div>
+        ${
+          remoteError
+            ? `<p class="error">${escapeHtml(remoteError)}</p>`
+            : `<p class="hint">Fetches a copy to edit locally — it won't stay linked to that URL, use Save/Export to keep your changes. The host must allow cross-origin requests (CORS).</p>`
+        }
+        <div class="confirm-actions">
+          <button id="remote-cancel" ${remoteLoading ? "disabled" : ""}>Cancel</button>
+          <button id="remote-submit" ${remoteLoading || !remoteUrlValue.trim() ? "disabled" : ""}>${remoteLoading ? "Copying…" : "Copy"}</button>
         </div>
       </div>
     </div>
@@ -697,6 +772,25 @@ function wireEvents(links: CatalogLink[]) {
 
   document.getElementById("btn-save")?.addEventListener("click", () => void actionSave());
   document.getElementById("btn-export")?.addEventListener("click", actionExportCatalog);
+
+  document.getElementById("btn-copy-remote")?.addEventListener("click", actionOpenRemoteDialog);
+  document.getElementById("remote-cancel")?.addEventListener("click", actionCancelRemoteDialog);
+  document.getElementById("remote-submit")?.addEventListener("click", () => void actionSubmitRemoteDialog());
+  const remoteUrlInput = document.getElementById("remote-url-input") as HTMLInputElement | null;
+  const remoteSubmitBtn = document.getElementById("remote-submit") as HTMLButtonElement | null;
+  remoteUrlInput?.addEventListener("input", () => {
+    remoteUrlValue = remoteUrlInput.value;
+    if (remoteSubmitBtn) remoteSubmitBtn.disabled = remoteLoading || !remoteUrlInput.value.trim();
+  });
+  remoteUrlInput?.addEventListener("keydown", (evt) => {
+    if (evt.key === "Enter" && !remoteUrlInput.value.trim()) return;
+    if (evt.key === "Enter") void actionSubmitRemoteDialog();
+    if (evt.key === "Escape") actionCancelRemoteDialog();
+  });
+  if (remoteDialogOpen && !remoteLoading) {
+    remoteUrlInput?.focus();
+    remoteUrlInput?.setSelectionRange(remoteUrlInput.value.length, remoteUrlInput.value.length);
+  }
 
   const fileImage = document.getElementById("file-image") as HTMLInputElement;
   document.getElementById("btn-add-image")?.addEventListener("click", () => fileImage.click());
