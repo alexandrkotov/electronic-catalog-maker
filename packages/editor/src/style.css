@@ -1,15 +1,46 @@
 :root {
-  /* Light-only for now: no dark theme has been designed yet. Declaring
-     `light dark` here without pairing every element with explicit colors
-     lets the browser's own dark-mode heuristics repaint form controls and
-     unstyled panels unpredictably (e.g. white text on white buttons). */
+  /* Every color used anywhere in this file is a custom property defined
+     here (light) and overridden below for [data-theme="dark"] — never
+     `color-scheme: light dark`, which previously caused a real bug: browser
+     dark-mode heuristics repainted unstyled form controls/panels
+     unpredictably (white text on white buttons). Theme is toggled explicitly
+     via packages/shared/src/theme.ts, which sets `data-theme` on <html>. */
   color-scheme: light;
   --border: #d0d5dd;
   --bg-panel: #f8f9fb;
   --bg-page: #ffffff;
+  --bg-elevated: #ffffff;
   --text: #1a1a1a;
+  --muted: #666666;
   --accent: #2563eb;
+  --accent-soft: #dbeafe;
+  --danger: #b91c1c;
+  --stage-a: #eeeeee;
+  --stage-b: #fafafa;
+  --hotspot-bg: #fde047;
+  --hotspot-border: #a16207;
+  --hotspot-pending-bg: #fecaca;
+  --hotspot-pending-border: #b91c1c;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --border: #3a3f4b;
+  --bg-panel: #1c1f26;
+  --bg-page: #14161b;
+  --bg-elevated: #22252d;
+  --text: #e5e7eb;
+  --muted: #9aa1ac;
+  --accent: #60a5fa;
+  --accent-soft: #1e3a5f;
+  --danger: #f87171;
+  --stage-a: #1a1c22;
+  --stage-b: #202329;
+  --hotspot-bg: #eab308;
+  --hotspot-border: #fde68a;
+  --hotspot-pending-bg: #7f1d1d;
+  --hotspot-pending-border: #fca5a5;
 }
 
 * {
@@ -92,7 +123,7 @@ body {
   position: absolute;
   inset: 0;
   overflow: auto;
-  background: repeating-conic-gradient(#eee 0% 25%, #fafafa 0% 50%) 50% / 20px 20px;
+  background: repeating-conic-gradient(var(--stage-a) 0% 25%, var(--stage-b) 0% 50%) 50% / 20px 20px;
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -112,7 +143,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  background: white;
+  background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.25rem;
@@ -127,7 +158,7 @@ body {
   font-size: 0.75rem;
   min-width: 3.2em;
   text-align: center;
-  color: #555;
+  color: var(--muted);
 }
 
 .stage-inner img {
@@ -144,8 +175,9 @@ body {
 .hotspot {
   position: absolute;
   transform: translate(-50%, -50%);
-  background: #fde047;
-  border: 1px solid #a16207;
+  background: var(--hotspot-bg);
+  border: 1px solid var(--hotspot-border);
+  color: #1a1a1a;
   border-radius: 3px;
   padding: 1px 5px;
   cursor: move;
@@ -161,8 +193,8 @@ body {
 
 .hotspot.pending {
   cursor: default;
-  background: #fecaca;
-  border-color: #b91c1c;
+  background: var(--hotspot-pending-bg);
+  border-color: var(--hotspot-pending-border);
 }
 
 .hotspot.editing {
@@ -179,7 +211,7 @@ tr.clickable-row:hover {
 }
 
 tr.clickable-row.editing {
-  background: #dbeafe;
+  background: var(--accent-soft);
 }
 
 .inspector {
@@ -197,7 +229,7 @@ tr.clickable-row.editing {
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #555;
+  color: var(--muted);
   margin: 0 0 0.5rem;
 }
 
@@ -210,7 +242,7 @@ tr.clickable-row.editing {
 
 .field label {
   font-size: 0.75rem;
-  color: #555;
+  color: var(--muted);
 }
 
 .field input,
@@ -220,7 +252,7 @@ tr.clickable-row.editing {
   border: 1px solid var(--border);
   border-radius: 4px;
   font: inherit;
-  background: white;
+  background: var(--bg-elevated);
   color: var(--text);
 }
 
@@ -228,7 +260,7 @@ button {
   padding: 0.35rem 0.75rem;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: white;
+  background: var(--bg-elevated);
   color: var(--text);
   cursor: pointer;
   font: inherit;
@@ -267,11 +299,11 @@ td {
 
 .hint {
   font-size: 0.75rem;
-  color: #777;
+  color: var(--muted);
 }
 
 .error {
-  color: #b91c1c;
+  color: var(--danger);
   font-size: 0.8rem;
 }
 

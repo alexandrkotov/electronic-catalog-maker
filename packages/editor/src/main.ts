@@ -15,6 +15,10 @@ import {
   listRowsForImage,
   openCatalog,
   readMeta,
+  resolveInitialTheme,
+  applyTheme,
+  currentTheme,
+  toggleTheme,
   updateLink,
   updateLinkPosition,
   type CatalogImage,
@@ -24,6 +28,9 @@ import {
   type SqlJsStatic,
 } from "@ecm/shared";
 import { slugify } from "./slugify";
+
+// Applied before the first render so there's no flash of the wrong theme.
+applyTheme(resolveInitialTheme());
 
 const app = document.getElementById("app")!;
 
@@ -472,6 +479,7 @@ function render() {
       <button id="btn-save" ${db ? "" : "disabled"} title="Save in place (overwrites the opened file where your browser supports it)">Save</button>
       <button id="btn-export" ${db ? "" : "disabled"} title="Always downloads a new copy">Export .${CATALOG_FILE_EXTENSION}</button>
       <span class="spacer"></span>
+      <button id="btn-theme" title="Toggle light/dark theme">${currentTheme() === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
       <span class="hint">${escapeHtml(statusMessage)}</span>
     </div>
 
@@ -670,6 +678,11 @@ function wireEvents(links: CatalogLink[]) {
   });
   document.getElementById("btn-confirm-no")?.addEventListener("click", () => {
     pendingConfirmation = null;
+    render();
+  });
+
+  document.getElementById("btn-theme")?.addEventListener("click", () => {
+    toggleTheme();
     render();
   });
 

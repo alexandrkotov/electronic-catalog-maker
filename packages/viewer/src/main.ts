@@ -9,11 +9,18 @@ import {
   listRowsForImage,
   openCatalog,
   readMeta,
+  resolveInitialTheme,
+  applyTheme,
+  currentTheme,
+  toggleTheme,
   type CatalogLink,
   type CatalogRow,
   type Database,
   type SqlJsStatic,
 } from "@ecm/shared";
+
+// Applied before the first render so there's no flash of the wrong theme.
+applyTheme(resolveInitialTheme());
 
 const app = document.getElementById("app")!;
 
@@ -192,6 +199,7 @@ function render() {
       <button id="btn-open">Open catalog…</button>
       <input type="file" id="file-open" accept=".${CATALOG_FILE_EXTENSION}" style="display:none" />
       <span class="spacer"></span>
+      <button id="btn-theme" title="Toggle light/dark theme">${currentTheme() === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
       <span class="hint">${escapeHtml(statusMessage)}</span>
     </div>
 
@@ -287,6 +295,11 @@ function rowHtml(r: CatalogRow, selectedUrl: string | null): string {
 
 function wireEvents() {
   const fileOpen = document.getElementById("file-open") as HTMLInputElement;
+  document.getElementById("btn-theme")?.addEventListener("click", () => {
+    toggleTheme();
+    render();
+  });
+
   document.getElementById("btn-open")?.addEventListener("click", () => fileOpen.click());
   fileOpen.addEventListener("change", () => {
     const file = fileOpen.files?.[0];
