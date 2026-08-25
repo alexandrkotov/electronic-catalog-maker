@@ -1,5 +1,12 @@
 # Electronic Catalog Maker
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
+![pnpm](https://img.shields.io/badge/pnpm-F69220?logo=pnpm&logoColor=white)
+![No backend](https://img.shields.io/badge/backend-none-brightgreen)
+
 Build and view interactive image-hotspot catalogs — a schematic picture with
 clickable positions linked to a data table (name, SKU, characteristics) —
 packaged as a single portable `.ecatm` file (a SQLite database under the hood). No backend, no install: open the
