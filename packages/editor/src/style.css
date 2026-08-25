@@ -84,8 +84,14 @@ body {
 
 .stage {
   grid-area: stage;
-  overflow: auto;
   position: relative;
+  overflow: hidden;
+}
+
+.stage-scroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
   background: repeating-conic-gradient(#eee 0% 25%, #fafafa 0% 50%) 50% / 20px 20px;
   display: flex;
   align-items: flex-start;
@@ -95,11 +101,44 @@ body {
 .stage-inner {
   position: relative;
   display: inline-block;
+  transform-origin: top left;
+}
+
+.zoom-controls {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.25rem;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.15);
+}
+
+.zoom-controls button {
+  padding: 0.2rem 0.5rem;
+}
+
+.zoom-controls .zoom-pct {
+  font-size: 0.75rem;
+  min-width: 3.2em;
+  text-align: center;
+  color: #555;
 }
 
 .stage-inner img {
   display: block;
   max-width: none;
+  cursor: grab;
+}
+
+.stage-scroll.panning,
+.stage-scroll.panning * {
+  cursor: grabbing !important;
 }
 
 .hotspot {

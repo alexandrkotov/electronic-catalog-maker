@@ -21,7 +21,18 @@ let SQL: SqlJsStatic;
 let db: Database | null = null;
 let activeImageId: number | null = null;
 let selectedUrl: string | null = null;
+let zoom = 1;
 let statusMessage = "";
+// render() replaces #app's innerHTML wholesale, which recreates #stage-scroll
+// from scratch (a fresh element always starts scrolled to 0,0) — tracked so
+// render() can restore the pan position instead of losing it on every
+// unrelated update (selecting a link/row, zooming, ...).
+let lastRenderedImageId: number | null = null;
+
+function actionSetZoom(next: number) {
+  zoom = Math.min(4, Math.max(0.25, next));
+  render();
+}
 
 async function boot() {
   app.innerHTML = `<p style="padding:1rem">Loading SQLite (sql.js)…</p>`;
@@ -53,6 +64,7 @@ function openBytes(bytes: Uint8Array) {
   const meta = readMeta(db);
   activeImageId = listImages(db)[0]?.id ?? null;
   selectedUrl = null;
+  zoom = 1;
   statusMessage = `Opened catalog "${meta.catalogName}".`;
   render();
 }
@@ -70,6 +82,7 @@ async function actionOpenFile(file: File) {
 function actionSelectImage(id: number) {
   activeImageId = id;
   selectedUrl = null;
+  zoom = 1;
   render();
 }
 
@@ -82,6 +95,30 @@ function actionSelectLink(url: string) {
   document
     .querySelector(`.hotspot[data-url="${cssEscape(url)}"]`)
     ?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+}
+
+/** Press-and-drag anywhere on the image to pan it (cursor turns into a grabbing hand). */
+function startImagePan(evt: MouseEvent, scrollEl: HTMLElement) {
+  evt.preventDefault();
+  const startX = evt.clientX;
+  const startY = evt.clientY;
+  const startScrollLeft = scrollEl.scrollLeft;
+  const startScrollTop = scrollEl.scrollTop;
+  scrollEl.classList.add("panning");
+
+  function onMove(moveEvt: MouseEvent) {
+    scrollEl.scrollLeft = startScrollLeft - (moveEvt.clientX - startX);
+    scrollEl.scrollTop = startScrollTop - (moveEvt.clientY - startY);
+  }
+
+  function onUp() {
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mouseup", onUp);
+    scrollEl.classList.remove("panning");
+  }
+
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
 }
 
 function cssEscape(s: string): string {
@@ -97,6 +134,16 @@ function render() {
   const activeImage = images.find((i) => i.id === activeImageId) ?? null;
   const links = db && activeImage ? listLinksForImage(db, activeImage.id) : [];
   const rows = db && activeImage ? listRowsForImage(db, activeImage.id) : [];
+
+  // Preserve the current pan position across a re-render of the *same*
+  // image (rebuilding #app.innerHTML recreates #stage-scroll from scratch,
+  // which would otherwise silently snap back to scrollLeft/Top = 0).
+  const prevStageScroll = document.getElementById("stage-scroll");
+  const savedScroll =
+    prevStageScroll && activeImageId === lastRenderedImageId
+      ? { left: prevStageScroll.scrollLeft, top: prevStageScroll.scrollTop }
+      : null;
+  lastRenderedImageId = activeImageId;
 
   app.innerHTML = `
     <div class="toolbar">
@@ -121,14 +168,17 @@ function render() {
     </div>
 
     <div class="stage">
-      ${
-        activeImage
-          ? `<div class="stage-inner">
-               <img src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
-               ${links.map((l) => hotspotHtml(l)).join("")}
-             </div>`
-          : `<p class="hint" style="padding:2rem">No image selected.</p>`
-      }
+      <div class="stage-scroll" id="stage-scroll">
+        ${
+          activeImage
+            ? `<div class="stage-inner" style="transform: scale(${zoom})">
+                 <img id="stage-img" src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
+                 ${links.map((l) => hotspotHtml(l)).join("")}
+               </div>`
+            : `<p class="hint" style="padding:2rem">No image selected.</p>`
+        }
+      </div>
+      ${activeImage ? renderZoomControls() : ""}
     </div>
 
     <div class="table-panel">
@@ -143,7 +193,26 @@ function render() {
     </div>
   `;
 
+  if (savedScroll) {
+    const stageScroll = document.getElementById("stage-scroll");
+    if (stageScroll) {
+      stageScroll.scrollLeft = savedScroll.left;
+      stageScroll.scrollTop = savedScroll.top;
+    }
+  }
+
   wireEvents();
+}
+
+function renderZoomControls(): string {
+  return `
+    <div class="zoom-controls">
+      <button id="btn-zoom-out" title="Zoom out">−</button>
+      <span class="zoom-pct">${Math.round(zoom * 100)}%</span>
+      <button id="btn-zoom-in" title="Zoom in">+</button>
+      <button id="btn-zoom-reset" title="Reset zoom">Reset</button>
+    </div>
+  `;
 }
 
 function hotspotHtml(l: CatalogLink): string {
@@ -170,6 +239,26 @@ function wireEvents() {
   document.querySelectorAll<HTMLLIElement>(".panel-images li[data-id]").forEach((li) => {
     li.addEventListener("click", () => actionSelectImage(Number(li.dataset.id)));
   });
+
+  document.getElementById("btn-zoom-in")?.addEventListener("click", () => actionSetZoom(zoom * 1.25));
+  document.getElementById("btn-zoom-out")?.addEventListener("click", () => actionSetZoom(zoom / 1.25));
+  document.getElementById("btn-zoom-reset")?.addEventListener("click", () => actionSetZoom(1));
+
+  document.getElementById("stage-scroll")?.addEventListener(
+    "wheel",
+    (evt) => {
+      if (!evt.ctrlKey && !evt.metaKey) return;
+      evt.preventDefault();
+      actionSetZoom(zoom * Math.exp(-evt.deltaY * 0.001));
+    },
+    { passive: false },
+  );
+
+  const stageImg = document.getElementById("stage-img") as HTMLImageElement | null;
+  const stageScroll = document.getElementById("stage-scroll") as HTMLElement | null;
+  if (stageImg && stageScroll) {
+    stageImg.addEventListener("mousedown", (evt) => startImagePan(evt, stageScroll));
+  }
 
   document.querySelectorAll<HTMLDivElement>(".hotspot[data-url]").forEach((el) => {
     el.addEventListener("click", () => actionSelectLink(el.dataset.url!));

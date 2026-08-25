@@ -36,13 +36,16 @@ let db: Database | null = null;
 let activeImageId: number | null = null;
 let pendingHotspot: { top: number; left: number } | null = null;
 let editingLinkId: number | null = null;
+let zoom = 1;
 let statusMessage = "";
 // Set when the catalog was opened (or first saved) via the File System
 // Access API, so subsequent Save calls can overwrite it in place.
 let openedFileHandle: FileSystemFileHandle | null = null;
-// Set right after a hotspot drag/click ends, so the mouseup's synthetic click
-// on the stage image doesn't get misread as "place a new hotspot here".
-let suppressNextStageClick = false;
+// render() replaces #app's innerHTML wholesale, which recreates #stage-scroll
+// from scratch (a fresh element always starts scrolled to 0,0) — tracked so
+// render() can restore the pan position instead of losing it on every
+// unrelated update (adding a hotspot, editing a link, zooming, ...).
+let lastRenderedImageId: number | null = null;
 
 async function boot() {
   app.innerHTML = `<p style="padding:1rem">Loading SQLite (sql.js)…</p>`;
@@ -62,6 +65,12 @@ function setStatus(message: string) {
 function resetTransientEditState() {
   pendingHotspot = null;
   editingLinkId = null;
+  zoom = 1;
+}
+
+function actionSetZoom(next: number) {
+  zoom = Math.min(4, Math.max(0.25, next));
+  render();
 }
 
 // ---------- actions: catalog lifecycle ----------
@@ -202,17 +211,48 @@ function actionSelectImage(id: number) {
 
 // ---------- actions: hotspots (links) ----------
 
-function actionStageClick(evt: MouseEvent, img: HTMLImageElement) {
-  if (suppressNextStageClick) {
-    suppressNextStageClick = false;
-    return;
-  }
+/**
+ * One gesture, two outcomes: click the bare image (no real movement) to
+ * place a new hotspot there, or press-and-drag to pan the image around
+ * instead (cursor turns into a grabbing hand).
+ */
+function startStageInteraction(evt: MouseEvent, img: HTMLImageElement, scrollEl: HTMLElement) {
+  evt.preventDefault();
   const rect = img.getBoundingClientRect();
-  const left = Math.round(evt.clientX - rect.left);
-  const top = Math.round(evt.clientY - rect.top);
-  pendingHotspot = { top, left };
-  editingLinkId = null;
-  render();
+  const startX = evt.clientX;
+  const startY = evt.clientY;
+  const startScrollLeft = scrollEl.scrollLeft;
+  const startScrollTop = scrollEl.scrollTop;
+  let moved = false;
+
+  function onMove(moveEvt: MouseEvent) {
+    const dx = moveEvt.clientX - startX;
+    const dy = moveEvt.clientY - startY;
+    if (!moved && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+      moved = true;
+      scrollEl.classList.add("panning");
+    }
+    if (moved) {
+      scrollEl.scrollLeft = startScrollLeft - dx;
+      scrollEl.scrollTop = startScrollTop - dy;
+    }
+  }
+
+  function onUp(upEvt: MouseEvent) {
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mouseup", onUp);
+    scrollEl.classList.remove("panning");
+    if (!moved) {
+      const left = Math.round((upEvt.clientX - rect.left) / zoom);
+      const top = Math.round((upEvt.clientY - rect.top) / zoom);
+      pendingHotspot = { top, left };
+      editingLinkId = null;
+      render();
+    }
+  }
+
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
 }
 
 /**
@@ -232,8 +272,8 @@ function startDragHotspot(evt: MouseEvent, link: CatalogLink, el: HTMLElement, i
 
   function onMove(moveEvt: MouseEvent) {
     if (Math.abs(moveEvt.clientX - startX) > 3 || Math.abs(moveEvt.clientY - startY) > 3) moved = true;
-    top = Math.round(moveEvt.clientY - rect.top);
-    left = Math.round(moveEvt.clientX - rect.left);
+    top = Math.round((moveEvt.clientY - rect.top) / zoom);
+    left = Math.round((moveEvt.clientX - rect.left) / zoom);
     el.style.top = `${top}px`;
     el.style.left = `${left}px`;
   }
@@ -241,13 +281,6 @@ function startDragHotspot(evt: MouseEvent, link: CatalogLink, el: HTMLElement, i
   function onUp() {
     window.removeEventListener("mousemove", onMove);
     window.removeEventListener("mouseup", onUp);
-    // Only guards against a spurious click firing on the image as part of
-    // *this* mouseup — must not linger, or it would silently eat some
-    // unrelated later click on the image (e.g. after editing via the table).
-    suppressNextStageClick = true;
-    setTimeout(() => {
-      suppressNextStageClick = false;
-    }, 0);
     if (moved) {
       if (db) updateLinkPosition(db, link.id, top, left);
       render();
@@ -255,6 +288,7 @@ function startDragHotspot(evt: MouseEvent, link: CatalogLink, el: HTMLElement, i
       editingLinkId = link.id;
       pendingHotspot = null;
       render();
+      centerOnHotspot(link.id);
     }
   }
 
@@ -266,6 +300,14 @@ function actionEditLink(linkId: number) {
   editingLinkId = linkId;
   pendingHotspot = null;
   render();
+  centerOnHotspot(linkId);
+}
+
+/** Scrolls the stage so the given hotspot is centered in view. */
+function centerOnHotspot(linkId: number) {
+  document
+    .querySelector(`.hotspot[data-id="${linkId}"]`)
+    ?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
 }
 
 function actionAddLink(name: string, url: string) {
@@ -367,6 +409,16 @@ function render() {
   const availableLinks = links.filter((l) => !usedUrls.has(l.url));
   const editingLink = links.find((l) => l.id === editingLinkId) ?? null;
 
+  // Preserve the current pan position across a re-render of the *same*
+  // image (rebuilding #app.innerHTML recreates #stage-scroll from scratch,
+  // which would otherwise silently snap back to scrollLeft/Top = 0).
+  const prevStageScroll = document.getElementById("stage-scroll");
+  const savedScroll =
+    prevStageScroll && activeImageId === lastRenderedImageId
+      ? { left: prevStageScroll.scrollLeft, top: prevStageScroll.scrollTop }
+      : null;
+  lastRenderedImageId = activeImageId;
+
   app.innerHTML = `
     <div class="toolbar">
       <h1>Electronic Catalog — Editor</h1>
@@ -395,15 +447,18 @@ function render() {
     </div>
 
     <div class="stage">
-      ${
-        activeImage
-          ? `<div class="stage-inner" id="stage-inner">
-               <img id="stage-img" src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
-               ${links.map((l) => hotspotHtml(l)).join("")}
-               ${pendingHotspot ? `<div class="hotspot pending" style="top:${pendingHotspot.top}px;left:${pendingHotspot.left}px">new…</div>` : ""}
-             </div>`
-          : `<p class="hint" style="padding:2rem">Select an image on the left, or add a new one.</p>`
-      }
+      <div class="stage-scroll" id="stage-scroll">
+        ${
+          activeImage
+            ? `<div class="stage-inner" id="stage-inner" style="transform: scale(${zoom})">
+                 <img id="stage-img" src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
+                 ${links.map((l) => hotspotHtml(l)).join("")}
+                 ${pendingHotspot ? `<div class="hotspot pending" style="top:${pendingHotspot.top}px;left:${pendingHotspot.left}px">new…</div>` : ""}
+               </div>`
+            : `<p class="hint" style="padding:2rem">Select an image on the left, or add a new one.</p>`
+        }
+      </div>
+      ${activeImage ? renderZoomControls() : ""}
     </div>
 
     <div class="inspector">
@@ -415,7 +470,26 @@ function render() {
     </div>
   `;
 
+  if (savedScroll) {
+    const stageScroll = document.getElementById("stage-scroll");
+    if (stageScroll) {
+      stageScroll.scrollLeft = savedScroll.left;
+      stageScroll.scrollTop = savedScroll.top;
+    }
+  }
+
   wireEvents(links);
+}
+
+function renderZoomControls(): string {
+  return `
+    <div class="zoom-controls">
+      <button id="btn-zoom-out" title="Zoom out">−</button>
+      <span class="zoom-pct">${Math.round(zoom * 100)}%</span>
+      <button id="btn-zoom-in" title="Zoom in">+</button>
+      <button id="btn-zoom-reset" title="Reset zoom">Reset</button>
+    </div>
+  `;
 }
 
 function hotspotHtml(l: CatalogLink): string {
@@ -540,8 +614,25 @@ function wireEvents(links: CatalogLink[]) {
     li.addEventListener("click", () => actionSelectImage(Number(li.dataset.id)));
   });
 
+  document.getElementById("btn-zoom-in")?.addEventListener("click", () => actionSetZoom(zoom * 1.25));
+  document.getElementById("btn-zoom-out")?.addEventListener("click", () => actionSetZoom(zoom / 1.25));
+  document.getElementById("btn-zoom-reset")?.addEventListener("click", () => actionSetZoom(1));
+
+  document.getElementById("stage-scroll")?.addEventListener(
+    "wheel",
+    (evt) => {
+      if (!evt.ctrlKey && !evt.metaKey) return;
+      evt.preventDefault();
+      actionSetZoom(zoom * Math.exp(-evt.deltaY * 0.001));
+    },
+    { passive: false },
+  );
+
   const stageImg = document.getElementById("stage-img") as HTMLImageElement | null;
-  stageImg?.addEventListener("click", (evt) => actionStageClick(evt, stageImg));
+  const stageScroll = document.getElementById("stage-scroll") as HTMLElement | null;
+  if (stageImg && stageScroll) {
+    stageImg.addEventListener("mousedown", (evt) => startStageInteraction(evt, stageImg, stageScroll));
+  }
 
   if (stageImg) {
     document.querySelectorAll<HTMLDivElement>(".hotspot[data-id]").forEach((el) => {
