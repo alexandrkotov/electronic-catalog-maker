@@ -1,0 +1,12 @@
+{
+  "name": "electronic-catalog-maker",
+  "private": true,
+  "description": "Build and view interactive image-hotspot catalogs, packaged as a single portable SQLite file. No backend required.",
+  "license": "MIT",
+  "scripts": {
+    "dev:editor": "pnpm --filter @ecm/editor dev",
+    "dev:viewer": "pnpm --filter @ecm/viewer dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck"
+  }
+}

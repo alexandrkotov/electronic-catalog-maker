@@ -1,0 +1,5 @@
+export * from "./types.js";
+export * from "./schema.js";
+export * from "./db.js";
+// Re-exported so consumers (editor/viewer) don't need their own @types/sql.js.
+export type { Database, SqlJsStatic } from "sql.js";
