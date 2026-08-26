@@ -327,7 +327,7 @@ if it's gone stale so the CDN URL can't silently drift from source, and
 redeploys the editor/viewer to Pages — all three on every push to `main`,
 no manual step. Known gap, confirmed via a live two-editor test: no
 conflict detection on concurrent edits (see "⚠️ No conflict detection"
-above). Not yet built: bulk link import.
+above).
 
 ## License
 
