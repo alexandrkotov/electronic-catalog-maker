@@ -101,6 +101,7 @@ jobs:
           cp landing/index.html site/index.html
           cp -r packages/editor/dist site/editor
           cp -r packages/viewer/dist site/viewer
+          cp -r demo site/demo
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
