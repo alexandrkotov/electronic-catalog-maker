@@ -253,6 +253,10 @@ table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.8rem;
+  /* Fixed layout + a <colgroup> is what makes per-cell truncation below
+     actually take effect — in the default auto layout, a column still
+     grows to fit its longest unwrapped line regardless of max-width. */
+  table-layout: fixed;
 }
 
 th,
@@ -261,6 +265,55 @@ td {
   padding: 0.35rem 0.4rem;
   text-align: left;
   vertical-align: top;
+}
+
+/* Every row stays one line tall — a cell's full text (e.g. a long list of
+   alternate part numbers) shows as a floating box on hover instead of
+   pushing the row taller. Never affects sibling rows' height, since the
+   popover is positioned absolutely and the hovered cell's own box doesn't
+   grow. */
+td {
+  position: relative;
+  overflow: hidden;
+}
+
+td:hover {
+  overflow: visible;
+}
+
+.cell-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+td:hover .cell-text {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  z-index: 20;
+  display: block;
+  width: max-content;
+  max-width: 18rem;
+  white-space: normal;
+  /* Deliberately a fixed pale yellow rather than a theme token — reads as
+     a "note" being highlighted in both light and dark mode, unlike most
+     of this file's colors which flip with the theme. Dark text throughout,
+     since a light background needs it regardless of which theme is active. */
+  background: #fef9c3;
+  color: #1a1a1a;
+  border: 1px solid #eab308;
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.35);
+}
+
+/* The rightmost column would otherwise expand past the panel's edge and
+   get clipped — grow it leftward from the cell's right edge instead. */
+td:last-child:hover .cell-text {
+  left: auto;
+  right: -1px;
 }
 
 tbody tr {

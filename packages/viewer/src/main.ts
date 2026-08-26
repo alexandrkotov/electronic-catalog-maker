@@ -3,8 +3,10 @@ import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import {
   CATALOG_FILE_EXTENSION,
   collectExtraKeys,
+  detectFileKind,
   findRowByUrl,
   groupImagesByFolder,
+  importSchCatalog,
   initSqlite,
   listAllRows,
   listImages,
@@ -83,7 +85,7 @@ async function loadFromUrl(url: string): Promise<string | null> {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const bytes = new Uint8Array(await res.arrayBuffer());
-    openBytes(bytes);
+    await openBytes(bytes, baseName(new URL(url, location.href).pathname));
     // Reflect the source into the address bar so the resulting page is
     // itself a shareable link (see README, "Sharing a catalog via link") —
     // matters most when the URL was typed into the dialog rather than
@@ -130,21 +132,45 @@ async function actionSubmitRemote() {
   }
 }
 
-function openBytes(bytes: Uint8Array) {
-  db = openCatalog(SQL, bytes);
-  const meta = readMeta(db);
+/**
+ * Opens either format transparently — sniffed from the file's actual tables,
+ * not its extension (see detectFileKind). A legacy `.sch` file is converted
+ * in-memory into a fresh catalog in *our* schema (importSchCatalog), so
+ * everything downstream (rendering, search, folders, instance-nav) just
+ * works without a parallel "legacy" code path anywhere else in this app.
+ */
+async function openBytes(bytes: Uint8Array, sourceName = "Legacy catalog") {
+  const kind = detectFileKind(SQL, bytes);
+  if (kind === "legacy-sch") {
+    statusMessage = "Converting legacy .sch catalog… this can take a moment for large files.";
+    render();
+    // Yield one tick so the status message above actually paints before the
+    // (synchronous, potentially slow for a big catalog) conversion work runs.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const result = await importSchCatalog(SQL, bytes, sourceName);
+    db = result.db;
+    statusMessage = `Converted legacy catalog "${sourceName}" (${result.imageCount} image${result.imageCount === 1 ? "" : "s"}${result.skippedDiagrams ? `, ${result.skippedDiagrams} skipped` : ""}).`;
+  } else {
+    db = openCatalog(SQL, bytes);
+    const meta = readMeta(db);
+    statusMessage = `Opened catalog "${meta.catalogName}".`;
+  }
   activeImageId = listImages(db)[0]?.id ?? null;
   selectedLinkId = null;
   zoom = 1;
-  statusMessage = `Opened catalog "${meta.catalogName}".`;
   remoteDialogOpen = false;
   render();
+}
+
+function baseName(nameOrPath: string): string {
+  const last = nameOrPath.split(/[\\/]/).pop() || nameOrPath;
+  return last.replace(/\.[^./]+$/, "") || last;
 }
 
 async function actionOpenFile(file: File) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   try {
-    openBytes(bytes);
+    await openBytes(bytes, baseName(file.name));
   } catch (err) {
     statusMessage = `Could not open file: ${(err as Error).message}`;
     render();
@@ -279,7 +305,7 @@ function render() {
     <div class="toolbar">
       <h1>Electronic Catalog — Viewer</h1>
       <button id="btn-open">Open catalog…</button>
-      <input type="file" id="file-open" accept=".${CATALOG_FILE_EXTENSION}" style="display:none" />
+      <input type="file" id="file-open" accept=".${CATALOG_FILE_EXTENSION},.sch" style="display:none" />
       <button id="btn-open-remote" title="Open a catalog hosted at a URL">Open remote catalog…</button>
       <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
       <span class="spacer"></span>
@@ -315,6 +341,7 @@ function render() {
       ${
         activeImage
           ? `<table>
+               <colgroup><col style="width:25%"><col style="width:18%"><col style="width:27%"><col style="width:30%"></colgroup>
                <thead><tr><th>Name</th><th>SKU</th><th>Description</th><th>Extra</th></tr></thead>
                <tbody>${rows.map((r) => rowHtml(r, selectedUrl)).join("")}</tbody>
              </table>`
@@ -465,7 +492,8 @@ function rowHtml(r: CatalogRow, selectedUrl: string | null): string {
   const extra = Object.entries(r.extra)
     .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`)
     .join(", ");
-  return `<tr data-url="${escapeHtml(r.url)}" class="${selected}"><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.sku)}</td><td>${escapeHtml(r.description)}</td><td>${extra}</td></tr>`;
+  const cell = (text: string) => `<td><span class="cell-text">${text}</span></td>`;
+  return `<tr data-url="${escapeHtml(r.url)}" class="${selected}">${cell(escapeHtml(r.name))}${cell(escapeHtml(r.sku))}${cell(escapeHtml(r.description))}${cell(extra)}</tr>`;
 }
 
 function wireEvents() {

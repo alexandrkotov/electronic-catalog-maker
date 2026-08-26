@@ -86,6 +86,37 @@ field (with autocomplete from folders already in use); leave it empty to
 keep the image ungrouped. Ungrouped images always list first, folders
 below them alphabetically. The viewer shows the same grouping read-only.
 
+## Opening a legacy `.sch` catalog
+
+Both apps can open a `.sch` file from the previous-generation desktop
+software this project continues — same "Open catalog…"/"Open remote
+catalog…" flow, detected automatically from the file's actual tables, not
+its extension. It's converted in memory into a regular catalog (nothing is
+ever written back to the `.sch` file itself), so everything else — search,
+folders, themes, instance-nav — works on it exactly like a native `.ecatm`
+catalog: each exploded-view diagram becomes an image (grouped into folders
+by its original category), each part position becomes a hotspot labeled
+with its original position number rather than its full name (the same
+diagram can have 70+ hotspots — full names as labels bury the picture), and
+parts with several superseding/alternate part numbers for one position keep
+the extra ones in that row's `extra.alternates` field rather than losing
+them.
+
+The viewer opens it read-only, same as any catalog. The editor opens it as
+an editable, unattached copy — the same "it's a copy, not opened in place"
+behavior as "Copy remote catalog…" (see above): Save prompts for a location
+the first time, and nothing is ever written back into the original `.sch`
+file, even if the browser handed the editor a writable handle to it.
+
+Two known limits, found from real fixture files: a diagram whose hotspot
+positions reference an *external* image URL instead of one embedded in the
+file is skipped (the conversion status reports how many) — the coordinate
+system that positions its hotspots isn't guaranteed to match any image we
+could fetch separately, and some real catalogs do use external URLs. Very
+large files (tens of thousands of diagrams) take proportionally longer to
+convert — a few seconds per thousand diagrams in testing — since it's all
+done in the browser with no server to offload to.
+
 ## Development
 
 ```bash

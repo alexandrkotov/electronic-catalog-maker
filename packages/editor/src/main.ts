@@ -9,9 +9,11 @@ import {
   collectFolders,
   createEmptyCatalog,
   deleteLink,
+  detectFileKind,
   exportCatalog,
   findLinkConflicts,
   groupImagesByFolder,
+  importSchCatalog,
   initSqlite,
   listAllRows,
   listImages,
@@ -43,7 +45,9 @@ const app = document.getElementById("app")!;
 
 const CATALOG_PICKER_TYPE: FilePickerAcceptType = {
   description: "Electronic catalog",
-  accept: { "application/x-sqlite3": [`.${CATALOG_FILE_EXTENSION}`] },
+  // .sch: the previous-generation desktop app's format — opened read-write
+  // here too, but always as an unattached copy (see openCatalogFromBytes).
+  accept: { "application/x-sqlite3": [`.${CATALOG_FILE_EXTENSION}`, ".sch"] },
 };
 
 let SQL: SqlJsStatic;
@@ -127,17 +131,50 @@ function actionNewCatalog() {
   setStatus(`Created new catalog "${name}".`);
 }
 
-async function openCatalogFromBytes(bytes: Uint8Array, handle: FileSystemFileHandle | null) {
+/**
+ * Opens either format transparently — sniffed from the file's actual tables,
+ * not its extension (see detectFileKind), matching the viewer. A legacy
+ * `.sch` file is converted in-memory into a fresh catalog in *our* schema
+ * (importSchCatalog) and always treated as an unattached copy: even if the
+ * caller has a real writable handle to the .sch file (picked via the File
+ * System Access API), it's discarded — Save must never write our schema
+ * back into the user's original legacy file. It behaves exactly like "Copy
+ * remote catalog…": editable right away, first Save prompts for a location.
+ */
+async function openCatalogFromBytes(
+  bytes: Uint8Array,
+  handle: FileSystemFileHandle | null,
+  sourceName = "Legacy catalog",
+) {
   try {
-    db = openCatalog(SQL, bytes);
-    const meta = readMeta(db);
-    activeImageId = currentImages()[0]?.id ?? null;
-    openedFileHandle = handle;
-    resetTransientEditState();
-    setStatus(`Opened catalog "${meta.catalogName}".`);
+    const kind = detectFileKind(SQL, bytes);
+    if (kind === "legacy-sch") {
+      setStatus("Converting legacy .sch catalog… this can take a moment for large files.");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const result = await importSchCatalog(SQL, bytes, sourceName);
+      db = result.db;
+      activeImageId = currentImages()[0]?.id ?? null;
+      openedFileHandle = null;
+      resetTransientEditState();
+      setStatus(
+        `Converted legacy catalog "${sourceName}" (${result.imageCount} image${result.imageCount === 1 ? "" : "s"}${result.skippedDiagrams ? `, ${result.skippedDiagrams} skipped` : ""}). Save to keep it as a .${CATALOG_FILE_EXTENSION} file.`,
+      );
+    } else {
+      db = openCatalog(SQL, bytes);
+      const meta = readMeta(db);
+      activeImageId = currentImages()[0]?.id ?? null;
+      openedFileHandle = handle;
+      resetTransientEditState();
+      setStatus(`Opened catalog "${meta.catalogName}".`);
+    }
   } catch (err) {
     setStatus(`Could not open file: ${(err as Error).message}`);
   }
+}
+
+function baseName(nameOrPath: string): string {
+  const last = nameOrPath.split(/[\\/]/).pop() || nameOrPath;
+  return last.replace(/\.[^./]+$/, "") || last;
 }
 
 async function actionOpenCatalogClicked(fallbackInput: HTMLInputElement) {
@@ -146,7 +183,7 @@ async function actionOpenCatalogClicked(fallbackInput: HTMLInputElement) {
       const [handle] = await window.showOpenFilePicker({ types: [CATALOG_PICKER_TYPE] });
       if (!handle) return;
       const file = await handle.getFile();
-      await openCatalogFromBytes(new Uint8Array(await file.arrayBuffer()), handle);
+      await openCatalogFromBytes(new Uint8Array(await file.arrayBuffer()), handle, baseName(file.name));
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         setStatus(`Could not open file: ${(err as Error).message}`);
@@ -197,7 +234,8 @@ async function actionSubmitRemoteDialog() {
   }
   remoteLoading = false;
   remoteDialogOpen = false;
-  await openCatalogFromBytes(bytes, null); // no file handle — a "copy", not opened in place
+  // No file handle — a "copy", not opened in place — same as any .sch import.
+  await openCatalogFromBytes(bytes, null, baseName(new URL(url, location.href).pathname));
 }
 
 function suggestedFileName(): string {
@@ -573,7 +611,7 @@ function render() {
       <h1>Electronic Catalog — Editor</h1>
       <button id="btn-new">New catalog</button>
       <button id="btn-open">Open catalog…</button>
-      <input type="file" id="file-open" accept=".${CATALOG_FILE_EXTENSION}" style="display:none" />
+      <input type="file" id="file-open" accept=".${CATALOG_FILE_EXTENSION},.sch" style="display:none" />
       <button id="btn-copy-remote" title="Fetch a copy of a catalog hosted at a URL to start editing">Copy remote catalog…</button>
       <button id="btn-add-image" ${db ? "" : "disabled"}>Add image…</button>
       <input type="file" id="file-image" accept="image/*" style="display:none" />
@@ -907,7 +945,7 @@ function wireEvents(links: CatalogLink[]) {
   document.getElementById("btn-open")?.addEventListener("click", () => void actionOpenCatalogClicked(fileOpen));
   fileOpen.addEventListener("change", () => {
     const file = fileOpen.files?.[0];
-    if (file) void file.arrayBuffer().then((buf) => openCatalogFromBytes(new Uint8Array(buf), null));
+    if (file) void file.arrayBuffer().then((buf) => openCatalogFromBytes(new Uint8Array(buf), null, baseName(file.name)));
   });
 
   document.getElementById("btn-save")?.addEventListener("click", () => void actionSave());
