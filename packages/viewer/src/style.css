@@ -68,7 +68,11 @@ body {
    embeddable viewer creates its own div inside a shadow root). */
 .ecm-viewer-app {
   display: grid;
-  grid-template-columns: 220px 1fr 380px;
+  /* --images-w/--table-w are set as inline properties on the container
+     element itself (packages/shared/src/viewerEngine.ts, applyPanelWidths())
+     — that element is never touched by render()'s innerHTML rebuild, so a
+     user's resize survives every re-render, not just this one. */
+  grid-template-columns: var(--images-w, 220px) 6px 1fr 6px var(--table-w, 380px);
   height: 100%;
   /* Redundant with `body` above for the standalone page, but load-bearing
      for the embeddable viewer: its shadow tree has no <body> for that rule
@@ -85,13 +89,42 @@ body {
 .ecm-viewer-app.mode-full {
   grid-template-rows: auto 1fr;
   grid-template-areas:
-    "toolbar toolbar toolbar"
-    "images  stage    table";
+    "toolbar   toolbar   toolbar toolbar   toolbar"
+    "images    divider-l stage   divider-r table";
 }
 
 .ecm-viewer-app.mode-lite {
   grid-template-rows: 1fr;
-  grid-template-areas: "images stage table";
+  grid-template-areas: "images divider-l stage divider-r table";
+}
+
+/* Draggable dividers between the side panels and the stage — width itself
+   lives in JS state (viewerEngine.ts startPanelResize), this just draws the
+   grab handle. Same pattern as the editor's equivalent. */
+.panel-divider {
+  position: relative;
+  cursor: col-resize;
+}
+#divider-images {
+  grid-area: divider-l;
+}
+#divider-table {
+  grid-area: divider-r;
+}
+.panel-divider::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--border);
+}
+.panel-divider:hover::after,
+.panel-divider.dragging::after {
+  left: 0;
+  width: 100%;
+  background: var(--accent);
 }
 
 .toolbar {
@@ -119,7 +152,6 @@ body {
 
 .panel-images {
   grid-area: images;
-  border-right: 1px solid var(--border);
   overflow-y: auto;
   padding: 0.5rem;
   background: var(--bg-page);
@@ -273,7 +305,6 @@ body {
 
 .table-panel {
   grid-area: table;
-  border-left: 1px solid var(--border);
   overflow-y: auto;
   padding: 0.75rem;
   background: var(--bg-page);
@@ -295,6 +326,25 @@ td {
   padding: 0.35rem 0.4rem;
   text-align: left;
   vertical-align: top;
+}
+
+th {
+  position: relative; /* anchors .col-resize-handle */
+}
+
+.col-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 1;
+}
+.col-resize-handle:hover,
+.col-resize-handle.dragging {
+  background: var(--accent);
+  opacity: 0.5;
 }
 
 /* Every row stays one line tall — a cell's full text (e.g. a long list of

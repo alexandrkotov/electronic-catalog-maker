@@ -45,6 +45,15 @@ interface EcmFileSystemFileHandle {
  */
 const DEMO_CATALOG_URL =
   "https://alexandrkotov.github.io/electronic-catalog-maker/demo/auto-spare-parts.ecatm";
+
+// Limits/defaults for the resizable side panels + row-data table columns —
+// see the per-instance state declared inside mountViewer() below. Plain
+// module-level constants (not per-instance) since they're the same for
+// every mounted viewer, unlike the widths themselves.
+const PANEL_WIDTH_LIMITS = { min: 160, max: 640 };
+const COL_WIDTH_LIMITS = { min: 40, max: 400 };
+/** Name, SKU, Description, Extra — matches rowHtml()'s cell order below. */
+const DEFAULT_COL_WIDTHS = [100, 70, 110, 120];
 type ShowOpenFilePicker = (options?: {
   types?: { description?: string; accept: Record<string, string[]> }[];
   multiple?: boolean;
@@ -155,6 +164,128 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // clears the other.
   let openedFileHandle: EcmFileSystemFileHandle | null = null;
   let refreshing = false;
+
+  // ---------- resizable layout (side panels + the row-data table's columns) ----------
+  // Same pattern as the editor's equivalent (packages/editor/src/main.ts) —
+  // user-adjustable, remembered per-browser via localStorage, not part of
+  // the catalog file itself. Per-instance state (not module-level like the
+  // editor's, which only ever has one instance) since a page can embed
+  // several <ecm-viewer> widgets at once, each mounting this function
+  // separately — sharing one localStorage key across instances is fine
+  // (same as theme.ts already does), but the in-memory width has to be
+  // each instance's own.
+  let imagesPanelWidth = loadPanelWidth("ecm-viewer-images-width", 220);
+  let tablePanelWidth = loadPanelWidth("ecm-viewer-table-width", 380);
+  let colWidths = loadColWidths();
+  applyPanelWidths(); // before the first render — avoids a flash of the default width
+
+  function loadPanelWidth(key: string, fallback: number): number {
+    try {
+      const raw = Number(localStorage.getItem(key));
+      if (Number.isFinite(raw) && raw >= PANEL_WIDTH_LIMITS.min && raw <= PANEL_WIDTH_LIMITS.max) return raw;
+    } catch {
+      // localStorage unavailable (privacy mode, etc.) — fall back to the default.
+    }
+    return fallback;
+  }
+
+  // Applied as CSS custom properties directly on `container` (not
+  // `container.innerHTML`), so a resize survives render()'s wholesale
+  // innerHTML rebuild without needing to be reapplied on every call.
+  function applyPanelWidths() {
+    container.style.setProperty("--images-w", `${imagesPanelWidth}px`);
+    container.style.setProperty("--table-w", `${tablePanelWidth}px`);
+  }
+
+  function loadColWidths(): number[] {
+    try {
+      const raw = localStorage.getItem("ecm-viewer-table-col-widths");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length === DEFAULT_COL_WIDTHS.length && parsed.every((n) => typeof n === "number" && n > 0)) {
+          return parsed;
+        }
+      }
+    } catch {
+      // malformed or unavailable storage — use the default widths instead.
+    }
+    return [...DEFAULT_COL_WIDTHS];
+  }
+
+  function saveColWidths() {
+    try {
+      localStorage.setItem("ecm-viewer-table-col-widths", JSON.stringify(colWidths));
+    } catch {
+      // Width still applies for this session, just won't persist.
+    }
+  }
+
+  function colTableTotalWidth(): number {
+    return colWidths.reduce((a, b) => a + b, 0);
+  }
+
+  /**
+   * Drags one of the two panel dividers (images↔stage, stage↔table).
+   * Follows the same "poke style properties directly on mousemove, skip
+   * render()" pattern as hotspot dragging elsewhere in this file — a full
+   * re-render on every mousemove would be wasteful and can lose focus.
+   */
+  function startPanelResize(evt: MouseEvent, side: "images" | "table") {
+    evt.preventDefault();
+    const divider = evt.currentTarget as HTMLElement;
+    const startX = evt.clientX;
+    const startWidth = side === "images" ? imagesPanelWidth : tablePanelWidth;
+    divider.classList.add("dragging");
+
+    function onMove(moveEvt: MouseEvent) {
+      const dx = moveEvt.clientX - startX;
+      // The table panel sits on the right, so dragging its divider left (dx < 0) should grow it.
+      const raw = side === "images" ? startWidth + dx : startWidth - dx;
+      const width = Math.min(PANEL_WIDTH_LIMITS.max, Math.max(PANEL_WIDTH_LIMITS.min, raw));
+      if (side === "images") imagesPanelWidth = width;
+      else tablePanelWidth = width;
+      applyPanelWidths();
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      divider.classList.remove("dragging");
+      try {
+        localStorage.setItem(side === "images" ? "ecm-viewer-images-width" : "ecm-viewer-table-width", String(side === "images" ? imagesPanelWidth : tablePanelWidth));
+      } catch {
+        // Width still applies for this session, just won't persist.
+      }
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  /** Drags a column-resize handle in the row-data table's header. */
+  function startColumnResize(evt: MouseEvent, colIndex: number) {
+    evt.preventDefault();
+    evt.stopPropagation();
+    const handle = evt.currentTarget as HTMLElement;
+    const startX = evt.clientX;
+    const startWidth = colWidths[colIndex] ?? COL_WIDTH_LIMITS.min;
+    handle.classList.add("dragging");
+
+    function onMove(moveEvt: MouseEvent) {
+      const width = Math.min(COL_WIDTH_LIMITS.max, Math.max(COL_WIDTH_LIMITS.min, startWidth + (moveEvt.clientX - startX)));
+      colWidths[colIndex] = width;
+      const table = root.querySelector<HTMLTableElement>("table[data-col-key='rows']");
+      const col = table?.querySelectorAll("col")[colIndex] as HTMLElement | undefined;
+      if (col) col.style.width = `${width}px`;
+      if (table) table.style.width = `${colTableTotalWidth()}px`;
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      handle.classList.remove("dragging");
+      saveColWidths();
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
 
   function actionSetZoom(next: number) {
     zoom = Math.min(4, Math.max(0.25, next));
@@ -511,6 +642,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           }
         </div>
 
+        <div class="panel-divider" id="divider-images" title="Drag to resize"></div>
+
         <div class="stage">
           <div class="stage-scroll" id="stage-scroll">
             ${
@@ -526,12 +659,19 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           ${instances.length > 1 ? renderInstanceNav(instanceIndex, instances.length) : ""}
         </div>
 
+        <div class="panel-divider" id="divider-table" title="Drag to resize"></div>
+
         <div class="table-panel">
           ${
             activeImage
-              ? `<table>
-                   <colgroup><col style="width:25%"><col style="width:18%"><col style="width:27%"><col style="width:30%"></colgroup>
-                   <thead><tr><th>Name</th><th>SKU</th><th>Description</th><th>Extra</th></tr></thead>
+              ? `<table data-col-key="rows" style="width:${colTableTotalWidth()}px">
+                   <colgroup>${colWidths.map((w) => `<col style="width:${w}px">`).join("")}</colgroup>
+                   <thead><tr>
+                     <th>Name<span class="col-resize-handle" data-col="0"></span></th>
+                     <th>SKU<span class="col-resize-handle" data-col="1"></span></th>
+                     <th>Description<span class="col-resize-handle" data-col="2"></span></th>
+                     <th>Extra<span class="col-resize-handle" data-col="3"></span></th>
+                   </tr></thead>
                    <tbody>${rows.map((r) => rowHtml(r, selectedUrl)).join("")}</tbody>
                  </table>`
               : ""
@@ -776,6 +916,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
     root.querySelectorAll<HTMLTableRowElement>("tr[data-url]").forEach((tr) => {
       tr.addEventListener("click", () => actionSelectRowByUrl(tr.dataset.url!));
+    });
+
+    root.getElementById("divider-images")?.addEventListener("mousedown", (evt) => startPanelResize(evt as MouseEvent, "images"));
+    root.getElementById("divider-table")?.addEventListener("mousedown", (evt) => startPanelResize(evt as MouseEvent, "table"));
+    root.querySelectorAll<HTMLElement>(".col-resize-handle").forEach((handle) => {
+      handle.addEventListener("mousedown", (evt) => startColumnResize(evt as MouseEvent, Number(handle.dataset.col)));
     });
 
     void findRowByUrl; // used indirectly via listRowsForImage today; kept for future direct-lookup use
