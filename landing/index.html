@@ -56,6 +56,9 @@
   footer a {
     color: inherit;
   }
+  #visits {
+    margin-top: 1rem;
+  }
 </style>
 </head>
 <body>
@@ -79,6 +82,18 @@
     <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Source on GitHub</a>
     — catalog files stay on your own disk unless you explicitly open one
     from a URL.
+    <div id="visits"></div>
   </footer>
+
+  <!-- Privacy-friendly, cookie-free page-view counting (goatcounter.com) —
+       tracks this page's own path automatically; the visible badge below
+       uses path:"TOTAL" so it counts landing+editor+viewer combined,
+       since visiting the landing page alone doesn't mean someone actually
+       used the tool. Not `async`, on purpose: the inline call right after
+       it needs `window.goatcounter.visit_count` to already exist. -->
+  <script data-goatcounter="https://ecatm.goatcounter.com/count" src="//gc.zgo.at/count.js"></script>
+  <script>
+    window.goatcounter.visit_count({ append: "#visits", path: "TOTAL", type: "html" });
+  </script>
 </body>
 </html>

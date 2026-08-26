@@ -9,5 +9,11 @@
   <body>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
+    <!-- Privacy-friendly, cookie-free page-view counting (goatcounter.com) —
+         same account as the landing page and viewer, so the dashboard shows
+         editor vs. viewer usage separately. count.js skips localhost/private
+         IPs by default (no allow_local set), so local dev doesn't pollute
+         the real counts — nothing to gate on the production build. -->
+    <script data-goatcounter="https://ecatm.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
   </body>
 </html>
