@@ -61,3 +61,49 @@ jobs:
             git commit -m "ci: rebuild packages/viewer-embed/dist"
             git push
           fi
+
+  # Publishes the editor and viewer as a GitHub Pages project site — the
+  # "domain and hosting" half of the public-hub backlog item, previously
+  # left open since local dev servers were the only way to run either app.
+  # editor/viewer's own vite.config.ts only applies the /electronic-
+  # catalog-maker/<app>/ base path for this production build, never local
+  # dev, so README's localhost URLs stay accurate.
+  deploy-pages:
+    name: Deploy editor + viewer to GitHub Pages
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @ecm/editor build
+      - run: pnpm --filter @ecm/viewer build
+      - name: Assemble the Pages site (landing page + both apps as subpaths)
+        run: |
+          mkdir -p site
+          cp landing/index.html site/index.html
+          cp -r packages/editor/dist site/editor
+          cp -r packages/viewer/dist site/viewer
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4

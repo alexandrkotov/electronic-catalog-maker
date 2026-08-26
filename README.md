@@ -23,10 +23,17 @@ other page — even a plain static HTML file with no build step of its own
 
 ## Getting started
 
-Both apps are fully client-side — no server, no database, no accounts —
-but running them locally still needs two ordinary developer tools
-installed once (there's no hosted version or downloadable installer yet,
-see "Status" below):
+Just want to use the apps? They're hosted, free, nothing to install:
+
+- **[Editor](https://alexandrkotov.github.io/electronic-catalog-maker/editor/)**
+- **[Viewer](https://alexandrkotov.github.io/electronic-catalog-maker/viewer/)**
+
+Both run entirely in your browser — nothing you build gets uploaded
+anywhere unless you explicitly open a catalog from a URL (see "Sharing a
+catalog via link" below); a saved `.ecatm` file lives on your own disk.
+
+To develop the project instead (or run it without depending on that
+hosted copy), it needs two ordinary developer tools installed once:
 
 - [Node.js](https://nodejs.org/) 18 or later
 - [pnpm](https://pnpm.io/installation)
@@ -284,12 +291,12 @@ light/dark theme. The viewer is also embeddable elsewhere as
 `<ecm-viewer>` (see "Embedding the viewer"), distributed straight from
 this repo via jsDelivr — its built `dist/ecm-viewer.js` is deliberately
 committed (everywhere else, `dist/` is gitignored) since that file *is*
-what gets served. [CI](.github/workflows/ci.yml) typechecks and builds
-every package on each push/PR, and rebuilds+recommits that one file on
-pushes to `main` if it's gone stale, so the live CDN URL can't silently
-drift from source. Not yet built: a hosted/public version of the
-editor/viewer apps themselves (local dev server is the only way to run
-them today), bulk link import.
+what gets served. The editor and viewer themselves are hosted too, free,
+on GitHub Pages — see "Getting started" for the links. [CI](.github/workflows/ci.yml)
+typechecks and builds every package on each push/PR, rebuilds+recommits
+`ecm-viewer.js` if it's gone stale so the CDN URL can't silently drift
+from source, and redeploys the editor/viewer to Pages — all three on
+every push to `main`, no manual step. Not yet built: bulk link import.
 
 ## License
 

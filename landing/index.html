@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Electronic Catalog Maker</title>
+<style>
+  /* Light-only, deliberately — no `color-scheme: light dark` (see the
+     editor/viewer's own style.css for why: without every element paired
+     with explicit colors, browser dark-mode heuristics repaint things
+     unpredictably). This page is tiny and static; not worth a real theme. */
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    max-width: 640px;
+    margin: 4rem auto;
+    padding: 0 1.5rem;
+    line-height: 1.5;
+    color: #1a1a1a;
+    background: #fff;
+  }
+  h1 { margin-bottom: 0.25rem; }
+  p.tagline { color: #666; margin-top: 0; }
+  .apps {
+    display: flex;
+    gap: 1rem;
+    margin: 2rem 0;
+    flex-wrap: wrap;
+  }
+  .apps a {
+    flex: 1;
+    min-width: 200px;
+    display: block;
+    padding: 1.25rem;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    text-decoration: none;
+    color: inherit;
+  }
+  .apps a:hover {
+    border-color: #2563eb;
+  }
+  .apps h2 {
+    margin: 0 0 0.4rem;
+    font-size: 1.1rem;
+  }
+  .apps p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #666;
+  }
+  footer {
+    margin-top: 3rem;
+    font-size: 0.85rem;
+    color: #888;
+  }
+  footer a {
+    color: inherit;
+  }
+</style>
+</head>
+<body>
+  <h1>Electronic Catalog Maker</h1>
+  <p class="tagline">
+    Build and view interactive image-hotspot catalogs — no backend, no install.
+  </p>
+
+  <div class="apps">
+    <a href="editor/">
+      <h2>Editor →</h2>
+      <p>Build a catalog: place hotspots on an image, attach data to each.</p>
+    </a>
+    <a href="viewer/">
+      <h2>Viewer →</h2>
+      <p>Open a catalog file and click around it.</p>
+    </a>
+  </div>
+
+  <footer>
+    <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Source on GitHub</a>
+    — catalog files stay on your own disk unless you explicitly open one
+    from a URL.
+  </footer>
+</body>
+</html>
