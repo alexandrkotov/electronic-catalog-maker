@@ -699,7 +699,7 @@ function actionToggleSearch() {
 /** A repeated name/url is legitimate (the same part drawn at several positions on one diagram). */
 function conflictMessage(conflicts: LinkConflict[]): string {
   const lines = conflicts.map(
-    (c) => `${c.field === "name" ? "Name" : "URL"} "${c.value}" is already used by another hotspot in this catalog.`,
+    (c) => `${c.field === "name" ? "Name" : "Address"} "${c.value}" is already used by another hotspot in this catalog.`,
   );
   return `${lines.join("\n")}\n\nThis is fine if it's the same part drawn again elsewhere. Save anyway?`;
 }
@@ -1164,7 +1164,7 @@ function renderLinksSection(links: CatalogLink[], editingLinkId: number | null):
         <colgroup><col style="width:${nameW}px"><col style="width:${urlW}px"></colgroup>
         <thead><tr>
           <th>Name<span class="col-resize-handle" data-table="links" data-col="0"></span></th>
-          <th>URL<span class="col-resize-handle" data-table="links" data-col="1"></span></th>
+          <th>Address<span class="col-resize-handle" data-table="links" data-col="1"></span></th>
         </tr></thead>
         <tbody>
           ${links
@@ -1188,7 +1188,7 @@ function renderRowForm(availableLinks: CatalogLink[]): string {
         availableLinks.length === 0
           ? `<p class="hint">Add a link with no data row first.</p>`
           : `<form id="form-row">
-               <div class="field"><label>URL (matches a link)</label>
+               <div class="field"><label>Address (matches a link)</label>
                  <select name="url">${availableLinks.map((l) => `<option value="${escapeHtml(l.url)}">${escapeHtml(l.url)} (${escapeHtml(l.name)})</option>`).join("")}</select>
                </div>
                <div class="field"><label>Name</label><input name="name" /></div>
@@ -1207,7 +1207,7 @@ function renderEditRowForm(row: CatalogRow | null): string {
   return `
     <section>
       <h2>Edit table row</h2>
-      <p class="hint">URL: ${escapeHtml(row.url)} (change the hotspot's address to repoint this row)</p>
+      <p class="hint">Address: ${escapeHtml(row.url)} (change the hotspot's address to repoint this row)</p>
       <form id="form-edit-row">
         <div class="field"><label>Name</label><input name="name" value="${escapeHtml(row.name)}" /></div>
         <div class="field"><label>SKU</label><input name="sku" value="${escapeHtml(row.sku)}" /></div>
@@ -1231,7 +1231,7 @@ function renderRowsSection(rows: ReturnType<typeof listRowsForImage>, editingRow
       <table data-col-key="rows" style="table-layout:fixed; width:${colTableTotalWidth("rows")}px">
         <colgroup><col style="width:${urlW}px"><col style="width:${nameW}px"><col style="width:${skuW}px"></colgroup>
         <thead><tr>
-          <th>URL<span class="col-resize-handle" data-table="rows" data-col="0"></span></th>
+          <th>Address<span class="col-resize-handle" data-table="rows" data-col="0"></span></th>
           <th>Name<span class="col-resize-handle" data-table="rows" data-col="1"></span></th>
           <th>SKU<span class="col-resize-handle" data-table="rows" data-col="2"></span></th>
         </tr></thead>
