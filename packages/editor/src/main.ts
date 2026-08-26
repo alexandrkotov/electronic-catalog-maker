@@ -1127,7 +1127,7 @@ function renderLinkForm(links: CatalogLink[]): string {
                    : ""
                }
                <div class="field"><label>Link name</label><input name="name" required /></div>
-               <div class="field"><label>Address (url)</label><input name="url" required /></div>
+               <div class="field"><label>Address</label><input name="url" required /></div>
                <button type="submit">Add link</button>
              </form>`
           : `<p class="hint">Click on the image to place a hotspot.</p>`
@@ -1144,7 +1144,7 @@ function renderEditLinkForm(link: CatalogLink | null): string {
       <p class="hint">Position: top=${link.top}, left=${link.left} (drag the hotspot on the image to move it)</p>
       <form id="form-edit-link">
         <div class="field"><label>Link name</label><input name="name" value="${escapeHtml(link.name)}" required /></div>
-        <div class="field"><label>Address (url), unique across the whole catalog</label><input name="url" value="${escapeHtml(link.url)}" required /></div>
+        <div class="field"><label>Address, unique across the whole catalog</label><input name="url" value="${escapeHtml(link.url)}" required /></div>
         <div style="display:flex; gap:0.5rem; align-items:center">
           <button type="submit">Save changes</button>
           <button type="button" id="btn-cancel-edit">Cancel</button>

@@ -75,7 +75,7 @@ catalog via link" below).
    left; click it to make it the active image.
 3. Click anywhere on the image to place a hotspot (a red crosshair tracks
    where you're about to click, with a dashed box showing roughly how much
-   room the label will take). Fill in **Link name** and **Address (url)**
+   room the label will take). Fill in **Link name** and **Address**
    in the "New link (hotspot)" panel and click **Add link**. If this exact
    part is drawn elsewhere on the same image already, pick it from the
    "Same part as an existing hotspot?" dropdown instead of typing a new
