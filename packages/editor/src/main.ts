@@ -9,6 +9,7 @@ import {
   collectFolders,
   createEmptyCatalog,
   deleteLink,
+  deleteRow,
   detectFileKind,
   exportCatalog,
   findLinkConflicts,
@@ -29,8 +30,10 @@ import {
   updateImage,
   updateLink,
   updateLinkPosition,
+  updateRow,
   type CatalogImage,
   type CatalogLink,
+  type CatalogRow,
   type Database,
   type LinkConflict,
   type SearchField,
@@ -55,6 +58,7 @@ let db: Database | null = null;
 let activeImageId: number | null = null;
 let pendingHotspot: { top: number; left: number } | null = null;
 let editingLinkId: number | null = null;
+let editingRowId: number | null = null;
 let zoom = 1;
 let statusMessage = "";
 // Set when the catalog was opened (or first saved) via the File System
@@ -111,6 +115,7 @@ function setStatus(message: string) {
 function resetTransientEditState() {
   pendingHotspot = null;
   editingLinkId = null;
+  editingRowId = null;
   zoom = 1;
 }
 
@@ -382,6 +387,7 @@ function startStageInteraction(evt: MouseEvent, img: HTMLImageElement, scrollEl:
       const top = Math.round((upEvt.clientY - rect.top) / zoom);
       pendingHotspot = { top, left };
       editingLinkId = null;
+      editingRowId = null;
       render();
     }
   }
@@ -476,9 +482,11 @@ function startDragHotspot(evt: MouseEvent, link: CatalogLink, el: HTMLElement, i
       render();
     } else {
       editingLinkId = link.id;
+      editingRowId = null;
       pendingHotspot = null;
       render();
       centerOnHotspot(link.id);
+      scrollInspectorToEditLink();
     }
   }
 
@@ -486,8 +494,10 @@ function startDragHotspot(evt: MouseEvent, link: CatalogLink, el: HTMLElement, i
   window.addEventListener("mouseup", onUp);
 }
 
+/** Triggered by clicking a row in "Links on this image" — the inspector's scroll position is left as-is (see render()'s scroll preservation), unlike the image-hotspot click path below. */
 function actionEditLink(linkId: number) {
   editingLinkId = linkId;
+  editingRowId = null;
   pendingHotspot = null;
   render();
   centerOnHotspot(linkId);
@@ -500,6 +510,18 @@ function centerOnHotspot(linkId: number) {
     ?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
 }
 
+/**
+ * Scrolls the inspector panel so the just-opened "Edit link" form is
+ * visible — for clicking a hotspot directly on the image, where (unlike
+ * clicking a row in one of the lists) the inspector's current scroll
+ * position has nothing to do with where the form ends up, so it should
+ * move to meet the user rather than stay put (see render()'s scroll
+ * preservation, which is for the opposite case: clicking within the list).
+ */
+function scrollInspectorToEditLink() {
+  document.getElementById("form-edit-link")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
 /** Clicking a search result: switches image (if needed) and opens the matching hotspot for editing. */
 function actionGoToSearchResult(imageId: number, url: string) {
   if (!db) return;
@@ -509,8 +531,12 @@ function actionGoToSearchResult(imageId: number, url: string) {
   zoom = 1;
   const link = listLinksForImage(db, imageId).find((l) => l.url === url);
   editingLinkId = link ? link.id : null;
+  editingRowId = null;
   render();
-  if (link) centerOnHotspot(link.id);
+  if (link) {
+    centerOnHotspot(link.id);
+    scrollInspectorToEditLink();
+  }
 }
 
 function actionToggleSearch() {
@@ -601,19 +627,55 @@ function actionCancelEditLink() {
   render();
 }
 
+/** Parses the "Extra characteristics (JSON)" textarea; returns null (and sets a status message) if invalid. */
+function parseExtraField(extraText: string): Record<string, string> | null {
+  if (!extraText.trim()) return {};
+  try {
+    return JSON.parse(extraText);
+  } catch {
+    setStatus('The "extra characteristics" field must be a valid JSON object.');
+    return null;
+  }
+}
+
 function actionAddRow(url: string, name: string, sku: string, description: string, extraText: string) {
   if (!db || activeImageId === null) return;
-  let extra: Record<string, string> = {};
-  if (extraText.trim()) {
-    try {
-      extra = JSON.parse(extraText);
-    } catch {
-      setStatus('The "extra characteristics" field must be a valid JSON object.');
-      return;
-    }
-  }
+  const extra = parseExtraField(extraText);
+  if (extra === null) return;
   addRow(db, { imageId: activeImageId, url, name, sku, description, extra });
   setStatus(`Row for "${url}" added.`);
+}
+
+function actionEditRow(rowId: number) {
+  editingRowId = rowId;
+  editingLinkId = null;
+  pendingHotspot = null;
+  render();
+}
+
+function actionCancelEditRow() {
+  editingRowId = null;
+  render();
+}
+
+function actionSaveRowEdit(name: string, sku: string, description: string, extraText: string) {
+  if (!db || editingRowId === null) return;
+  const extra = parseExtraField(extraText);
+  if (extra === null) return;
+  updateRow(db, editingRowId, { name, sku, description, extra });
+  editingRowId = null;
+  setStatus(`Row "${name}" updated.`);
+}
+
+function actionDeleteRow() {
+  if (!db || editingRowId === null) return;
+  const rowId = editingRowId;
+  askConfirm("Delete this table row? Its hotspot stays on the image, just unassigned from any data. This can't be undone.", () => {
+    if (!db) return;
+    deleteRow(db, rowId);
+    editingRowId = null;
+    setStatus("Row deleted.");
+  });
 }
 
 // ---------- helpers ----------
@@ -650,6 +712,7 @@ function render() {
   const usedUrls = new Set(rows.map((r) => r.url));
   const availableLinks = links.filter((l) => !usedUrls.has(l.url));
   const editingLink = links.find((l) => l.id === editingLinkId) ?? null;
+  const editingRow = rows.find((r) => r.id === editingRowId) ?? null;
 
   // Preserve the current pan position across a re-render of the *same*
   // image (rebuilding #app.innerHTML recreates #stage-scroll from scratch,
@@ -659,6 +722,13 @@ function render() {
     prevStageScroll && activeImageId === lastRenderedImageId
       ? { left: prevStageScroll.scrollLeft, top: prevStageScroll.scrollTop }
       : null;
+  // Same problem for the right-hand inspector panel: clicking a link or a
+  // table row re-renders #app to open its edit form, which recreates
+  // #inspector from scratch and would otherwise snap it back to the top —
+  // jarring when you're editing several rows down a long list.
+  const prevInspector = document.getElementById("inspector");
+  const savedInspectorScrollTop =
+    prevInspector && activeImageId === lastRenderedImageId ? prevInspector.scrollTop : null;
   lastRenderedImageId = activeImageId;
 
   app.innerHTML = `
@@ -696,7 +766,7 @@ function render() {
                  <div class="crosshair-box" id="crosshair-box"></div>
                  <div class="crosshair-h" id="crosshair-h"></div>
                  <div class="crosshair-v" id="crosshair-v"></div>
-                 ${links.map((l) => hotspotHtml(l)).join("")}
+                 ${links.map((l) => hotspotHtml(l, editingRow?.url ?? null)).join("")}
                  ${pendingHotspot ? `<div class="hotspot pending" style="top:${pendingHotspot.top}px;left:${pendingHotspot.left}px">new…</div>` : ""}
                </div>`
             : `<p class="hint" style="padding:2rem">Select an image on the left, or add a new one.</p>`
@@ -705,13 +775,14 @@ function render() {
       ${activeImage ? renderZoomControls() : ""}
     </div>
 
-    <div class="inspector">
+    <div class="inspector" id="inspector">
       ${activeImage ? renderImageForm(activeImage, images) : ""}
       ${activeImage ? renderLinkForm(links) : ""}
       ${activeImage ? renderEditLinkForm(editingLink) : ""}
       ${activeImage ? renderLinksSection(links, editingLinkId) : ""}
       ${activeImage ? renderRowForm(availableLinks) : ""}
-      ${activeImage ? renderRowsSection(rows) : ""}
+      ${activeImage ? renderEditRowForm(editingRow) : ""}
+      ${activeImage ? renderRowsSection(rows, editingRowId) : ""}
     </div>
 
     ${renderConfirmOverlay()}
@@ -724,6 +795,10 @@ function render() {
       stageScroll.scrollLeft = savedScroll.left;
       stageScroll.scrollTop = savedScroll.top;
     }
+  }
+  if (savedInspectorScrollTop !== null) {
+    const inspector = document.getElementById("inspector");
+    if (inspector) inspector.scrollTop = savedInspectorScrollTop;
   }
 
   wireEvents(links);
@@ -870,9 +945,11 @@ function wireSearchResultClicks() {
   });
 }
 
-function hotspotHtml(l: CatalogLink): string {
-  const editing = l.id === editingLinkId ? " editing" : "";
-  return `<div class="hotspot${editing}" data-id="${l.id}" style="top:${l.top}px;left:${l.left}px" title="${escapeHtml(l.url)} — drag to reposition, click to edit">${escapeHtml(l.name)}</div>`;
+function hotspotHtml(l: CatalogLink, editingRowUrl: string | null): string {
+  const classes = ["hotspot"];
+  if (l.id === editingLinkId) classes.push("editing");
+  if (editingRowUrl !== null && l.url === editingRowUrl) classes.push("row-match");
+  return `<div class="${classes.join(" ")}" data-id="${l.id}" style="top:${l.top}px;left:${l.left}px" title="${escapeHtml(l.url)} — drag to reposition, click to edit">${escapeHtml(l.name)}</div>`;
 }
 
 function renderLinkForm(links: CatalogLink[]): string {
@@ -967,16 +1044,43 @@ function renderRowForm(availableLinks: CatalogLink[]): string {
   `;
 }
 
-function renderRowsSection(rows: ReturnType<typeof listRowsForImage>): string {
+function renderEditRowForm(row: CatalogRow | null): string {
+  if (!row) return "";
+  return `
+    <section>
+      <h2>Edit table row</h2>
+      <p class="hint">URL: ${escapeHtml(row.url)} (change the hotspot's address to repoint this row)</p>
+      <form id="form-edit-row">
+        <div class="field"><label>Name</label><input name="name" value="${escapeHtml(row.name)}" /></div>
+        <div class="field"><label>SKU</label><input name="sku" value="${escapeHtml(row.sku)}" /></div>
+        <div class="field"><label>Description</label><input name="description" value="${escapeHtml(row.description)}" /></div>
+        <div class="field"><label>Extra characteristics (JSON)</label><textarea name="extra" rows="3" placeholder='{"weight": "2.3 kg"}'>${escapeHtml(Object.keys(row.extra).length ? JSON.stringify(row.extra, null, 2) : "")}</textarea></div>
+        <div style="display:flex; gap:0.5rem; align-items:center">
+          <button type="submit">Save changes</button>
+          <button type="button" id="btn-cancel-edit-row">Cancel</button>
+          <button type="button" id="btn-delete-row" style="margin-left:auto; color:#b91c1c; border-color:#b91c1c">Delete</button>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function renderRowsSection(rows: ReturnType<typeof listRowsForImage>, editingRowId: number | null): string {
   return `
     <section>
       <h2>Table (${rows.length} rows)</h2>
       <table>
         <thead><tr><th>URL</th><th>Name</th><th>SKU</th></tr></thead>
         <tbody>
-          ${rows.map((r) => `<tr><td>${escapeHtml(r.url)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.sku)}</td></tr>`).join("")}
+          ${rows
+            .map(
+              (r) =>
+                `<tr data-row-id="${r.id}" class="clickable-row${r.id === editingRowId ? " editing" : ""}"><td>${escapeHtml(r.url)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.sku)}</td></tr>`,
+            )
+            .join("")}
         </tbody>
       </table>
+      <p class="hint">Click a row to edit its name, SKU, description or extra characteristics.</p>
     </section>
   `;
 }
@@ -1153,6 +1257,23 @@ function wireEvents(links: CatalogLink[]) {
       String(fd.get("extra") ?? ""),
     );
   });
+
+  document.querySelectorAll<HTMLTableRowElement>("tr[data-row-id]").forEach((tr) => {
+    tr.addEventListener("click", () => actionEditRow(Number(tr.dataset.rowId)));
+  });
+
+  document.getElementById("form-edit-row")?.addEventListener("submit", (evt) => {
+    evt.preventDefault();
+    const fd = new FormData(evt.target as HTMLFormElement);
+    actionSaveRowEdit(
+      String(fd.get("name") ?? ""),
+      String(fd.get("sku") ?? ""),
+      String(fd.get("description") ?? ""),
+      String(fd.get("extra") ?? ""),
+    );
+  });
+  document.getElementById("btn-cancel-edit-row")?.addEventListener("click", actionCancelEditRow);
+  document.getElementById("btn-delete-row")?.addEventListener("click", actionDeleteRow);
 }
 
 void boot();

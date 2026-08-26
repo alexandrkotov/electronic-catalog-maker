@@ -17,6 +17,30 @@ import type { CatalogImage, CatalogLink, CatalogRow } from "./types.js";
 import type { Database, SqlJsStatic } from "sql.js";
 
 /**
+ * Minimal slice of the File System Access API
+ * (https://wicg.github.io/file-system-access/, Chromium-only as of writing)
+ * this file uses — re-reading a locally opened file for Refresh. Declared
+ * locally (not a global ambient .d.ts like packages/editor's) because a
+ * global augmentation in packages/shared/src isn't visible when this file
+ * gets type-checked as part of packages/viewer's or packages/viewer-embed's
+ * own TS program (each package only pulls in shared's *.ts via the import
+ * graph, not shared's own tsconfig `include`). Feature-detected at runtime
+ * via getShowOpenFilePicker(); every call site falls back to a plain
+ * <input type=file> when it's undefined.
+ */
+interface EcmFileSystemFileHandle {
+  readonly name: string;
+  getFile(): Promise<File>;
+}
+type ShowOpenFilePicker = (options?: {
+  types?: { description?: string; accept: Record<string, string[]> }[];
+  multiple?: boolean;
+}) => Promise<EcmFileSystemFileHandle[]>;
+function getShowOpenFilePicker(): ShowOpenFilePicker | undefined {
+  return (window as unknown as { showOpenFilePicker?: ShowOpenFilePicker }).showOpenFilePicker;
+}
+
+/**
  * The viewer's actual behavior — rendering, state, event wiring — factored
  * out of packages/viewer's own entry point so it can be mounted more than
  * once: as the full-page standalone app, and inside the embeddable
@@ -105,6 +129,19 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // 0,0) — tracked so render() can restore the pan position instead of
   // losing it on every unrelated update (selecting a link/row, zooming, ...).
   let lastRenderedImageId: number | null = null;
+  // The URL the catalog was last (re)loaded from, if any — set on every
+  // successful loadFromUrl() and used by actionRefresh() to refetch the same
+  // source (e.g. a catalog shared via a cloud drive that another editor
+  // session just saved a new version of).
+  let currentSrcUrl: string | null = options.initialSrc ?? null;
+  // Set instead of currentSrcUrl when the catalog was opened via the local
+  // file picker (showOpenFilePicker, not the plain <input> fallback) — lets
+  // actionRefresh() re-read the same file from disk, e.g. a catalog synced
+  // locally via a cloud-drive client (OneDrive/Google Drive desktop) rather
+  // than fetched over HTTP. The two are mutually exclusive: opening one way
+  // clears the other.
+  let openedFileHandle: EcmFileSystemFileHandle | null = null;
+  let refreshing = false;
 
   function actionSetZoom(next: number) {
     zoom = Math.min(4, Math.max(0.25, next));
@@ -128,7 +165,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const bytes = new Uint8Array(await res.arrayBuffer());
-      await openBytes(bytes, baseName(new URL(url, location.href).pathname));
+      await openBytes(bytes, baseName(new URL(url, location.href).pathname), null);
+      currentSrcUrl = url;
+      openedFileHandle = null;
       if (updateAddressBar) {
         history.replaceState(null, "", `?src=${encodeURIComponent(url)}`);
       }
@@ -174,13 +213,56 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   }
 
   /**
+   * Re-reads the catalog from wherever it was last opened — refetches
+   * currentSrcUrl if it was loaded via URL, or re-reads openedFileHandle
+   * from disk if it was opened via the local file picker (a catalog synced
+   * locally by a cloud-drive client is the common case for that path). For
+   * watching a catalog someone else is actively editing without leaving the
+   * page. Keeps the current image/hotspot/zoom selected if they still exist
+   * in the refreshed data, instead of snapping back to the first image the
+   * way a plain reopen does.
+   */
+  async function actionRefresh() {
+    if ((!currentSrcUrl && !openedFileHandle) || refreshing) return;
+    const savedImageId = activeImageId;
+    const savedLinkId = selectedLinkId;
+    const savedZoom = zoom;
+    refreshing = true;
+    render();
+    if (currentSrcUrl) {
+      await loadFromUrl(currentSrcUrl);
+    } else if (openedFileHandle) {
+      try {
+        const file = await openedFileHandle.getFile();
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        await openBytes(bytes, baseName(file.name), openedFileHandle);
+      } catch (err) {
+        statusMessage = `Could not refresh "${openedFileHandle.name}": ${(err as Error).message}`;
+      }
+    }
+    refreshing = false;
+    if (db && savedImageId !== null && listImages(db).some((i) => i.id === savedImageId)) {
+      activeImageId = savedImageId;
+      if (savedLinkId !== null && listLinksForImage(db, savedImageId).some((l) => l.id === savedLinkId)) {
+        selectedLinkId = savedLinkId;
+      }
+      zoom = savedZoom;
+    }
+    render();
+  }
+
+  /**
    * Opens either format transparently — sniffed from the file's actual tables,
    * not its extension (see detectFileKind). A legacy `.sch` file is converted
    * in-memory into a fresh catalog in *our* schema (importSchCatalog), so
    * everything downstream (rendering, search, folders, instance-nav) just
    * works without a parallel "legacy" code path anywhere else in this app.
    */
-  async function openBytes(bytes: Uint8Array, sourceName = "Legacy catalog") {
+  async function openBytes(
+    bytes: Uint8Array,
+    sourceName = "Legacy catalog",
+    handle: EcmFileSystemFileHandle | null,
+  ) {
     const kind = detectFileKind(SQL, bytes);
     if (kind === "legacy-sch") {
       statusMessage = "Converting legacy .sch catalog… this can take a moment for large files.";
@@ -200,6 +282,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     selectedLinkId = null;
     zoom = 1;
     remoteDialogOpen = false;
+    openedFileHandle = handle;
+    if (handle) currentSrcUrl = null;
     render();
   }
 
@@ -211,11 +295,45 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   async function actionOpenFile(file: File) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     try {
-      await openBytes(bytes, baseName(file.name));
+      await openBytes(bytes, baseName(file.name), null);
     } catch (err) {
       statusMessage = `Could not open file: ${(err as Error).message}`;
       render();
     }
+  }
+
+  /**
+   * "Open catalog…" click: prefers the File System Access API so the
+   * resulting handle can back Refresh (re-reading the same file from disk —
+   * the common case for a catalog synced locally via a cloud-drive client).
+   * Falls back to the plain <input type=file> in browsers without it
+   * (Firefox, Safari); Refresh then stays disabled for a locally-opened file.
+   */
+  async function actionOpenFileClicked(fallbackInput: HTMLInputElement) {
+    const showOpenFilePicker = getShowOpenFilePicker();
+    if (showOpenFilePicker) {
+      try {
+        const [handle] = await showOpenFilePicker({
+          types: [
+            {
+              description: "Electronic catalog",
+              accept: { "application/x-sqlite3": [`.${CATALOG_FILE_EXTENSION}`, ".sch"] },
+            },
+          ],
+        });
+        if (!handle) return;
+        const file = await handle.getFile();
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        await openBytes(bytes, baseName(file.name), handle);
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          statusMessage = `Could not open file: ${(err as Error).message}`;
+          render();
+        }
+      }
+      return;
+    }
+    fallbackInput.click();
   }
 
   function actionSelectImage(id: number) {
@@ -355,6 +473,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                  <button id="btn-open">Open catalog…</button>
                  <input type="file" id="file-open" accept=".${CATALOG_FILE_EXTENSION},.sch" style="display:none" />
                  <button id="btn-open-remote" title="Open a catalog hosted at a URL">Open remote catalog…</button>
+                 <button id="btn-refresh" ${currentSrcUrl || openedFileHandle ? "" : "disabled"} title="Re-read the catalog from its source (URL or local file) — see changes someone else just saved">${refreshing ? "Refreshing…" : "Refresh"}</button>
                  <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
                  <span class="spacer"></span>
                  <button id="btn-theme" title="Toggle light/dark theme">${currentTheme(themeTarget) === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
@@ -542,26 +661,29 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function rowHtml(r: CatalogRow, selectedUrl: string | null): string {
     const selected = r.url === selectedUrl ? "selected" : "";
     const extra = Object.entries(r.extra)
-      .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`)
+      .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(String(v))}`)
       .join(", ");
     const cell = (text: string) => `<td><span class="cell-text">${text}</span></td>`;
     return `<tr data-url="${escapeHtml(r.url)}" class="${selected}">${cell(escapeHtml(r.name))}${cell(escapeHtml(r.sku))}${cell(escapeHtml(r.description))}${cell(extra)}</tr>`;
   }
 
   function wireEvents() {
-    const fileOpen = root.getElementById("file-open") as HTMLInputElement | null;
+    // Only present in "full" mode, same as #btn-open below — never actually
+    // null when the listeners it's used in can fire.
+    const fileOpen = root.getElementById("file-open") as HTMLInputElement;
     root.getElementById("btn-theme")?.addEventListener("click", () => {
       toggleTheme(themeTarget);
       render();
     });
 
-    root.getElementById("btn-open")?.addEventListener("click", () => fileOpen?.click());
+    root.getElementById("btn-open")?.addEventListener("click", () => void actionOpenFileClicked(fileOpen));
     fileOpen?.addEventListener("change", () => {
       const file = fileOpen.files?.[0];
       if (file) void actionOpenFile(file);
     });
 
     root.getElementById("btn-open-remote")?.addEventListener("click", actionOpenRemote);
+    root.getElementById("btn-refresh")?.addEventListener("click", () => void actionRefresh());
     root.getElementById("open-url-cancel")?.addEventListener("click", actionCancelRemote);
     root.getElementById("open-url-submit")?.addEventListener("click", () => void actionSubmitRemote());
     const openUrlInput = root.getElementById("open-url-input") as HTMLInputElement | null;

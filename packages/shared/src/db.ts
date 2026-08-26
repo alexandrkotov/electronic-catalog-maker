@@ -386,6 +386,39 @@ export function addRow(db: Database, input: AddRowInput): number {
   return lastInsertRowId(db);
 }
 
+export interface UpdateRowInput {
+  name?: string;
+  sku?: string;
+  description?: string;
+  extra?: Record<string, string>;
+}
+
+/**
+ * Updates an existing data row's display fields (name/sku/description/extra).
+ * Does not touch `url` — that's the join key against links and is only ever
+ * repointed via updateLink() so the image-row pairing can't silently break.
+ */
+export function updateRow(db: Database, rowId: number, input: UpdateRowInput): void {
+  const stmt = db.prepare("UPDATE rows SET name = ?, sku = ?, description = ?, extra = ? WHERE id = ?");
+  stmt.run([
+    input.name ?? "",
+    input.sku ?? "",
+    input.description ?? "",
+    JSON.stringify(input.extra ?? {}),
+    rowId,
+  ]);
+  stmt.free();
+}
+
+/**
+ * Deletes a data row without touching its hotspot(s) — the link(s) sharing
+ * its url stay on the image, just unassigned from any table data (the same
+ * state a hotspot is in right after it's first created).
+ */
+export function deleteRow(db: Database, rowId: number): void {
+  db.run("DELETE FROM rows WHERE id = ?", [rowId]);
+}
+
 /** Moves an existing hotspot to a new pixel position (e.g. after dragging it in the editor). */
 export function updateLinkPosition(db: Database, linkId: number, top: number, left: number): void {
   const stmt = db.prepare("UPDATE links SET top = ?, left = ? WHERE id = ?");

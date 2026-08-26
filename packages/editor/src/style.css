@@ -19,6 +19,7 @@
   --stage-b: #fafafa;
   --hotspot-bg: #fde047;
   --hotspot-border: #a16207;
+  --hotspot-row-match-bg: #f97316;
   --hotspot-pending-bg: #fecaca;
   --hotspot-pending-border: #b91c1c;
   --hotspot-pending-text: #1a1a1a;
@@ -40,6 +41,7 @@
   --stage-b: #202329;
   --hotspot-bg: #eab308;
   --hotspot-border: #fde68a;
+  --hotspot-row-match-bg: #fb923c;
   --hotspot-pending-bg: #7f1d1d;
   --hotspot-pending-border: #fca5a5;
   /* The fixed dark `.hotspot` text color (#1a1a1a, kept for the yellow
@@ -268,6 +270,15 @@ body {
 .hotspot.editing {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* All hotspots sharing the data row currently open in "Edit table row" —
+   a row can back several hotspots (the same part drawn more than once on
+   one diagram), so editing it edits all of them at once; this is what
+   makes that visible on the image. */
+.hotspot.row-match {
+  background: var(--hotspot-row-match-bg);
+  color: #1a1a1a;
 }
 
 tr.clickable-row {
