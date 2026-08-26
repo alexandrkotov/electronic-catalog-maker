@@ -494,13 +494,21 @@ function startDragHotspot(evt: MouseEvent, link: CatalogLink, el: HTMLElement, i
   window.addEventListener("mouseup", onUp);
 }
 
-/** Triggered by clicking a row in "Links on this image" — the inspector's scroll position is left as-is (see render()'s scroll preservation), unlike the image-hotspot click path below. */
+/**
+ * Triggered by clicking a row in "Links on this image". Always scrolls the
+ * "Edit link" form into view — it renders *above* the links list in the DOM
+ * (see renderEditLinkForm/renderLinksSection order in render()), so on an
+ * image with many hotspots (real .sch imports can have 70+), a preserved
+ * scroll position can leave the form off-screen above the clicked row, same
+ * as the "Edit table row" case below.
+ */
 function actionEditLink(linkId: number) {
   editingLinkId = linkId;
   editingRowId = null;
   pendingHotspot = null;
   render();
   centerOnHotspot(linkId);
+  scrollInspectorToEditLink();
 }
 
 /** Scrolls the stage so the given hotspot is centered in view. */
@@ -512,14 +520,25 @@ function centerOnHotspot(linkId: number) {
 
 /**
  * Scrolls the inspector panel so the just-opened "Edit link" form is
- * visible — for clicking a hotspot directly on the image, where (unlike
- * clicking a row in one of the lists) the inspector's current scroll
- * position has nothing to do with where the form ends up, so it should
- * move to meet the user rather than stay put (see render()'s scroll
- * preservation, which is for the opposite case: clicking within the list).
+ * visible. Runs on every path that opens it — clicking a hotspot directly
+ * on the image (where the inspector's current scroll position has nothing
+ * to do with where the form ends up) and clicking a row in "Links on this
+ * image" (whose form renders *above* the list in the DOM, so on an image
+ * with many hotspots a preserved scroll position can leave it off-screen).
  */
 function scrollInspectorToEditLink() {
   document.getElementById("form-edit-link")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+/**
+ * Scrolls the inspector panel so the just-opened "Edit table row" form is
+ * visible. Always runs — the form renders *above* the table in the DOM
+ * (see renderEditRowForm/renderRowsSection order in render()), so a long
+ * table's preserved scroll position can leave it off-screen above the
+ * clicked row, same reasoning as "Edit link" above.
+ */
+function scrollInspectorToEditRow() {
+  document.getElementById("form-edit-row")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 /** Clicking a search result: switches image (if needed) and opens the matching hotspot for editing. */
@@ -651,6 +670,7 @@ function actionEditRow(rowId: number) {
   editingLinkId = null;
   pendingHotspot = null;
   render();
+  scrollInspectorToEditRow();
 }
 
 function actionCancelEditRow() {
