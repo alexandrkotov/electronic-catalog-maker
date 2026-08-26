@@ -39,12 +39,22 @@
   .apps a:hover {
     border-color: #2563eb;
   }
-  .demo-link {
+  .demos {
     margin: 0 0 2rem;
     font-size: 0.9rem;
     color: #666;
   }
-  .demo-link a {
+  .demos p {
+    margin: 0 0 0.4rem;
+  }
+  .demos ul {
+    margin: 0;
+    padding-left: 1.25rem;
+  }
+  .demos li {
+    margin: 0.2rem 0;
+  }
+  .demos a {
     color: #2563eb;
   }
   .apps h2 {
@@ -91,16 +101,23 @@
     </a>
   </div>
 
-  <p class="demo-link">
-    No catalog file yet? <a href="viewer/?src=https%3A%2F%2Falexandrkotov.github.io%2Felectronic-catalog-maker%2Fdemo%2Fauto-spare-parts.ecatm">Try a demo catalog →</a>
-    — a real anonymized truck-parts catalog, ready to click around.
-  </p>
+  <div class="demos">
+    <p>No catalog file yet? Try a demo catalog:</p>
+    <ul>
+      <li><a href="viewer/?src=https%3A%2F%2Falexandrkotov.github.io%2Felectronic-catalog-maker%2Fdemo%2Fauto-spare-parts.ecatm">Auto parts →</a> — an anonymized truck-parts catalog, dense with hotspots</li>
+      <li><a href="viewer/?src=https%3A%2F%2Falexandrkotov.github.io%2Felectronic-catalog-maker%2Fdemo%2Ffurniture.ecatm">Furniture →</a> — real photos, a smaller catalog to browse</li>
+    </ul>
+  </div>
 
   <footer>
     <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Source on GitHub</a>
     — catalog files stay on your own disk unless you explicitly open one
     from a URL.
     <div id="visits"></div>
+    <div>
+      Built by
+      <a href="https://www.linkedin.com/in/alexkotovwa/">Alexander Kotov</a>
+    </div>
   </footer>
 
   <!-- Privacy-friendly, cookie-free page-view counting (goatcounter.com) —

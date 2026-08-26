@@ -34,17 +34,25 @@ interface EcmFileSystemFileHandle {
 }
 
 /**
- * The one demo catalog shipped in the repo itself (see demo/ at the repo
- * root and .github/workflows/ci.yml's deploy-pages job, which is what
- * actually publishes it) — a real anonymized parts catalog, offered from
- * the empty-state screen below so a first-time visitor can see the app
- * working on real-looking data without needing a catalog file of their own.
- * Hardcoded (not derived from location.origin) because it's the same file
- * regardless of where this build of the viewer happens to be hosted —
- * including a local dev server, which has no copy of its own to serve.
+ * Demo catalogs shipped in the repo itself (see demo/ at the repo root and
+ * .github/workflows/ci.yml's deploy-pages job, which is what actually
+ * publishes them) — offered from the empty-state screen below so a
+ * first-time visitor can see the app working on real-looking data without
+ * needing a catalog file of their own. Hardcoded (not derived from
+ * location.origin) because it's the same files regardless of where this
+ * build of the viewer happens to be hosted — including a local dev server,
+ * which has no copy of its own to serve.
  */
-const DEMO_CATALOG_URL =
-  "https://alexandrkotov.github.io/electronic-catalog-maker/demo/auto-spare-parts.ecatm";
+const DEMO_CATALOGS = [
+  {
+    label: "Auto parts",
+    url: "https://alexandrkotov.github.io/electronic-catalog-maker/demo/auto-spare-parts.ecatm",
+  },
+  {
+    label: "Furniture",
+    url: "https://alexandrkotov.github.io/electronic-catalog-maker/demo/furniture.ecatm",
+  },
+];
 
 // Limits/defaults for the resizable side panels + row-data table columns —
 // see the per-instance state declared inside mountViewer() below. Plain
@@ -331,9 +339,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     render();
   }
 
-  /** "Try a demo catalog" on the empty-state screen — see DEMO_CATALOG_URL. */
-  function actionOpenDemo() {
-    void loadFromUrl(DEMO_CATALOG_URL);
+  /** "Try a demo catalog" on the empty-state screen — see DEMO_CATALOGS. */
+  function actionOpenDemo(url: string) {
+    void loadFromUrl(url);
   }
 
   function actionCancelRemote() {
@@ -637,7 +645,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
             images.length === 0
               ? mode === "lite"
                 ? `<p class="hint">${escapeHtml(statusMessage || "Loading…")}</p>`
-                : `<p class="hint">Open a .${CATALOG_FILE_EXTENSION} catalog file, or <a href="#" id="btn-open-demo">try a demo catalog</a>.</p>`
+                : `<p class="hint">Open a .${CATALOG_FILE_EXTENSION} catalog file, or try a demo catalog: ${DEMO_CATALOGS.map(
+                    (d, i) => `<a href="#" class="open-demo-link" data-demo="${i}">${escapeHtml(d.label)}</a>`,
+                  ).join(", ")}.</p>`
               : renderImageList(images)
           }
         </div>
@@ -841,9 +851,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     });
 
     root.getElementById("btn-open-remote")?.addEventListener("click", actionOpenRemote);
-    root.getElementById("btn-open-demo")?.addEventListener("click", (evt) => {
-      evt.preventDefault();
-      actionOpenDemo();
+    root.querySelectorAll<HTMLAnchorElement>(".open-demo-link").forEach((link) => {
+      link.addEventListener("click", (evt) => {
+        evt.preventDefault();
+        const demo = DEMO_CATALOGS[Number(link.dataset.demo)];
+        if (demo) actionOpenDemo(demo.url);
+      });
     });
     root.getElementById("btn-refresh")?.addEventListener("click", () => void actionRefresh());
     root.getElementById("open-url-cancel")?.addEventListener("click", actionCancelRemote);
