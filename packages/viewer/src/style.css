@@ -392,6 +392,10 @@ button:disabled {
   color: var(--muted);
 }
 
+.hint a {
+  color: var(--accent);
+}
+
 /* "Open remote catalog…" dialog — same visual pattern as the editor's
    in-app confirm modal (deliberately not window.prompt(), which shares
    window.confirm()'s dialog-spam auto-deny problem in Chrome). */

@@ -32,6 +32,19 @@ interface EcmFileSystemFileHandle {
   readonly name: string;
   getFile(): Promise<File>;
 }
+
+/**
+ * The one demo catalog shipped in the repo itself (see demo/ at the repo
+ * root and .github/workflows/ci.yml's deploy-pages job, which is what
+ * actually publishes it) — a real anonymized parts catalog, offered from
+ * the empty-state screen below so a first-time visitor can see the app
+ * working on real-looking data without needing a catalog file of their own.
+ * Hardcoded (not derived from location.origin) because it's the same file
+ * regardless of where this build of the viewer happens to be hosted —
+ * including a local dev server, which has no copy of its own to serve.
+ */
+const DEMO_CATALOG_URL =
+  "https://alexandrkotov.github.io/electronic-catalog-maker/demo/auto-spare-parts.ecatm";
 type ShowOpenFilePicker = (options?: {
   types?: { description?: string; accept: Record<string, string[]> }[];
   multiple?: boolean;
@@ -185,6 +198,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     remoteUrlValue = "";
     remoteError = null;
     render();
+  }
+
+  /** "Try a demo catalog" on the empty-state screen — see DEMO_CATALOG_URL. */
+  function actionOpenDemo() {
+    void loadFromUrl(DEMO_CATALOG_URL);
   }
 
   function actionCancelRemote() {
@@ -488,7 +506,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
             images.length === 0
               ? mode === "lite"
                 ? `<p class="hint">${escapeHtml(statusMessage || "Loading…")}</p>`
-                : `<p class="hint">Open a .${CATALOG_FILE_EXTENSION} catalog file.</p>`
+                : `<p class="hint">Open a .${CATALOG_FILE_EXTENSION} catalog file, or <a href="#" id="btn-open-demo">try a demo catalog</a>.</p>`
               : renderImageList(images)
           }
         </div>
@@ -683,6 +701,10 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     });
 
     root.getElementById("btn-open-remote")?.addEventListener("click", actionOpenRemote);
+    root.getElementById("btn-open-demo")?.addEventListener("click", (evt) => {
+      evt.preventDefault();
+      actionOpenDemo();
+    });
     root.getElementById("btn-refresh")?.addEventListener("click", () => void actionRefresh());
     root.getElementById("open-url-cancel")?.addEventListener("click", actionCancelRemote);
     root.getElementById("open-url-submit")?.addEventListener("click", () => void actionSubmitRemote());
