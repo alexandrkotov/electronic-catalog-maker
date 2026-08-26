@@ -391,12 +391,67 @@ function startStageInteraction(evt: MouseEvent, img: HTMLImageElement, scrollEl:
 }
 
 /**
+ * Precision crosshair for placing a new hotspot — full-height/width guide
+ * lines through the exact click point (their intersection already marks it
+ * unambiguously, so no separate ring/dot on top), plus a dashed box
+ * approximating the label's footprint (see crosshairBoxSize). Inspired by
+ * the previous-generation desktop editor's own cursor, found unused in its
+ * source tree: E:\_showcase_1\3.LinkMapEditor\...\image\64-left-top-
+ * corner-7.png — that one draws a ring at the intersection too, dropped
+ * here as redundant once actually tried. Positioned in unscaled image
+ * pixels as a child of #stage-inner, same as hotspots themselves, so the
+ * zoom transform scales it identically — no separate math needed. Updated
+ * by directly poking style properties on mousemove rather than calling
+ * render(), since that fires far too often for a full re-render.
+ */
+function showCrosshair(x: number, y: number) {
+  const h = document.getElementById("crosshair-h");
+  const v = document.getElementById("crosshair-v");
+  const b = document.getElementById("crosshair-box");
+  if (h) {
+    h.style.display = "block";
+    h.style.top = `${y}px`;
+  }
+  if (v) {
+    v.style.display = "block";
+    v.style.left = `${x}px`;
+  }
+  if (b) {
+    // Just a point doesn't say how much room the label itself will take —
+    // approximate its footprint from an existing hotspot on this image
+    // (badge width follows its text, so this is usually a good guess for
+    // "another one like it"), falling back to a generic size on an image
+    // that doesn't have one yet.
+    const { width, height } = crosshairBoxSize();
+    b.style.display = "block";
+    b.style.width = `${width}px`;
+    b.style.height = `${height}px`;
+    b.style.top = `${y - height / 2}px`;
+    b.style.left = `${x - width / 2}px`;
+  }
+}
+
+function crosshairBoxSize(): { width: number; height: number } {
+  const sample = document.querySelector<HTMLElement>(".hotspot:not(.pending)");
+  if (sample) return { width: sample.offsetWidth, height: sample.offsetHeight };
+  return { width: 40, height: 20 }; // no hotspot on this image yet — a generic guess
+}
+
+function hideCrosshair() {
+  for (const id of ["crosshair-h", "crosshair-v", "crosshair-box"]) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = "none";
+  }
+}
+
+/**
  * One gesture, two outcomes: drag an existing hotspot to reposition it, or
  * click it (no real movement) to open it for editing.
  */
 function startDragHotspot(evt: MouseEvent, link: CatalogLink, el: HTMLElement, img: HTMLImageElement) {
   evt.preventDefault();
   evt.stopPropagation();
+  hideCrosshair(); // dragging an existing hotspot, not placing a new one
   const rect = img.getBoundingClientRect();
   const startX = evt.clientX;
   const startY = evt.clientY;
@@ -638,6 +693,9 @@ function render() {
           activeImage
             ? `<div class="stage-inner" id="stage-inner" style="transform: scale(${zoom})">
                  <img id="stage-img" src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
+                 <div class="crosshair-box" id="crosshair-box"></div>
+                 <div class="crosshair-h" id="crosshair-h"></div>
+                 <div class="crosshair-v" id="crosshair-v"></div>
                  ${links.map((l) => hotspotHtml(l)).join("")}
                  ${pendingHotspot ? `<div class="hotspot pending" style="top:${pendingHotspot.top}px;left:${pendingHotspot.left}px">new…</div>` : ""}
                </div>`
@@ -1018,8 +1076,23 @@ function wireEvents(links: CatalogLink[]) {
 
   const stageImg = document.getElementById("stage-img") as HTMLImageElement | null;
   const stageScroll = document.getElementById("stage-scroll") as HTMLElement | null;
+  const stageInner = document.getElementById("stage-inner") as HTMLElement | null;
   if (stageImg && stageScroll) {
     stageImg.addEventListener("mousedown", (evt) => startStageInteraction(evt, stageImg, stageScroll));
+  }
+
+  if (stageImg && stageInner) {
+    stageInner.addEventListener("mousemove", (evt) => {
+      // Hovering an existing hotspot (or mid-pan) — let its own cursor/drag
+      // handling take over instead of drawing the placement crosshair.
+      if (stageScroll?.classList.contains("panning") || (evt.target as HTMLElement).closest(".hotspot")) {
+        hideCrosshair();
+        return;
+      }
+      const rect = stageImg.getBoundingClientRect();
+      showCrosshair((evt.clientX - rect.left) / zoom, (evt.clientY - rect.top) / zoom);
+    });
+    stageInner.addEventListener("mouseleave", hideCrosshair);
   }
 
   if (stageImg) {

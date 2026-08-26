@@ -21,6 +21,7 @@
   --hotspot-border: #a16207;
   --hotspot-pending-bg: #fecaca;
   --hotspot-pending-border: #b91c1c;
+  --hotspot-pending-text: #1a1a1a;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
@@ -41,6 +42,10 @@
   --hotspot-border: #fde68a;
   --hotspot-pending-bg: #7f1d1d;
   --hotspot-pending-border: #fca5a5;
+  /* The fixed dark `.hotspot` text color (#1a1a1a, kept for the yellow
+     default badges) is nearly unreadable against this dark red — needs
+     its own light text, found via the user's own screenshot. */
+  --hotspot-pending-text: #fecaca;
 }
 
 * {
@@ -182,12 +187,56 @@ body {
 .stage-inner img {
   display: block;
   max-width: none;
-  cursor: grab;
+  /* The crosshair below (JS-driven, see showCrosshair/hideCrosshair) stands
+     in for the system cursor while placing a hotspot; grabbing still shows
+     during an actual pan (the !important rule below overrides this). */
+  cursor: none;
 }
 
 .stage-scroll.panning,
 .stage-scroll.panning * {
   cursor: grabbing !important;
+}
+
+/* Precision placement crosshair — styled after the previous-generation
+   desktop editor's own (unused there, but requested here) cursor asset.
+   Fixed red rather than a theme token: it sits on top of arbitrary user
+   image content, not app chrome, so it needs to stay visible regardless of
+   what's under it or which theme is active. Hidden by default; JS toggles
+   display and position directly (see showCrosshair/hideCrosshair) rather
+   than through render(), since mousemove fires far too often for that. */
+.crosshair-h,
+.crosshair-v,
+.crosshair-box {
+  display: none;
+  position: absolute;
+  pointer-events: none;
+}
+
+.crosshair-h {
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px solid #ff3b30;
+  z-index: 6;
+}
+
+.crosshair-v {
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid #ff3b30;
+  z-index: 6;
+}
+
+/* Approximate footprint of the label that will land here — sized from an
+   existing hotspot's actual badge on this image where possible (see
+   crosshairBoxSize()), since text width can't be known before it's typed. */
+.crosshair-box {
+  border: 1px dashed #ff3b30;
+  border-radius: 3px;
+  box-sizing: border-box;
+  z-index: 5;
 }
 
 .hotspot {
@@ -213,6 +262,7 @@ body {
   cursor: default;
   background: var(--hotspot-pending-bg);
   border-color: var(--hotspot-pending-border);
+  color: var(--hotspot-pending-text);
 }
 
 .hotspot.editing {

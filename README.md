@@ -8,6 +8,9 @@
 ![pnpm](https://img.shields.io/badge/pnpm-F69220?logo=pnpm&logoColor=white)
 ![No backend](https://img.shields.io/badge/backend-none-brightgreen)
 
+Inspired by an earlier project of mine,
+[auto-parts-universal-catalog](https://github.com/alexandrkotov/auto-parts-universal-catalog).
+
 Build and view interactive image-hotspot catalogs — a schematic picture with
 clickable positions linked to a data table (name, SKU, characteristics) —
 packaged as a single portable `.ecatm` file (a SQLite database under the hood). No backend, no install: open the
