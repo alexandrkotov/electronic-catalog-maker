@@ -47,21 +47,51 @@
   box-sizing: border-box;
 }
 
+/* height: 100% (not min-height: 100vh) so .ecm-viewer-app's own height: 100%
+   below has a definite height to resolve against — needed for the
+   standalone page to still fill the viewport now that sizing isn't
+   hardcoded to 100vh (the embeddable viewer instead fills whatever box its
+   host page gives it, however tall that is — see packages/viewer-embed). */
+html {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  min-height: 100vh;
+  height: 100%;
   background: var(--bg-page);
   color: var(--text);
 }
 
-#app {
+/* Not #app — the container this renders into isn't assumed to have any
+   particular id (the standalone page's happens to be #app, but the
+   embeddable viewer creates its own div inside a shadow root). */
+.ecm-viewer-app {
   display: grid;
   grid-template-columns: 220px 1fr 380px;
+  height: 100%;
+  /* Redundant with `body` above for the standalone page, but load-bearing
+     for the embeddable viewer: its shadow tree has no <body> for that rule
+     to ever match, so text/background silently fell back to whatever the
+     *embedding* page's own body happened to set (usually plain black text
+     on transparent) — found by comparing computed styles line-for-line
+     against the standalone app, since visually "both look dark" hid it at
+     a glance. `color` is inherited so nested text (table cells, the image
+     list, ...) needs *something* in the shadow tree to establish it. */
+  background: var(--bg-page);
+  color: var(--text);
+}
+
+.ecm-viewer-app.mode-full {
   grid-template-rows: auto 1fr;
   grid-template-areas:
     "toolbar toolbar toolbar"
     "images  stage    table";
-  height: 100vh;
+}
+
+.ecm-viewer-app.mode-lite {
+  grid-template-rows: 1fr;
+  grid-template-areas: "images stage table";
 }
 
 .toolbar {

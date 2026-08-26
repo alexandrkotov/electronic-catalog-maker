@@ -6,6 +6,7 @@
   "scripts": {
     "dev:editor": "pnpm --filter @ecm/editor dev",
     "dev:viewer": "pnpm --filter @ecm/viewer dev",
+    "dev:embed": "pnpm --filter @ecm/viewer-embed dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck"
   }

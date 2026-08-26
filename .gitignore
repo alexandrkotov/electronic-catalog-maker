@@ -3,3 +3,12 @@ dist/
 .DS_Store
 *.log
 .vite/
+
+# The embeddable viewer's build IS the distributable — it's what jsDelivr
+# serves straight from this repo (see README "Embedding the viewer"), so
+# unlike the editor/viewer apps' own dist/ (deployed separately, never
+# committed), this one is checked in deliberately. Rebuild + recommit it
+# after any change to packages/viewer-embed or packages/shared/src/
+# viewerEngine.ts.
+!packages/viewer-embed/dist/
+!packages/viewer-embed/dist/**

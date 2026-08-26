@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ecm-viewer — dev preview</title>
+    <script type="module" src="/src/ecm-viewer.ts"></script>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        max-width: 900px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      ecm-viewer {
+        margin: 1rem 0 2rem;
+      }
+      /* Proves an embedding page's own CSS wins over the component's
+         internal :host default — see ecm-viewer.ts. */
+      #styled-example {
+        border: 3px dashed #7c3aed;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>ecm-viewer — dev preview</h1>
+    <p>Not part of the built widget — just a page for exercising it locally
+      with <code>pnpm dev</code>, same purpose as the editor/viewer apps'
+      own index.html.</p>
+
+    <h2>Lite mode (default), fixed to one catalog</h2>
+    <ecm-viewer src="/demo.ecatm" style="height: 480px"></ecm-viewer>
+
+    <h2>Full mode</h2>
+    <ecm-viewer mode="full" src="/demo.ecatm" style="height: 600px"></ecm-viewer>
+
+    <h2>Host page overriding the default border/size</h2>
+    <ecm-viewer id="styled-example" src="/demo.ecatm" style="height: 300px"></ecm-viewer>
+  </body>
+</html>

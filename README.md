@@ -15,9 +15,11 @@ Build and view interactive image-hotspot catalogs — a schematic picture with
 clickable positions linked to a data table (name, SKU, characteristics) —
 packaged as a single portable `.ecatm` file (a SQLite database under the
 hood, read and written entirely in the browser via
-[sql.js](https://github.com/sql-js/sql.js)). Two apps, one file format: the
-**editor** builds a catalog, the **viewer** opens one and lets you click
-around it.
+[sql.js](https://github.com/sql-js/sql.js)). One file format, three ways to
+use it: the **editor** builds a catalog, the **viewer** opens one as its
+own full-page app, and `<ecm-viewer>` embeds that same viewer into any
+other page — even a plain static HTML file with no build step of its own
+(see "Embedding the viewer" below).
 
 ## Getting started
 
@@ -38,6 +40,10 @@ pnpm install
 pnpm dev:editor   # http://localhost:5173
 pnpm dev:viewer   # http://localhost:5174 — run in a second terminal
 ```
+
+(There's a third one, `pnpm dev:embed`, for developing the embeddable
+`<ecm-viewer>` component — see "Embedding the viewer" below; most people
+just want the two above.)
 
 That's genuinely everything: no `.env` file, no database to point at,
 nothing else to configure. Each command starts a local dev server and
@@ -101,6 +107,44 @@ A few other things worth knowing:
 Someone shared a catalog with you as a link instead of a file? Click
 **Open remote catalog…** and paste it in, or just open the link directly —
 see "Sharing a catalog via link" below.
+
+## Embedding the viewer
+
+`<ecm-viewer>` is the viewer packaged as a Web Component — drop it into any
+page, including a plain static HTML file with no build step of its own.
+One `<script>` tag covers both the lite and full variants — just change
+the attributes on `<ecm-viewer>` itself:
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js"></script>
+
+<!-- Lite (default): just the picture + hotspots + table, fixed to one catalog. -->
+<ecm-viewer src="https://example.com/catalog.ecatm" style="height: 500px"></ecm-viewer>
+
+<!-- Full: the whole toolbar too (Open catalog…/Open remote catalog…/Search…/theme) —
+     src is only what's shown first, a visitor can open a different catalog from there. -->
+<ecm-viewer mode="full" src="https://example.com/catalog.ecatm" style="height: 600px"></ecm-viewer>
+```
+
+That's the whole setup: no `type="module"`, no npm install on your side —
+the script self-registers the `<ecm-viewer>` tag once, and every
+`<ecm-viewer>` element on the page (lite, full, or a mix of both) becomes
+its own independent instance, each in its own Shadow DOM (styles can't
+leak either direction) and each reusing the exact same catalog-viewing
+code as the standalone viewer above (see
+`packages/shared/src/viewerEngine.ts`) — everything on this page about
+clicking hotspots, search, folders, `.sch` catalogs, and so on applies
+here too.
+
+Two attributes:
+
+- `src` — a catalog URL to load on mount (same CORS requirement as
+  "Sharing a catalog via link" above — the file's host needs to allow it).
+- `mode` — `"lite"` (default) or `"full"`, as in the two examples above.
+
+Sizing and appearance are ordinary CSS on the element itself — it defaults
+to `height: 600px` with a light border, but any style/CSS rule your page
+applies to `ecm-viewer` (or a matching id/class) overrides that.
 
 ## Catalog file format
 
@@ -194,13 +238,20 @@ done in the browser with no server to offload to.
 ## Packages
 
 - [`packages/shared`](packages/shared) — the catalog file format: SQLite
-  schema, TypeScript types, and the sql.js wrapper both apps import
-  (opening/saving, search, folder grouping, legacy `.sch` import).
+  schema, TypeScript types, and the sql.js wrapper all three packages below
+  import (opening/saving, search, folder grouping, legacy `.sch` import) —
+  plus `viewerEngine.ts`, the viewer's actual rendering/state logic, shared
+  between the standalone viewer and the embeddable one so there's exactly
+  one implementation of "how the viewer behaves", not two to keep in sync.
 - [`packages/editor`](packages/editor) — builds a catalog.
-- [`packages/viewer`](packages/viewer) — opens one and browses it.
+- [`packages/viewer`](packages/viewer) — full-page app that opens one and
+  browses it; mounts `viewerEngine` into its own page.
+- [`packages/viewer-embed`](packages/viewer-embed) — the same engine
+  packaged as the `<ecm-viewer>` Web Component (see "Embedding the viewer"
+  above), built as a single self-contained script.
 
-Both apps run entirely in the browser and render their own DOM directly —
-there's no shared UI framework, just the shared data layer above.
+All three apps render their own DOM directly — there's no UI framework,
+just the shared engine/data layer above.
 
 ## Development
 
@@ -208,23 +259,35 @@ there's no shared UI framework, just the shared data layer above.
 pnpm install
 pnpm dev:editor   # http://localhost:5173
 pnpm dev:viewer   # http://localhost:5174 (or next free port)
-pnpm -r build     # production build of both apps -> packages/*/dist
+pnpm dev:embed    # http://localhost:5175 (or next free port) — <ecm-viewer> dev preview
+pnpm -r build     # production build of all three -> packages/*/dist
 ```
 
-`pnpm -r build` output is genuinely everything needed to host either app:
-static HTML/JS/CSS/WASM, no build-time secrets, no server-rendering step.
-Serve a `dist` folder with any static file host — `npx serve
-packages/viewer/dist`, GitHub Pages, Cloudflare Pages, or similar.
+For the editor/viewer, `pnpm -r build` output is genuinely everything
+needed to host either app: static HTML/JS/CSS/WASM, no build-time secrets,
+no server-rendering step. Serve a `dist` folder with any static file host
+— `npx serve packages/viewer/dist`, GitHub Pages, Cloudflare Pages, or
+similar. `packages/viewer-embed`'s build is different in one way: its
+`dist/ecm-viewer.js` is committed to the repo on purpose (see "Status")
+rather than gitignored, since that's the file "Embedding the viewer"
+points people at directly — rebuild and recommit it after touching that
+package or the shared viewer engine.
 
 ## Status
 
-Functional end-to-end in both apps: create a catalog, place hotspots, add
-data rows, save/export, group images into folders, search the whole
-catalog at once, open a catalog by URL, open a legacy `.sch` catalog
-(read-only in the viewer, as an editable copy in the editor), light/dark
-theme. Not yet built: a hosted/public version of either app (local dev
-server is the only way to run them today), bulk link import, an
-embeddable viewer Web Component.
+Functional end-to-end in the editor and viewer: create a catalog, place
+hotspots, add data rows, save/export, group images into folders, search
+the whole catalog at once, open a catalog by URL, open a legacy `.sch`
+catalog (read-only in the viewer, as an editable copy in the editor),
+light/dark theme. The viewer is also embeddable elsewhere as
+`<ecm-viewer>` (see "Embedding the viewer"), distributed straight from
+this repo via jsDelivr — its built `dist/ecm-viewer.js` is deliberately
+committed (everywhere else, `dist/` is gitignored) since that file *is*
+what gets served; there's no CI yet to rebuild it automatically, so it
+needs rebuilding and recommitting by hand after a change to
+`packages/viewer-embed` or `packages/shared/src/viewerEngine.ts`. Not yet
+built: a hosted/public version of the editor/viewer apps themselves (local
+dev server is the only way to run them today), bulk link import.
 
 ## License
 

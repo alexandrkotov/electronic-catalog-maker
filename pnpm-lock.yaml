@@ -53,6 +53,22 @@ importers:
         specifier: ^6.0.3
         version: 6.4.3(@types/node@26.2.0)
 
+  packages/viewer-embed:
+    dependencies:
+      '@ecm/shared':
+        specifier: workspace:*
+        version: link:../shared
+      sql.js:
+        specifier: ^1.11.0
+        version: 1.14.2
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vite:
+        specifier: ^6.0.3
+        version: 6.4.3(@types/node@26.2.0)
+
 packages:
 
   '@esbuild/aix-ppc64@0.25.12':
