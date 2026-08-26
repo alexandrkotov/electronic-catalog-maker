@@ -193,6 +193,31 @@ copy to start editing, not a live link back to that URL — the first Save
 prompts for a location, same as it would for any catalog that didn't come
 from a local file.
 
+The viewer's **Refresh** button re-reads the catalog from wherever it came
+from — the source URL, or (if it was opened via the local file picker) the
+same file on disk — so you can watch a catalog someone else is actively
+editing without reopening the page. It keeps your current image/hotspot/
+zoom selected across the refresh.
+
+### ⚠️ No conflict detection
+
+There is no real-time collaboration here — no merge, no locking, no "this
+file changed" warning. Both apps keep the whole catalog in memory once
+opened, and Save always serializes and overwrites the *entire* file, with
+no check against what's currently on disk. If two people open the same
+`.ecatm` file (say, from a shared OneDrive/Google Drive folder synced on
+both machines) and edit it at the same time, whoever saves second silently
+wins — the first person's changes are gone, no warning, nothing to undo.
+Confirmed live: open the same file in two editor tabs, add a hotspot in
+each, save the first, then save the second — the first hotspot is simply
+not in the file anymore afterwards.
+
+Until this gets an actual fix, treat a shared `.ecatm` file the way you'd
+treat a shared spreadsheet with no co-authoring support: agree on who's
+editing before you start, and have the other person **re-open the file**
+(or hit **Refresh** in the viewer) to pick up the latest version *before*
+making their own changes — not after.
+
 ## Reverse search
 
 Both apps have a **"Search…"** button that searches every row in the
