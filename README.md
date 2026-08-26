@@ -23,7 +23,9 @@ other page — even a plain static HTML file with no build step of its own
 
 ## Getting started
 
-Just want to use the apps? They're hosted, free, nothing to install:
+Just want to use the apps? They're hosted, free, nothing to install — see
+the **[project site](https://alexandrkotov.github.io/electronic-catalog-maker/)**,
+or jump straight in:
 
 - **[Editor](https://alexandrkotov.github.io/electronic-catalog-maker/editor/)**
 - **[Viewer](https://alexandrkotov.github.io/electronic-catalog-maker/viewer/)**
@@ -31,6 +33,12 @@ Just want to use the apps? They're hosted, free, nothing to install:
 Both run entirely in your browser — nothing you build gets uploaded
 anywhere unless you explicitly open a catalog from a URL (see "Sharing a
 catalog via link" below); a saved `.ecatm` file lives on your own disk.
+
+No catalog file of your own yet? Try a demo, no install or download
+needed — [Auto parts](https://alexandrkotov.github.io/electronic-catalog-maker/viewer/?src=https%3A%2F%2Falexandrkotov.github.io%2Felectronic-catalog-maker%2Fdemo%2Fauto-spare-parts.ecatm)
+(an anonymized catalog of exploded-view truck-part diagrams) or
+[Furniture](https://alexandrkotov.github.io/electronic-catalog-maker/viewer/?src=https%3A%2F%2Falexandrkotov.github.io%2Felectronic-catalog-maker%2Fdemo%2Ffurniture.ecatm)
+(real photos, a smaller catalog to browse).
 
 To develop the project instead (or run it without depending on that
 hosted copy), it needs two ordinary developer tools installed once:
