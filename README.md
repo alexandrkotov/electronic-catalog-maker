@@ -13,30 +13,101 @@ Inspired by an earlier project of mine,
 
 Build and view interactive image-hotspot catalogs — a schematic picture with
 clickable positions linked to a data table (name, SKU, characteristics) —
-packaged as a single portable `.ecatm` file (a SQLite database under the hood). No backend, no install: open the
-file in the viewer and it just works, the same way the whole lineage of tools
-this project continues has worked for the last decade.
+packaged as a single portable `.ecatm` file (a SQLite database under the
+hood, read and written entirely in the browser via
+[sql.js](https://github.com/sql-js/sql.js)). Two apps, one file format: the
+**editor** builds a catalog, the **viewer** opens one and lets you click
+around it.
 
-## Packages
+## Getting started
 
-- [`packages/shared`](packages/shared) — the catalog file format: SQLite schema,
-  TypeScript types, and a thin [sql.js](https://github.com/sql-js/sql.js) (SQLite
-  compiled to WASM) wrapper used by both apps below.
-- [`packages/editor`](packages/editor) — web app to build a catalog: load an
-  image, click to place hotspot links on it, and attach a data row to each link.
-- [`packages/viewer`](packages/viewer) — web app to open a catalog file, browse
-  its images, and click a hotspot to highlight the matching row in its table.
+Both apps are fully client-side — no server, no database, no accounts —
+but running them locally still needs two ordinary developer tools
+installed once (there's no hosted version or downloadable installer yet,
+see "Status" below):
 
-Both apps run entirely in the browser — SQLite is read/written client-side via
-sql.js, so a catalog is just a file you can host anywhere static (or a local
-disk file) and share.
+- [Node.js](https://nodejs.org/) 18 or later
+- [pnpm](https://pnpm.io/installation)
+
+Then, from a terminal:
+
+```bash
+git clone https://github.com/alexandrkotov/electronic-catalog-maker.git
+cd electronic-catalog-maker
+pnpm install
+pnpm dev:editor   # http://localhost:5173
+pnpm dev:viewer   # http://localhost:5174 — run in a second terminal
+```
+
+That's genuinely everything: no `.env` file, no database to point at,
+nothing else to configure. Each command starts a local dev server and
+prints its URL; leave it running and open that URL in a browser. A
+catalog file lives entirely on your own disk — nothing is ever uploaded
+anywhere unless you explicitly load one from a URL (see "Sharing a
+catalog via link" below).
+
+## Using the editor
+
+1. Click **New catalog** and give it a name.
+2. Click **Add image…** and pick a picture — a schematic, an exploded
+   parts diagram, a product photo. It shows up in the image list on the
+   left; click it to make it the active image.
+3. Click anywhere on the image to place a hotspot (a red crosshair tracks
+   where you're about to click, with a dashed box showing roughly how much
+   room the label will take). Fill in **Link name** and **Address (url)**
+   in the "New link (hotspot)" panel and click **Add link**. If this exact
+   part is drawn elsewhere on the same image already, pick it from the
+   "Same part as an existing hotspot?" dropdown instead of typing a new
+   address — the two hotspots will share one data row.
+4. Under **New table row**, pick the hotspot's address from the dropdown,
+   fill in Name / SKU / Description, and optionally some free-form
+   characteristics as JSON (e.g. `{"weight": "2.3 kg"}`), then click
+   **Add row**. This is the data the viewer will show when someone clicks
+   that hotspot.
+5. Click **Save** to write the catalog to a `.ecatm` file — in Chrome/Edge
+   it asks where the first time, then saves there on every later Save;
+   other browsers download a fresh copy each time. **Export .ecatm** always
+   downloads a copy without touching wherever you last saved.
+
+A few other things worth knowing:
+
+- Drag a hotspot to reposition it; click one (or its row under "Links on
+  this image") to rename it, change its address, or delete it.
+- Select an image to rename it or move it into a **Folder** — the image
+  list becomes two-level, grouped by folder (see "Grouping images into
+  folders" below).
+- **Copy remote catalog…** and opening a `.sch` file both work here too
+  (see the matching sections below) — either way, what you get is an
+  editable, unattached copy: Save prompts for a location, and nothing is
+  ever written back to wherever the data came from.
+
+## Using the viewer
+
+1. Click **Open catalog…** and pick a `.ecatm` file — or a legacy `.sch`
+   file from the previous-generation desktop software this project
+   continues (see "Opening a legacy `.sch` catalog" below).
+2. The image list appears on the left (grouped into folders if the
+   catalog uses them). Click an image to view it.
+3. Click a hotspot on the picture to highlight its row in the table on the
+   right — or click a table row to highlight and center its hotspot on the
+   picture. If a part is drawn more than once on the same image, a
+   **‹ N of M ›** control appears so you can step through every occurrence.
+4. Click **Search…** to find something anywhere in the catalog, not just
+   the current image, optionally narrowed to one field. Click a result to
+   jump straight to it.
+5. Zoom with **+ / − / Reset** (bottom-right) or Ctrl/Cmd+scroll over the
+   image; drag the bare image to pan around it.
+
+Someone shared a catalog with you as a link instead of a file? Click
+**Open remote catalog…** and paste it in, or just open the link directly —
+see "Sharing a catalog via link" below.
 
 ## Catalog file format
 
-One `.ecatm` file (a SQLite database under the hood) = one catalog ("semantic set"). Tables:
+One `.ecatm` file (a SQLite database under the hood) = one catalog. Tables:
 
-- `images` — one row per schematic picture (name, embedded image data, size,
-  and an optional `folder` label for grouping in the image list)
+- `images` — one row per picture (name, embedded image data, size, and an
+  optional `folder` label for grouping in the image list)
 - `links` — one row per clickable hotspot on an image (name, url, pixel
   position). Several hotspots may share the same `name`/`url` — that's how
   the same part gets drawn at multiple positions on one exploded diagram.
@@ -44,8 +115,8 @@ One `.ecatm` file (a SQLite database under the hood) = one catalog ("semantic se
   `sku`, `description`) plus a free-form `extra` JSON column for whatever
   characteristics a given catalog needs.
 
-See [`packages/shared/src/schema.ts`](packages/shared/src/schema.ts) for the
-exact DDL.
+See [`packages/shared/src/schema.ts`](packages/shared/src/schema.ts) for
+the exact DDL.
 
 ## Sharing a catalog via link
 
@@ -120,21 +191,40 @@ large files (tens of thousands of diagrams) take proportionally longer to
 convert — a few seconds per thousand diagrams in testing — since it's all
 done in the browser with no server to offload to.
 
+## Packages
+
+- [`packages/shared`](packages/shared) — the catalog file format: SQLite
+  schema, TypeScript types, and the sql.js wrapper both apps import
+  (opening/saving, search, folder grouping, legacy `.sch` import).
+- [`packages/editor`](packages/editor) — builds a catalog.
+- [`packages/viewer`](packages/viewer) — opens one and browses it.
+
+Both apps run entirely in the browser and render their own DOM directly —
+there's no shared UI framework, just the shared data layer above.
+
 ## Development
 
 ```bash
 pnpm install
 pnpm dev:editor   # http://localhost:5173
 pnpm dev:viewer   # http://localhost:5174 (or next free port)
+pnpm -r build     # production build of both apps -> packages/*/dist
 ```
+
+`pnpm -r build` output is genuinely everything needed to host either app:
+static HTML/JS/CSS/WASM, no build-time secrets, no server-rendering step.
+Serve a `dist` folder with any static file host — `npx serve
+packages/viewer/dist`, GitHub Pages, Cloudflare Pages, or similar.
 
 ## Status
 
-Early scaffold — functional end-to-end (create a catalog, place hotspots,
-add rows, export/reopen the `.ecatm`, view + highlight-on-click), but UI and
-feature parity with the legacy desktop tools (bulk link import, reverse
-search, exploded-view pan/zoom, embeddable viewer as a Web Component) are not
-built yet.
+Functional end-to-end in both apps: create a catalog, place hotspots, add
+data rows, save/export, group images into folders, search the whole
+catalog at once, open a catalog by URL, open a legacy `.sch` catalog
+(read-only in the viewer, as an editable copy in the editor), light/dark
+theme. Not yet built: a hosted/public version of either app (local dev
+server is the only way to run them today), bulk link import, an
+embeddable viewer Web Component.
 
 ## License
 
