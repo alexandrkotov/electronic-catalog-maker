@@ -58,6 +58,11 @@
   }
   #visits {
     margin-top: 1rem;
+    font-size: 0.85rem;
+    color: #666;
+  }
+  #visits strong {
+    color: #1a1a1a;
   }
 </style>
 </head>
@@ -86,14 +91,24 @@
   </footer>
 
   <!-- Privacy-friendly, cookie-free page-view counting (goatcounter.com) —
-       tracks this page's own path automatically; the visible badge below
-       uses path:"TOTAL" so it counts landing+editor+viewer combined,
-       since visiting the landing page alone doesn't mean someone actually
-       used the tool. Not `async`, on purpose: the inline call right after
-       it needs `window.goatcounter.visit_count` to already exist. -->
-  <script data-goatcounter="https://ecatm.goatcounter.com/count" src="//gc.zgo.at/count.js"></script>
+       tracks this page's own path automatically. -->
+  <script data-goatcounter="https://ecatm.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
   <script>
-    window.goatcounter.visit_count({ append: "#visits", path: "TOTAL", type: "html" });
+    // GoatCounter's own embeddable widget is an <iframe> — its serif/purple
+    // default styling can't be reached by this page's CSS at all, and it
+    // clashed with everything else here. Fetching the plain JSON count and
+    // rendering it as normal text instead — count_unique (people, not raw
+    // hits), summed across landing+editor+viewer ("TOTAL") since visiting
+    // the landing page alone doesn't mean someone actually used the tool.
+    fetch("https://ecatm.goatcounter.com/counter/TOTAL.json")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        const n = data.count_unique;
+        document.getElementById("visits").innerHTML =
+          `<strong>${n}</strong> ${n === "1" ? "person has" : "people have"} used this tool so far.`;
+      })
+      .catch(() => {});
   </script>
 </body>
 </html>
