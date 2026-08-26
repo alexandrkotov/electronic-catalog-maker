@@ -92,6 +92,135 @@ let searchOpen = false;
 let searchQuery = "";
 let searchField: SearchField = "all";
 
+// ---------- resizable layout (side panels + table columns) ----------
+// User-adjustable, remembered per-browser via localStorage (same pattern as
+// theme.ts) — these are editor-local UI preferences, not part of the
+// catalog file itself, so they don't round-trip through Save/Export.
+
+const PANEL_WIDTH_LIMITS = { min: 160, max: 640 };
+let imagesPanelWidth = loadPanelWidth("ecm-editor-images-width", 220);
+let inspectorPanelWidth = loadPanelWidth("ecm-editor-inspector-width", 320);
+applyPanelWidths(); // before the first render — avoids a flash of the default width, same reasoning as applyTheme() above
+
+function loadPanelWidth(key: string, fallback: number): number {
+  try {
+    const raw = Number(localStorage.getItem(key));
+    if (Number.isFinite(raw) && raw >= PANEL_WIDTH_LIMITS.min && raw <= PANEL_WIDTH_LIMITS.max) return raw;
+  } catch {
+    // localStorage unavailable (privacy mode, etc.) — fall back to the default.
+  }
+  return fallback;
+}
+
+// Applied as CSS custom properties directly on #app (not #app.innerHTML, so
+// it survives render()'s wholesale innerHTML rebuild without re-running).
+function applyPanelWidths() {
+  app.style.setProperty("--images-w", `${imagesPanelWidth}px`);
+  app.style.setProperty("--inspector-w", `${inspectorPanelWidth}px`);
+}
+
+type ColTableKey = "links" | "rows";
+const COL_WIDTH_LIMITS = { min: 40, max: 400 };
+const DEFAULT_COL_WIDTHS: Record<ColTableKey, number[]> = {
+  links: [110, 130], // Name, URL
+  rows: [60, 150, 80], // URL, Name, SKU
+};
+const colWidths: Record<ColTableKey, number[]> = {
+  links: loadColWidths("links"),
+  rows: loadColWidths("rows"),
+};
+
+function loadColWidths(key: ColTableKey): number[] {
+  const fallback = DEFAULT_COL_WIDTHS[key];
+  try {
+    const raw = localStorage.getItem(`ecm-editor-${key}-col-widths`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length === fallback.length && parsed.every((n) => typeof n === "number" && n > 0)) {
+        return parsed;
+      }
+    }
+  } catch {
+    // malformed or unavailable storage — use the default widths instead.
+  }
+  return [...fallback];
+}
+
+function saveColWidths(key: ColTableKey) {
+  try {
+    localStorage.setItem(`ecm-editor-${key}-col-widths`, JSON.stringify(colWidths[key]));
+  } catch {
+    // Width still applies for this session, just won't persist.
+  }
+}
+
+function colTableTotalWidth(key: ColTableKey): number {
+  return colWidths[key].reduce((a, b) => a + b, 0);
+}
+
+/**
+ * Drags one of the two panel dividers (images↔stage, stage↔inspector).
+ * Follows the same "poke style properties directly on mousemove, skip
+ * render()" pattern as hotspot dragging and the placement crosshair — a
+ * full re-render on every mousemove would be wasteful and can lose focus.
+ */
+function startPanelResize(evt: MouseEvent, side: "images" | "inspector") {
+  evt.preventDefault();
+  const divider = evt.currentTarget as HTMLElement;
+  const startX = evt.clientX;
+  const startWidth = side === "images" ? imagesPanelWidth : inspectorPanelWidth;
+  divider.classList.add("dragging");
+
+  function onMove(moveEvt: MouseEvent) {
+    const dx = moveEvt.clientX - startX;
+    // The inspector sits on the right, so dragging its divider left (dx < 0) should grow it.
+    const raw = side === "images" ? startWidth + dx : startWidth - dx;
+    const width = Math.min(PANEL_WIDTH_LIMITS.max, Math.max(PANEL_WIDTH_LIMITS.min, raw));
+    if (side === "images") imagesPanelWidth = width;
+    else inspectorPanelWidth = width;
+    applyPanelWidths();
+  }
+  function onUp() {
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mouseup", onUp);
+    divider.classList.remove("dragging");
+    try {
+      localStorage.setItem(side === "images" ? "ecm-editor-images-width" : "ecm-editor-inspector-width", String(side === "images" ? imagesPanelWidth : inspectorPanelWidth));
+    } catch {
+      // Width still applies for this session, just won't persist.
+    }
+  }
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+}
+
+/** Drags a column-resize handle in the "Links on this image" or "Table (N rows)" list. */
+function startColumnResize(evt: MouseEvent, tableKey: ColTableKey, colIndex: number) {
+  evt.preventDefault();
+  evt.stopPropagation();
+  const handle = evt.currentTarget as HTMLElement;
+  const startX = evt.clientX;
+  const startWidth = colWidths[tableKey][colIndex] ?? COL_WIDTH_LIMITS.min;
+  handle.classList.add("dragging");
+
+  function onMove(moveEvt: MouseEvent) {
+    const width = Math.min(COL_WIDTH_LIMITS.max, Math.max(COL_WIDTH_LIMITS.min, startWidth + (moveEvt.clientX - startX)));
+    colWidths[tableKey][colIndex] = width;
+    const table = document.querySelector<HTMLTableElement>(`table[data-col-key="${tableKey}"]`);
+    const col = table?.querySelectorAll("col")[colIndex] as HTMLElement | undefined;
+    if (col) col.style.width = `${width}px`;
+    if (table) table.style.width = `${colTableTotalWidth(tableKey)}px`;
+  }
+  function onUp() {
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mouseup", onUp);
+    handle.classList.remove("dragging");
+    saveColWidths(tableKey);
+  }
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+}
+
 function askConfirm(message: string, onConfirm: () => void) {
   pendingConfirmation = { message, onConfirm };
   render();
@@ -777,6 +906,8 @@ function render() {
       }
     </div>
 
+    <div class="panel-divider" id="divider-images" title="Drag to resize"></div>
+
     <div class="stage">
       <div class="stage-scroll" id="stage-scroll">
         ${
@@ -794,6 +925,8 @@ function render() {
       </div>
       ${activeImage ? renderZoomControls() : ""}
     </div>
+
+    <div class="panel-divider" id="divider-inspector" title="Drag to resize"></div>
 
     <div class="inspector" id="inspector">
       ${activeImage ? renderImageForm(activeImage, images) : ""}
@@ -1023,11 +1156,16 @@ function renderEditLinkForm(link: CatalogLink | null): string {
 }
 
 function renderLinksSection(links: CatalogLink[], editingLinkId: number | null): string {
+  const [nameW, urlW] = colWidths.links;
   return `
     <section>
       <h2>Links on this image (${links.length})</h2>
-      <table>
-        <thead><tr><th>Name</th><th>URL</th></tr></thead>
+      <table data-col-key="links" style="table-layout:fixed; width:${colTableTotalWidth("links")}px">
+        <colgroup><col style="width:${nameW}px"><col style="width:${urlW}px"></colgroup>
+        <thead><tr>
+          <th>Name<span class="col-resize-handle" data-table="links" data-col="0"></span></th>
+          <th>URL<span class="col-resize-handle" data-table="links" data-col="1"></span></th>
+        </tr></thead>
         <tbody>
           ${links
             .map(
@@ -1086,11 +1224,17 @@ function renderEditRowForm(row: CatalogRow | null): string {
 }
 
 function renderRowsSection(rows: ReturnType<typeof listRowsForImage>, editingRowId: number | null): string {
+  const [urlW, nameW, skuW] = colWidths.rows;
   return `
     <section>
       <h2>Table (${rows.length} rows)</h2>
-      <table>
-        <thead><tr><th>URL</th><th>Name</th><th>SKU</th></tr></thead>
+      <table data-col-key="rows" style="table-layout:fixed; width:${colTableTotalWidth("rows")}px">
+        <colgroup><col style="width:${urlW}px"><col style="width:${nameW}px"><col style="width:${skuW}px"></colgroup>
+        <thead><tr>
+          <th>URL<span class="col-resize-handle" data-table="rows" data-col="0"></span></th>
+          <th>Name<span class="col-resize-handle" data-table="rows" data-col="1"></span></th>
+          <th>SKU<span class="col-resize-handle" data-table="rows" data-col="2"></span></th>
+        </tr></thead>
         <tbody>
           ${rows
             .map(
@@ -1119,6 +1263,17 @@ function wireEvents(links: CatalogLink[]) {
   document.getElementById("btn-theme")?.addEventListener("click", () => {
     toggleTheme();
     render();
+  });
+
+  document.getElementById("divider-images")?.addEventListener("mousedown", (evt) => startPanelResize(evt as MouseEvent, "images"));
+  document.getElementById("divider-inspector")?.addEventListener("mousedown", (evt) => startPanelResize(evt as MouseEvent, "inspector"));
+
+  document.querySelectorAll<HTMLElement>(".col-resize-handle").forEach((handle) => {
+    handle.addEventListener("mousedown", (evt) => {
+      const tableKey = handle.dataset.table as ColTableKey;
+      const colIndex = Number(handle.dataset.col);
+      startColumnResize(evt as MouseEvent, tableKey, colIndex);
+    });
   });
 
   document.getElementById("btn-new")?.addEventListener("click", actionNewCatalog);

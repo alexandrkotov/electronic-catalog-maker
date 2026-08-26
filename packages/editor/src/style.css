@@ -63,12 +63,46 @@ body {
 
 #app {
   display: grid;
-  grid-template-columns: 220px 1fr 320px;
+  /* --images-w/--inspector-w are set as inline properties on #app itself
+     (packages/editor/src/main.ts, applyPanelWidths()) — that element is
+     never touched by render()'s innerHTML rebuild, so a user's resize
+     survives every re-render, not just this one. */
+  grid-template-columns: var(--images-w, 220px) 6px 1fr 6px var(--inspector-w, 320px);
   grid-template-rows: auto 1fr;
   grid-template-areas:
-    "toolbar toolbar toolbar"
-    "images  stage    inspector";
+    "toolbar   toolbar   toolbar toolbar   toolbar"
+    "images    divider-l stage   divider-r inspector";
   height: 100vh;
+}
+
+/* Draggable dividers between the side panels and the stage — width itself
+   lives in JS state (main.ts startPanelResize), this just draws the
+   grab handle. Replaces the old fixed border-right/border-left on
+   .panel-images/.inspector (see below). */
+.panel-divider {
+  position: relative;
+  cursor: col-resize;
+}
+#divider-images {
+  grid-area: divider-l;
+}
+#divider-inspector {
+  grid-area: divider-r;
+}
+.panel-divider::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--border);
+}
+.panel-divider:hover::after,
+.panel-divider.dragging::after {
+  left: 0;
+  width: 100%;
+  background: var(--accent);
 }
 
 .toolbar {
@@ -96,7 +130,6 @@ body {
 
 .panel-images {
   grid-area: images;
-  border-right: 1px solid var(--border);
   overflow-y: auto;
   padding: 0.5rem;
   background: var(--bg-page);
@@ -295,7 +328,6 @@ tr.clickable-row.editing {
 
 .inspector {
   grid-area: inspector;
-  border-left: 1px solid var(--border);
   overflow-y: auto;
   padding: 0.75rem;
   display: flex;
@@ -374,6 +406,35 @@ td {
   border-bottom: 1px solid var(--border);
   padding: 0.3rem 0.4rem;
   text-align: left;
+}
+
+th {
+  position: relative; /* anchors .col-resize-handle */
+}
+
+/* The two resizable tables ("Links on this image", "Table (N rows)") use
+   table-layout: fixed with explicit <col> widths (see main.ts) — long
+   content is clipped with an ellipsis rather than wrapping onto a second
+   line, since the user can now just widen the column instead. */
+td {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.col-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 1;
+}
+.col-resize-handle:hover,
+.col-resize-handle.dragging {
+  background: var(--accent);
+  opacity: 0.5;
 }
 
 .hint {
