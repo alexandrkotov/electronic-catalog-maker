@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Typecheck + build all packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm run build
+
+  # packages/viewer-embed/dist/ecm-viewer.js is committed on purpose (see
+  # README "Status") — it's the actual file jsDelivr serves straight from
+  # this repo, not something built at deploy time. Without this job, a
+  # change to packages/viewer-embed or the shared viewer engine only takes
+  # effect on the live CDN URL once someone remembers to rebuild and
+  # recommit that one file by hand. This rebuilds it on every push to main
+  # and pushes a follow-up commit only if the output actually changed.
+  rebuild-embed-dist:
+    name: Rebuild viewer-embed dist if stale
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @ecm/viewer-embed build
+      - name: Commit rebuilt dist, if it actually changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/viewer-embed/dist
+          if git diff --cached --quiet; then
+            echo "dist/ already matches source — nothing to commit."
+          else
+            git commit -m "ci: rebuild packages/viewer-embed/dist"
+            git push
+          fi

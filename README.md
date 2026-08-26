@@ -270,8 +270,9 @@ no server-rendering step. Serve a `dist` folder with any static file host
 similar. `packages/viewer-embed`'s build is different in one way: its
 `dist/ecm-viewer.js` is committed to the repo on purpose (see "Status")
 rather than gitignored, since that's the file "Embedding the viewer"
-points people at directly — rebuild and recommit it after touching that
-package or the shared viewer engine.
+points people at directly — [CI](.github/workflows/ci.yml) rebuilds and
+recommits it automatically after a push to `main`, so you don't have to
+remember to by hand (though nothing stops you from doing so locally too).
 
 ## Status
 
@@ -283,11 +284,12 @@ light/dark theme. The viewer is also embeddable elsewhere as
 `<ecm-viewer>` (see "Embedding the viewer"), distributed straight from
 this repo via jsDelivr — its built `dist/ecm-viewer.js` is deliberately
 committed (everywhere else, `dist/` is gitignored) since that file *is*
-what gets served; there's no CI yet to rebuild it automatically, so it
-needs rebuilding and recommitting by hand after a change to
-`packages/viewer-embed` or `packages/shared/src/viewerEngine.ts`. Not yet
-built: a hosted/public version of the editor/viewer apps themselves (local
-dev server is the only way to run them today), bulk link import.
+what gets served. [CI](.github/workflows/ci.yml) typechecks and builds
+every package on each push/PR, and rebuilds+recommits that one file on
+pushes to `main` if it's gone stale, so the live CDN URL can't silently
+drift from source. Not yet built: a hosted/public version of the
+editor/viewer apps themselves (local dev server is the only way to run
+them today), bulk link import.
 
 ## License
 
