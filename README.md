@@ -32,10 +32,11 @@ disk file) and share.
 
 One `.ecatm` file (a SQLite database under the hood) = one catalog ("semantic set"). Tables:
 
-- `images` — one row per schematic picture (name, embedded image data, size)
+- `images` — one row per schematic picture (name, embedded image data, size,
+  and an optional `folder` label for grouping in the image list)
 - `links` — one row per clickable hotspot on an image (name, url, pixel
-  position). **`name` and `url` are unique across the whole catalog**, not just
-  per image.
+  position). Several hotspots may share the same `name`/`url` — that's how
+  the same part gets drawn at multiple positions on one exploded diagram.
 - `rows` — one row of data per link, joined by `url`. Fixed columns (`name`,
   `sku`, `description`) plus a free-form `extra` JSON column for whatever
   characteristics a given catalog needs.
@@ -75,6 +76,15 @@ to one field (Name, SKU, Description, or any key that shows up in some
 row's free-form `extra` data) with the dropdown next to the search box.
 Clicking a result jumps straight to the image it's on and centers the
 matching hotspot; in the editor it also opens that hotspot for editing.
+
+## Grouping images into folders
+
+The image list on the left is two-level: images can be tagged with a
+folder name to group them (e.g. separate manuals for "Wardrobe" and "Bed"
+inside one catalog). In the editor, select an image and set its **Folder**
+field (with autocomplete from folders already in use); leave it empty to
+keep the image ungrouped. Ungrouped images always list first, folders
+below them alphabetically. The viewer shows the same grouping read-only.
 
 ## Development
 

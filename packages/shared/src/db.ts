@@ -42,14 +42,25 @@ export function openCatalog(SQL: SqlJsStatic, bytes: Uint8Array): Database {
 
 /**
  * A catalog's schema is baked into the file at CREATE TABLE time — reopening
- * an old file does NOT pick up schema changes made in newer code. Catalogs
- * created before hotspots were allowed to share a url/name (see schema.ts)
- * still have `UNIQUE` on links.name/links.url, so adding a legitimate
- * duplicate (the same part drawn again) throws a raw SQLite constraint error
- * instead of the friendly in-app warning. Detect and rebuild the table
- * without those constraints, preserving every row's data and id.
+ * an old file does NOT pick up schema changes made in newer code. Each
+ * migration below is independent and self-guarded (checks whether it's
+ * already applied before doing anything), so opening a file from any past
+ * version of the schema brings it up to date in one pass.
  */
 function migrateLegacySchema(db: Database): void {
+  migrateLinksUniqueConstraint(db);
+  migrateImagesFolderColumn(db);
+}
+
+/**
+ * Catalogs created before hotspots were allowed to share a url/name (see
+ * schema.ts) still have `UNIQUE` on links.name/links.url, so adding a
+ * legitimate duplicate (the same part drawn again) throws a raw SQLite
+ * constraint error instead of the friendly in-app warning. Detect and
+ * rebuild the table without those constraints, preserving every row's data
+ * and id.
+ */
+function migrateLinksUniqueConstraint(db: Database): void {
   const ddlRows = db.exec("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'links'");
   const ddl = ddlRows[0]?.values[0]?.[0];
   if (typeof ddl !== "string" || !/UNIQUE/i.test(ddl)) return; // already on the current schema
@@ -71,6 +82,14 @@ function migrateLegacySchema(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_links_image_id ON links(image_id);
     CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
   `);
+}
+
+/** Catalogs created before folder grouping existed are missing `images.folder` entirely. */
+function migrateImagesFolderColumn(db: Database): void {
+  const ddlRows = db.exec("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'images'");
+  const ddl = ddlRows[0]?.values[0]?.[0];
+  if (typeof ddl === "string" && /\bfolder\b/i.test(ddl)) return; // already on the current schema
+  db.run("ALTER TABLE images ADD COLUMN folder TEXT NOT NULL DEFAULT ''");
 }
 
 /** Serializes the catalog back to bytes, ready to download or fetch elsewhere. */
@@ -96,7 +115,7 @@ export function readMeta(db: Database): CatalogMeta {
 
 export function listImages(db: Database): CatalogImage[] {
   const stmt = db.prepare(
-    "SELECT id, name, mime_type, image_data, width, height, sort_order FROM images ORDER BY sort_order, id",
+    "SELECT id, name, mime_type, image_data, width, height, sort_order, folder FROM images ORDER BY sort_order, id",
   );
   const out: CatalogImage[] = [];
   while (stmt.step()) {
@@ -109,6 +128,7 @@ export function listImages(db: Database): CatalogImage[] {
       width: Number(r.width),
       height: Number(r.height),
       sortOrder: Number(r.sort_order),
+      folder: String(r.folder ?? ""),
     });
   }
   stmt.free();
@@ -221,15 +241,37 @@ export interface AddImageInput {
   width: number;
   height: number;
   sortOrder?: number;
+  folder?: string;
 }
 
 export function addImage(db: Database, input: AddImageInput): number {
   const stmt = db.prepare(
-    "INSERT INTO images (name, mime_type, image_data, width, height, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
+    "INSERT INTO images (name, mime_type, image_data, width, height, sort_order, folder) VALUES (?, ?, ?, ?, ?, ?, ?)",
   );
-  stmt.run([input.name, input.mimeType, input.imageData, input.width, input.height, input.sortOrder ?? 0]);
+  stmt.run([
+    input.name,
+    input.mimeType,
+    input.imageData,
+    input.width,
+    input.height,
+    input.sortOrder ?? 0,
+    input.folder ?? "",
+  ]);
   stmt.free();
   return lastInsertRowId(db);
+}
+
+export interface UpdateImageInput {
+  name: string;
+  /** "" clears the folder (the image becomes ungrouped). */
+  folder: string;
+}
+
+/** Renames an image and/or moves it into a different (or no) folder. */
+export function updateImage(db: Database, imageId: number, input: UpdateImageInput): void {
+  const stmt = db.prepare("UPDATE images SET name = ?, folder = ? WHERE id = ?");
+  stmt.run([input.name, input.folder, imageId]);
+  stmt.free();
 }
 
 export interface AddLinkInput {

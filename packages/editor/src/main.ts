@@ -6,10 +6,12 @@ import {
   addRow,
   CATALOG_FILE_EXTENSION,
   collectExtraKeys,
+  collectFolders,
   createEmptyCatalog,
   deleteLink,
   exportCatalog,
   findLinkConflicts,
+  groupImagesByFolder,
   initSqlite,
   listAllRows,
   listImages,
@@ -22,6 +24,7 @@ import {
   currentTheme,
   toggleTheme,
   searchRows,
+  updateImage,
   updateLink,
   updateLinkPosition,
   type CatalogImage,
@@ -269,6 +272,9 @@ async function actionAddImage(file: File) {
     return;
   }
   const { width, height } = await imageDimensions(dataUrl);
+  // Inherit the active image's folder — adding another page while working
+  // inside a folder should keep it there, not drop it back to ungrouped.
+  const activeFolder = currentImages().find((i) => i.id === activeImageId)?.folder ?? "";
   const id = addImage(db, {
     name: file.name,
     mimeType: mimeType ?? file.type,
@@ -276,10 +282,22 @@ async function actionAddImage(file: File) {
     width,
     height,
     sortOrder: currentImages().length,
+    folder: activeFolder,
   });
   activeImageId = id;
   resetTransientEditState();
   setStatus(`Added image "${file.name}".`);
+}
+
+/** Renames the active image and/or moves it into a different (or no) folder. */
+function actionUpdateImageMeta() {
+  if (!db || activeImageId === null) return;
+  const nameInput = document.getElementById("image-name-input") as HTMLInputElement | null;
+  const folderInput = document.getElementById("image-folder-input") as HTMLInputElement | null;
+  const name = nameInput?.value.trim() || "Untitled image";
+  const folder = folderInput?.value.trim() ?? "";
+  updateImage(db, activeImageId, { name, folder });
+  setStatus(`Updated "${name}".`);
 }
 
 function actionSelectImage(id: number) {
@@ -572,12 +590,7 @@ function render() {
       ${
         images.length === 0
           ? `<p class="hint">${db ? "No images in this catalog yet." : "Create or open a catalog."}</p>`
-          : `<ul>${images
-              .map(
-                (img) =>
-                  `<li data-id="${img.id}" class="${img.id === activeImageId ? "active" : ""}">${escapeHtml(img.name)}</li>`,
-              )
-              .join("")}</ul>`
+          : renderImageList(images)
       }
     </div>
 
@@ -597,6 +610,7 @@ function render() {
     </div>
 
     <div class="inspector">
+      ${activeImage ? renderImageForm(activeImage, images) : ""}
       ${activeImage ? renderLinkForm(links) : ""}
       ${activeImage ? renderEditLinkForm(editingLink) : ""}
       ${activeImage ? renderLinksSection(links, editingLinkId) : ""}
@@ -617,6 +631,41 @@ function render() {
   }
 
   wireEvents(links);
+}
+
+/** Two-level list: ungrouped images first, then one heading per folder (see shared/images.ts). */
+function renderImageList(images: CatalogImage[]): string {
+  return groupImagesByFolder(images)
+    .map((group) => {
+      const items = group.images
+        .map(
+          (img) =>
+            `<li data-id="${img.id}" class="${img.id === activeImageId ? "active" : ""}">${escapeHtml(img.name)}</li>`,
+        )
+        .join("");
+      if (group.folder === "") return `<ul class="image-list">${items}</ul>`;
+      return `<div class="image-folder"><div class="image-folder-name">${escapeHtml(group.folder)}</div><ul class="image-list">${items}</ul></div>`;
+    })
+    .join("");
+}
+
+function renderImageForm(image: CatalogImage, allImages: CatalogImage[]): string {
+  const folders = collectFolders(allImages);
+  return `
+    <section>
+      <h2>Image</h2>
+      <div class="field">
+        <label for="image-name-input">Name</label>
+        <input type="text" id="image-name-input" value="${escapeHtml(image.name)}" />
+      </div>
+      <div class="field">
+        <label for="image-folder-input">Folder (leave empty for none)</label>
+        <input type="text" id="image-folder-input" list="folder-options" value="${escapeHtml(image.folder)}" placeholder="e.g. Wardrobe" />
+        <datalist id="folder-options">${folders.map((f) => `<option value="${escapeHtml(f)}"></option>`).join("")}</datalist>
+      </div>
+      <button id="btn-save-image">Save</button>
+    </section>
+  `;
 }
 
 function renderZoomControls(): string {
@@ -912,6 +961,8 @@ function wireEvents(links: CatalogLink[]) {
   document.querySelectorAll<HTMLLIElement>(".panel-images li[data-id]").forEach((li) => {
     li.addEventListener("click", () => actionSelectImage(Number(li.dataset.id)));
   });
+
+  document.getElementById("btn-save-image")?.addEventListener("click", actionUpdateImageMeta);
 
   document.getElementById("btn-zoom-in")?.addEventListener("click", () => actionSetZoom(zoom * 1.25));
   document.getElementById("btn-zoom-out")?.addEventListener("click", () => actionSetZoom(zoom / 1.25));

@@ -7,6 +7,8 @@ export interface CatalogImage {
   width: number;
   height: number;
   sortOrder: number;
+  /** Free-form grouping label for the two-level image list; "" = ungrouped. */
+  folder: string;
 }
 
 export interface CatalogLink {

@@ -114,6 +114,23 @@ body {
   color: white;
 }
 
+.image-folder {
+  margin-top: 0.5rem;
+}
+
+.image-folder-name {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.image-folder .image-list li {
+  padding-left: 1.25rem;
+}
+
 .stage {
   grid-area: stage;
   position: relative;

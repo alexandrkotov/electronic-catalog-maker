@@ -14,6 +14,10 @@
  * - `links.name`/`links.url` colliding with another hotspot elsewhere in the catalog is
  *   NOT blocked at the schema level — the editor warns and lets the user confirm, since
  *   the same name/url legitimately repeats for the "same part, another position" case.
+ * - `images.folder` is a plain free-form string, not a separate `folders` table with
+ *   its own id — grouping is purely presentational (two-level image list: folder,
+ *   then images), so there's nothing to gain from normalizing it, and a plain column
+ *   means renaming/moving an image between folders is a single UPDATE.
  * - Per-row characteristics that vary by catalog/image (weight, material, ...) live in
  *   `rows.extra` as a JSON object rather than as dynamic columns, to keep the editor
  *   and viewer schema-agnostic.
@@ -42,7 +46,8 @@ CREATE TABLE IF NOT EXISTS images (
   image_data TEXT NOT NULL, -- base64, no data: prefix
   width      INTEGER NOT NULL,
   height     INTEGER NOT NULL,
-  sort_order INTEGER NOT NULL DEFAULT 0
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  folder     TEXT NOT NULL DEFAULT '' -- free-form label for two-level grouping in the image list; '' = ungrouped
 );
 
 CREATE TABLE IF NOT EXISTS links (

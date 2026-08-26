@@ -4,6 +4,7 @@ import {
   CATALOG_FILE_EXTENSION,
   collectExtraKeys,
   findRowByUrl,
+  groupImagesByFolder,
   initSqlite,
   listAllRows,
   listImages,
@@ -16,6 +17,7 @@ import {
   currentTheme,
   toggleTheme,
   searchRows,
+  type CatalogImage,
   type CatalogLink,
   type CatalogRow,
   type Database,
@@ -290,12 +292,7 @@ function render() {
       ${
         images.length === 0
           ? `<p class="hint">Open a .${CATALOG_FILE_EXTENSION} catalog file.</p>`
-          : `<ul>${images
-              .map(
-                (img) =>
-                  `<li data-id="${img.id}" class="${img.id === activeImageId ? "active" : ""}">${escapeHtml(img.name)}</li>`,
-              )
-              .join("")}</ul>`
+          : renderImageList(images)
       }
     </div>
 
@@ -358,6 +355,22 @@ function render() {
   }
 
   wireEvents();
+}
+
+/** Two-level list: ungrouped images first, then one heading per folder (see shared/images.ts). */
+function renderImageList(images: CatalogImage[]): string {
+  return groupImagesByFolder(images)
+    .map((group) => {
+      const items = group.images
+        .map(
+          (img) =>
+            `<li data-id="${img.id}" class="${img.id === activeImageId ? "active" : ""}">${escapeHtml(img.name)}</li>`,
+        )
+        .join("");
+      if (group.folder === "") return `<ul class="image-list">${items}</ul>`;
+      return `<div class="image-folder"><div class="image-folder-name">${escapeHtml(group.folder)}</div><ul class="image-list">${items}</ul></div>`;
+    })
+    .join("");
 }
 
 function renderZoomControls(): string {
