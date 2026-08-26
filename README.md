@@ -309,19 +309,25 @@ remember to by hand (though nothing stops you from doing so locally too).
 ## Status
 
 Functional end-to-end in the editor and viewer: create a catalog, place
-hotspots, add data rows, save/export, group images into folders, search
-the whole catalog at once, open a catalog by URL, open a legacy `.sch`
-catalog (read-only in the viewer, as an editable copy in the editor),
-light/dark theme. The viewer is also embeddable elsewhere as
-`<ecm-viewer>` (see "Embedding the viewer"), distributed straight from
-this repo via jsDelivr — its built `dist/ecm-viewer.js` is deliberately
-committed (everywhere else, `dist/` is gitignored) since that file *is*
-what gets served. The editor and viewer themselves are hosted too, free,
-on GitHub Pages — see "Getting started" for the links. [CI](.github/workflows/ci.yml)
-typechecks and builds every package on each push/PR, rebuilds+recommits
-`ecm-viewer.js` if it's gone stale so the CDN URL can't silently drift
-from source, and redeploys the editor/viewer to Pages — all three on
-every push to `main`, no manual step. Not yet built: bulk link import.
+hotspots, add and edit data rows (including free-form `extra`
+characteristics as JSON — editing an already-saved row, not just adding a
+new one, highlights every hotspot that row's `url` is shared by), save/
+export, group images into folders, search the whole catalog at once, open
+a catalog by URL or re-fetch it later with the viewer's **Refresh** to
+watch for changes saved elsewhere, open a legacy `.sch` catalog (read-only
+in the viewer, as an editable copy in the editor), light/dark theme. The
+viewer is also embeddable elsewhere as `<ecm-viewer>` (see "Embedding the
+viewer"), distributed straight from this repo via jsDelivr — its built
+`dist/ecm-viewer.js` is deliberately committed (everywhere else, `dist/`
+is gitignored) since that file *is* what gets served. The editor and
+viewer themselves are hosted too, free, on GitHub Pages — see "Getting
+started" for the links. [CI](.github/workflows/ci.yml) typechecks and
+builds every package on each push/PR, rebuilds+recommits `ecm-viewer.js`
+if it's gone stale so the CDN URL can't silently drift from source, and
+redeploys the editor/viewer to Pages — all three on every push to `main`,
+no manual step. Known gap, confirmed via a live two-editor test: no
+conflict detection on concurrent edits (see "⚠️ No conflict detection"
+above). Not yet built: bulk link import.
 
 ## License
 
