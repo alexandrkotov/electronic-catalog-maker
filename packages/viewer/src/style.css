@@ -193,6 +193,31 @@ body {
   padding-left: 1.25rem;
 }
 
+/* Mobile tab bar (Images / Diagram / Table) — always rendered (see
+   viewerEngine.ts render()) but only shown below the mobile breakpoint,
+   where the three-column desktop grid collapses to one panel at a time.
+   Harmless above the breakpoint: `display: none` removes it from grid
+   layout entirely regardless of the `grid-area: tabs` it's given, and
+   "tabs" isn't even a named area in the desktop grid-template-areas. */
+.mobile-tabs {
+  display: none;
+  grid-area: tabs;
+  gap: 0.25rem;
+  padding: 0.4rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.mobile-tab-btn {
+  flex: 1;
+}
+
+.mobile-tab-btn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
 .stage {
   grid-area: stage;
   position: relative;
@@ -575,4 +600,65 @@ button:disabled {
 
 .search-results li:hover {
   background: var(--bg-panel);
+}
+
+/* Mobile layout — below this width the desktop three-column grid (fixed-px
+   side panels + a flexible stage, see .ecm-viewer-app above) no longer
+   fits: --images-w/--table-w alone already exceed a phone's viewport, which
+   pushed the stage to ~0 width and shoved the toolbar/table off-screen with
+   no way to scroll back to them. Below the breakpoint, collapse to a single
+   full-width panel at a time, switched via .mobile-tabs (grid-area "tabs",
+   hidden above the breakpoint — see there). Panel-resize dividers make no
+   sense with only one panel visible, so they're hidden too; their drag
+   handlers (startPanelResize) simply never fire without a divider to grab. */
+@media (max-width: 860px) {
+  .ecm-viewer-app.mode-full {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "toolbar"
+      "tabs"
+      "content";
+  }
+
+  .ecm-viewer-app.mode-lite {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "tabs"
+      "content";
+  }
+
+  .mobile-tabs {
+    display: flex;
+  }
+
+  .panel-divider {
+    display: none;
+  }
+
+  /* All three occupy the same grid cell; data-mobile-tab (set on the
+     container itself, see viewerEngine.ts render()) picks which one is
+     actually shown. */
+  .panel-images,
+  .stage,
+  .table-panel {
+    grid-area: content;
+    width: 100%;
+    min-width: 0;
+    display: none;
+  }
+
+  .ecm-viewer-app[data-mobile-tab="images"] .panel-images,
+  .ecm-viewer-app[data-mobile-tab="stage"] .stage,
+  .ecm-viewer-app[data-mobile-tab="table"] .table-panel {
+    display: block;
+  }
+
+  /* Fixed-width columns (see colgroup in rowHtml()) can still add up to
+     more than a phone's width — scroll the table sideways within its own
+     panel instead of letting it push the page wider than the viewport. */
+  .table-panel {
+    overflow-x: auto;
+  }
 }
