@@ -212,7 +212,16 @@ body {
   flex: 1;
 }
 
-.mobile-tab-btn.active {
+/* Also cover :hover/:focus-visible on the active tab itself — tapping a
+   button on iOS Safari leaves it matching :focus-visible, and that generic
+   button rule (further below) outspecifies a plain `.mobile-tab-btn.active`
+   (two pseudo-classes there vs. this rule's two classes lose to its
+   element+2-pseudo-classes count). Without this, the just-tapped tab fell
+   back to the unselected button's pale background while `color: white`
+   still won — white text on a near-white background, unreadable. */
+.mobile-tab-btn.active,
+.mobile-tab-btn.active:hover,
+.mobile-tab-btn.active:focus-visible {
   background: var(--accent);
   color: white;
   border-color: var(--accent);
