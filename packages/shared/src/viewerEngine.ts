@@ -172,6 +172,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // clears the other.
   let openedFileHandle: EcmFileSystemFileHandle | null = null;
   let refreshing = false;
+  // Which single panel is shown below the mobile breakpoint (see .mobile-tabs
+  // / .ecm-viewer-app[data-mobile-tab] in style.css) — irrelevant above it,
+  // where all three panels sit side by side per the desktop grid regardless
+  // of this value. Starts on "images" so a freshly opened catalog shows its
+  // image list first, same as the desktop layout's left panel; picking an
+  // image switches to "stage" (see actionSelectImage) since that's the part
+  // the user just asked to look at.
+  let mobileTab: "images" | "stage" | "table" = "images";
 
   // ---------- resizable layout (side panels + the row-data table's columns) ----------
   // Same pattern as the editor's equivalent (packages/editor/src/main.ts) —
@@ -438,6 +446,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     activeImageId = listImages(db)[0]?.id ?? null;
     selectedLinkId = null;
     zoom = 1;
+    mobileTab = "images"; // fresh catalog — start from the image list, same as opening one the first time
     remoteDialogOpen = false;
     openedFileHandle = handle;
     if (handle) currentSrcUrl = null;
@@ -497,12 +506,23 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     activeImageId = id;
     selectedLinkId = null;
     zoom = 1;
+    mobileTab = "stage"; // no-op above the mobile breakpoint — see mobileTab's declaration
+    render();
+  }
+
+  function actionSetMobileTab(tab: "images" | "stage" | "table") {
+    mobileTab = tab;
     render();
   }
 
   /** Clicking a hotspot directly: we know exactly which physical instance was clicked. */
   function actionSelectHotspot(linkId: number) {
     selectedLinkId = linkId;
+    // Also reached from actionSelectRowByUrl (tapping a table row) — jump to
+    // the stage so the highlight this just produced is actually visible.
+    // No-op above the mobile breakpoint and when a hotspot on the stage
+    // itself was the thing clicked — see mobileTab's declaration.
+    mobileTab = "stage";
     render();
     centerSelection();
   }
@@ -539,6 +559,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     searchOpen = false;
     activeImageId = imageId;
     zoom = 1;
+    mobileTab = "stage"; // no-op above the mobile breakpoint — see mobileTab's declaration
     const link = listLinksForImage(db, imageId).find((l) => l.url === url);
     selectedLinkId = link ? link.id : null;
     render();
@@ -622,6 +643,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // it might be the standalone app's own #app div, or a plain div created
     // inside a shadow root by the embed) so nothing here assumes who created it.
     container.classList.add("ecm-viewer-app", `mode-${mode}`);
+    // Read by the mobile breakpoint's CSS (.ecm-viewer-app[data-mobile-tab=...])
+    // to decide which single panel to show — see mobileTab's declaration.
+    // Set on `container` itself (not inside innerHTML below) so it survives
+    // the wholesale rebuild, same reasoning as applyPanelWidths()'s CSS
+    // custom properties.
+    container.setAttribute("data-mobile-tab", mobileTab);
     container.innerHTML = `
         ${
           mode === "full"
@@ -639,6 +666,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                </div>`
             : ""
         }
+
+        <div class="mobile-tabs">
+          <button type="button" class="mobile-tab-btn ${mobileTab === "images" ? "active" : ""}" data-tab="images">Images</button>
+          <button type="button" class="mobile-tab-btn ${mobileTab === "stage" ? "active" : ""}" data-tab="stage">Diagram</button>
+          <button type="button" class="mobile-tab-btn ${mobileTab === "table" ? "active" : ""}" data-tab="table">Table</button>
+        </div>
 
         <div class="panel-images">
           ${
@@ -898,6 +931,10 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
     root.querySelectorAll<HTMLLIElement>(".panel-images li[data-id]").forEach((li) => {
       li.addEventListener("click", () => actionSelectImage(Number(li.dataset.id)));
+    });
+
+    root.querySelectorAll<HTMLButtonElement>(".mobile-tab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => actionSetMobileTab(btn.dataset.tab as "images" | "stage" | "table"));
     });
 
     root.getElementById("btn-zoom-in")?.addEventListener("click", () => actionSetZoom(zoom * 1.25));
