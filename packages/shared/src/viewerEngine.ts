@@ -60,8 +60,8 @@ const DEMO_CATALOGS = [
 // every mounted viewer, unlike the widths themselves.
 const PANEL_WIDTH_LIMITS = { min: 160, max: 640 };
 const COL_WIDTH_LIMITS = { min: 40, max: 400 };
-/** Name, SKU, Description, Extra — matches rowHtml()'s cell order below. */
-const DEFAULT_COL_WIDTHS = [100, 70, 110, 120];
+/** Name, SKU, Description, Extra, Buy — matches rowHtml()'s cell order below. */
+const DEFAULT_COL_WIDTHS = [100, 70, 110, 120, 64];
 type ShowOpenFilePicker = (options?: {
   types?: { description?: string; accept: Record<string, string[]> }[];
   multiple?: boolean;
@@ -755,6 +755,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                      <th>SKU<span class="col-resize-handle" data-col="1"></span></th>
                      <th>Description<span class="col-resize-handle" data-col="2"></span></th>
                      <th>Extra<span class="col-resize-handle" data-col="3"></span></th>
+                     <th><span class="col-resize-handle" data-col="4"></span></th>
                    </tr></thead>
                    <tbody>${rows.map((r) => rowHtml(r, selectedUrl)).join("")}</tbody>
                  </table>`
@@ -920,8 +921,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       // Some other/unrecognized store link — can't be combined into the cart, so it's still an instant single-item link.
       buyControl = `<a class="buy-btn" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer" title="Buy this item">Buy</a>`;
     }
-    const extraCell = `<td><span class="cell-text">${extra}</span>${buyControl}</td>`;
-    return `<tr data-url="${escapeHtml(r.url)}" class="${selected}">${cell(escapeHtml(r.name))}${cell(escapeHtml(r.sku))}${cell(escapeHtml(r.description))}${extraCell}</tr>`;
+    // Buy gets its own column (not appended after Extra's text) — sitting
+    // right after variable-length extra text made its on-screen position
+    // jump around row to row, and Extra's hover-expand tooltip would flash
+    // under the cursor while aiming straight down the Buy column.
+    const extraCell = `<td class="extra-cell"><span class="cell-text">${extra}</span></td>`;
+    const buyCell = `<td class="buy-cell">${buyControl}</td>`;
+    return `<tr data-url="${escapeHtml(r.url)}" class="${selected}">${cell(escapeHtml(r.name))}${cell(escapeHtml(r.sku))}${cell(escapeHtml(r.description))}${extraCell}${buyCell}</tr>`;
   }
 
   function wireEvents() {

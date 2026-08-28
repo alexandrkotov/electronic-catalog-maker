@@ -340,6 +340,12 @@ body {
 .table-panel {
   grid-area: table;
   overflow-y: auto;
+  /* Fixed-width columns (see colgroup in rowHtml()) can add up to more than
+     the panel's own width, on any screen size, not just a phone's — scroll
+     the table sideways within its own panel instead of letting it bleed
+     past the panel's edge (undiscoverable: no visible scrollbar cue, so it
+     silently clipped the Buy column at the panel's edge before this). */
+  overflow-x: auto;
   padding: 0.75rem;
   background: var(--bg-page);
 }
@@ -432,22 +438,28 @@ td {
     box-shadow: 0 4px 12px rgb(0 0 0 / 0.35);
   }
 
-  /* The rightmost column would otherwise expand past the panel's edge and
-     get clipped — grow it leftward from the cell's right edge instead. */
-  td:last-child:hover .cell-text {
+  /* Extra sits right before the narrow Buy column, not the table's actual
+     last column anymore — anchor its tooltip to grow leftward from its own
+     right edge instead of the default left-anchor, so a wide tooltip can't
+     spill rightward over the Buy button sitting right next to it. */
+  .extra-cell:hover .cell-text {
     left: auto;
     right: -1px;
   }
 }
 
+.buy-cell {
+  overflow: visible;
+  text-align: center;
+}
+
 .buy-btn {
   display: inline-block;
   position: relative;
-  /* Above td:hover .cell-text's expanded tooltip (z-index: 20) — otherwise
-     hovering the row to read the full extra text covers the button and
-     the click never lands. */
+  /* Above .extra-cell:hover .cell-text's expanded tooltip (z-index: 20) —
+     that tooltip can still grow wide enough to spill over the Buy column
+     sitting right next to it, and this keeps the button clickable when it does. */
   z-index: 21;
-  margin-left: 0.4rem;
   padding: 0.1rem 0.5rem;
   font-size: 0.7rem;
   font-weight: 600;
@@ -725,12 +737,5 @@ button:disabled {
   .ecm-viewer-app[data-mobile-tab="stage"] .stage,
   .ecm-viewer-app[data-mobile-tab="table"] .table-panel {
     display: block;
-  }
-
-  /* Fixed-width columns (see colgroup in rowHtml()) can still add up to
-     more than a phone's width — scroll the table sideways within its own
-     panel instead of letting it push the page wider than the viewport. */
-  .table-panel {
-    overflow-x: auto;
   }
 }
