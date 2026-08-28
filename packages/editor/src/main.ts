@@ -243,10 +243,37 @@ function askConfirm(message: string, onConfirm: () => void) {
   render();
 }
 
+// `?src=<url>` opens that catalog automatically on load, same idea as the
+// viewer's own `?src=` (see packages/shared/src/viewerEngine.ts) — used by
+// the landing page's demo links to jump straight into editing a demo, not
+// just viewing it. Unlike the viewer, the editor never syncs this back into
+// the address bar: matches "Copy remote catalog…"'s existing semantics
+// (an unattached copy to edit, not a live link back to the source).
+const initialSrcParam = new URLSearchParams(location.search).get("src");
+
 async function boot() {
   app.innerHTML = `<p style="padding:1rem">Loading SQLite (sql.js)…</p>`;
   SQL = await initSqlite(wasmUrl);
-  render();
+  if (initialSrcParam) {
+    await loadInitialFromUrl(initialSrcParam);
+  } else {
+    render();
+  }
+}
+
+async function loadInitialFromUrl(url: string) {
+  app.innerHTML = `<p style="padding:1rem">Loading catalog…</p>`;
+  let bytes: Uint8Array;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    bytes = new Uint8Array(await res.arrayBuffer());
+  } catch (err) {
+    statusMessage = `Could not load "${url}": ${(err as Error).message}`;
+    render();
+    return;
+  }
+  await openCatalogFromBytes(bytes, null, baseName(new URL(url, location.href).pathname));
 }
 
 function currentImages(): CatalogImage[] {
