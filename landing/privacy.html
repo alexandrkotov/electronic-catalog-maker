@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Privacy Policy — Electronic Catalog Maker</title>
+<style>
+  /* Same light-only, no-color-scheme approach as landing/index.html — see
+     that file's comment for why. */
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    max-width: 640px;
+    margin: 4rem auto;
+    padding: 0 1.5rem;
+    line-height: 1.6;
+    color: #1a1a1a;
+    background: #fff;
+  }
+  h1 { margin-bottom: 0.25rem; }
+  p.tagline { color: #666; margin-top: 0; }
+  h2 { margin-top: 2rem; font-size: 1.15rem; }
+  a { color: #2563eb; }
+  footer {
+    margin-top: 3rem;
+    font-size: 0.85rem;
+    color: #888;
+  }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+  <h1>Privacy Policy</h1>
+  <p class="tagline">Electronic Catalog Maker — Editor &amp; Viewer</p>
+
+  <p>Short version: these apps don't collect, store, or transmit any
+  personal information. Everything runs locally, in your browser or in the
+  installed app, against files on your own device.</p>
+
+  <h2>What the apps do</h2>
+  <p>The Editor and Viewer read and write <code>.ecatm</code> catalog
+  files — a single portable SQLite file, opened either from your local
+  disk or from a URL you provide. All of the actual work (reading, editing,
+  searching, rendering) happens on your device via
+  <a href="https://sql.js.org/">sql.js</a>, a SQLite build compiled to
+  WebAssembly. There is no backend server, no account, and no sign-in — we
+  have nothing to store even if we wanted to.</p>
+
+  <h2>Local files</h2>
+  <p>When you open or save a catalog, the browser's File System Access API
+  (or a plain file picker as a fallback) asks the operating system to read
+  or write exactly the file you selected. That file never leaves your
+  device unless you yourself choose to share it — nothing is uploaded to
+  us or to any third party by the apps themselves.</p>
+
+  <h2>Opening a catalog from a URL</h2>
+  <p>If you open a catalog via a remote link (for example, one of the demo
+  catalogs, or a link someone shared with you), your browser makes a
+  request directly to whatever server hosts that file. That request is
+  between you and that host — we don't see it, and it's subject to that
+  host's own policies, not ours.</p>
+
+  <h2>Analytics</h2>
+  <p>The public website (this landing page, and the Editor/Viewer when
+  opened in an ordinary browser tab) uses
+  <a href="https://www.goatcounter.com/">GoatCounter</a>, a privacy-friendly,
+  cookie-free page-view counter. It doesn't use cookies, doesn't track you
+  across sites, and only records anonymous, aggregate visit counts — never
+  anything tied to an individual person.</p>
+  <p>The installed desktop app (Editor or Viewer, once added to your Start
+  menu / taskbar via the browser's install prompt or the Microsoft Store)
+  is built to <strong>never contact this analytics service at all</strong>
+  — it's blocked at two independent levels in the app itself, specifically
+  so that using the installed app stays entirely private and offline-first.</p>
+
+  <h2>Buying an item from a catalog</h2>
+  <p>Some catalogs include a "Buy" button on individual items, configured
+  by whoever built that catalog. Clicking it takes you to a third-party
+  store (for example Payhip) to complete a purchase there. Any payment or
+  personal information involved is handled entirely by that store, under
+  its own privacy policy — the Editor and Viewer apps never see, collect,
+  or process it.</p>
+
+  <h2>Third-party services used by this project</h2>
+  <ul>
+    <li><a href="https://www.goatcounter.com/">GoatCounter</a> — anonymous page-view counting on the public website (see "Analytics" above).</li>
+    <li>Whatever host serves a catalog file you open by URL (e.g. GitHub Pages for the demo catalogs).</li>
+    <li>Whatever store a catalog's "Buy" button links to, if you choose to use it.</li>
+  </ul>
+  <p>None of these are things the Editor or Viewer apps themselves run,
+  operate, or receive data from beyond what's described above.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If this ever changes (for example, if a future feature needs to talk
+  to a server), this page will be updated to reflect that honestly.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy: <a href="mailto:alex.kotov.wa@gmail.com">alex.kotov.wa@gmail.com</a>.</p>
+
+  <footer>
+    <a href="./">Electronic Catalog Maker</a> —
+    <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Source on GitHub</a>
+    <div>Last updated: August 28, 2026.</div>
+  </footer>
+</body>
+</html>
