@@ -469,8 +469,28 @@ td {
   background: #16a34a;
 }
 
-.buy-btn:hover {
+.buy-btn:hover,
+.buy-btn:focus-visible {
   filter: brightness(1.1);
+}
+
+/* Explicit :hover/:focus-visible background overrides — the generic
+   `button:hover:not(:disabled)` / `button:focus-visible:not(:disabled)`
+   rules below (element + 2 pseudo-classes) outspecify a plain `.buy-btn`
+   or `.buy-btn.in-cart` (1-2 classes), so hovering — or, on iOS Safari,
+   just tapping — this button reverted its background to the generic pale
+   one while `.buy-btn`'s own `color: #fff` still won: white text on a
+   near-white background, unreadable. Same bug shape as the mobile-tab
+   :focus-visible fix (see that commit) — bumping specificity with an
+   extra :not(:disabled) fixes it the same way. */
+.buy-btn:hover:not(:disabled),
+.buy-btn:focus-visible:not(:disabled) {
+  background: var(--accent);
+}
+
+.buy-btn.in-cart:hover:not(:disabled),
+.buy-btn.in-cart:focus-visible:not(:disabled) {
+  background: #16a34a;
 }
 
 tbody tr {
