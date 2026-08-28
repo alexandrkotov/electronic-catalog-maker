@@ -67,6 +67,20 @@ catalog file lives entirely on your own disk — nothing is ever uploaded
 anywhere unless you explicitly load one from a URL (see "Sharing a
 catalog via link" below).
 
+## Installing as an app
+
+Both apps are installable — entirely optional, and nothing you can't also
+just do in an ordinary browser tab. On the editor or viewer page, Chrome
+and Edge show an install icon in the address bar (or offer it from the
+browser's menu); confirming it adds a real desktop app with its own icon
+and window, no app store involved. Editor and Viewer install separately —
+pick one, or both.
+
+This changes nothing about how either app behaves: same catalog format,
+same offline-first, browser-only logic, just launched from your desktop
+instead of a bookmark. Uninstalling is the same as any other app installed
+this way (right-click its icon, or the browser's own app-management page).
+
 ## Using the editor
 
 1. Click **New catalog** and give it a name.
@@ -370,8 +384,10 @@ watch for changes saved elsewhere, open a legacy `.sch` catalog (read-only
 in the viewer, as an editable copy in the editor), light/dark theme, and
 a Buy button per row (from an `extra.buy_url`) that can accumulate into a
 combined multi-item checkout — configurable per catalog, and not tied to
-any one store (see "Selling from a catalog"). The viewer is also
-embeddable elsewhere as `<ecm-viewer>` (see "Embedding the
+any one store (see "Selling from a catalog"). Both apps are also
+installable as standalone desktop apps straight from the browser (see
+"Installing as an app") — purely optional, same behavior either way. The
+viewer is also embeddable elsewhere as `<ecm-viewer>` (see "Embedding the
 viewer"), distributed straight from this repo via jsDelivr — its built
 `dist/ecm-viewer.js` is deliberately committed (everywhere else, `dist/`
 is gitignored) since that file *is* what gets served. The editor and
