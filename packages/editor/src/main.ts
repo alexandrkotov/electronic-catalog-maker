@@ -30,6 +30,7 @@ import {
   currentTheme,
   toggleTheme,
   searchRows,
+  setUpPwa,
   updateImage,
   updateLink,
   updateLinkPosition,
@@ -47,6 +48,10 @@ import { slugify } from "./slugify";
 
 // Applied before the first render so there's no flash of the wrong theme.
 applyTheme(resolveInitialTheme());
+
+// Service Worker registration + the standalone-aware GoatCounter gate —
+// see packages/shared/src/pwa.ts.
+setUpPwa();
 
 const app = document.getElementById("app")!;
 

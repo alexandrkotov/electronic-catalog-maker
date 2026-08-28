@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Electronic Catalog — Editor</title>
     <link rel="stylesheet" href="/src/style.css" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="icons/icon-192.png" />
+    <meta name="theme-color" content="#2563eb" />
   </head>
   <body>
     <div id="app"></div>
@@ -13,7 +16,11 @@
          same account as the landing page and viewer, so the dashboard shows
          editor vs. viewer usage separately. count.js skips localhost/private
          IPs by default (no allow_local set), so local dev doesn't pollute
-         the real counts — nothing to gate on the production build. -->
-    <script data-goatcounter="https://ecatm.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+         the real counts — nothing to gate on the production build.
+
+         The <script> tag itself now lives in packages/shared/src/pwa.ts
+         (setUpPwa(), called from main.ts) rather than statically here — an
+         installed standalone PWA must never talk to goatcounter.com at
+         all, only a plain browser-tab visit to this page should count. -->
   </body>
 </html>

@@ -1,6 +1,10 @@
 import "./style.css";
 import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
-import { mountViewer } from "@ecm/shared";
+import { mountViewer, setUpPwa } from "@ecm/shared";
+
+// Service Worker registration + the standalone-aware GoatCounter gate —
+// see packages/shared/src/pwa.ts.
+setUpPwa();
 
 // The standalone full-page app: renders into the page's own #app div (light
 // DOM, no shadow root — `root` defaults to `document`), full toolbar, reads
