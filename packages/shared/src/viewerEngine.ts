@@ -1,4 +1,9 @@
-import { CATALOG_FILE_EXTENSION } from "./schema.js";
+import {
+  CATALOG_FILE_EXTENSION,
+  DEFAULT_CART_CHECKOUT_BASE_URL,
+  DEFAULT_CART_ID_PATTERN,
+  DEFAULT_CART_ITEM_PARAM,
+} from "./schema.js";
 import {
   findRowByUrl,
   initSqlite,
@@ -71,15 +76,32 @@ function getShowOpenFilePicker(): ShowOpenFilePicker | undefined {
 }
 
 /**
- * Pulls the product id out of a Payhip "direct checkout" link
- * (https://payhip.com/buy?link=ID) so several rows' links can be combined
- * into one multi-item checkout — see cartItems. Returns null for anything
- * else (a different store, or no buy_url at all), which is the signal for
- * that row to fall back to the old single-item instant-navigate Buy button.
+ * Pulls an item id out of a row's buy_url using the catalog's own
+ * cart_id_pattern (see schema.ts DEFAULT_CART_ID_PATTERN and CatalogMeta),
+ * so several rows can be combined into one multi-item checkout — see
+ * cartItems/buildCartCheckoutUrl. Returns null for anything that doesn't
+ * match (a different/unrecognized store, no buy_url at all, or a malformed
+ * saved pattern), which is the signal for that row to fall back to the
+ * single-item instant-navigate Buy button instead.
  */
-function parsePayhipCartId(buyUrl: string): string | null {
-  const m = /^https:\/\/payhip\.com\/buy\?link=([^&]+)$/.exec(buyUrl);
+function parseCartItemId(buyUrl: string, cartIdPattern: string): string | null {
+  let re: RegExp;
+  try {
+    re = new RegExp(cartIdPattern);
+  } catch {
+    return null; // malformed regex saved via the editor's Store settings dialog
+  }
+  const m = re.exec(buyUrl);
   return m?.[1] ?? null;
+}
+
+/**
+ * Builds the combined checkout URL for several cart item ids, using the
+ * catalog's own cart_item_param/cart_checkout_base_url (see schema.ts).
+ */
+function buildCartCheckoutUrl(ids: string[], cartItemParam: string, cartCheckoutBaseUrl: string): string {
+  const itemsParams = ids.map((id) => cartItemParam.replaceAll("{id}", encodeURIComponent(id))).join("&");
+  return `${cartCheckoutBaseUrl}${itemsParams}`;
 }
 
 /**
@@ -166,22 +188,29 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   let searchOpen = false;
   let searchQuery = "";
   let searchField: SearchField = "all";
-  // Multi-item cart for rows whose extra.buy_url is a Payhip "direct checkout"
-  // link (payhip.com/buy?link=ID) — such links can be combined into one
-  // multi-product checkout URL (payhip.com/buy?s=1&cart_links[]=ID&qty[ID]=1,
-  // repeated per item), so the Buy button on those rows adds to this cart
-  // instead of navigating immediately; a toolbar button opens the combined
-  // checkout for everything in it. Rows with some other/unrecognized buy_url
-  // fall back to the old instant-navigate behavior (see rowHtml/parsePayhipCartId)
-  // since there's no general way to merge arbitrary stores' URLs. Session-only
-  // by design (not persisted) — this is a demo-catalog feature, not a real cart.
+  // Multi-item cart for rows whose extra.buy_url matches the catalog's own
+  // cart_id_pattern (see schema.ts DEFAULT_CART_ID_PATTERN and CatalogMeta;
+  // defaults describe Payhip's own URL scheme, but any store built on
+  // repeated per-item query parameters can be described the same way via
+  // the editor's Store settings dialog) — such links can be combined into
+  // one multi-item checkout URL (buildCartCheckoutUrl), so the Buy button on
+  // those rows adds to this cart instead of navigating immediately; a
+  // toolbar button opens the combined checkout for everything in it. Rows
+  // with some other/unrecognized buy_url fall back to the old
+  // instant-navigate behavior (see rowHtml/parseCartItemId), and cart_mode
+  // "instant" opts every row out of this regardless of whether it matches.
+  // Session-only by design (not persisted) — this is a demo-catalog
+  // feature, not a real cart.
   let cartItems = new Set<string>(); // row urls
-  // Set from the catalog's own meta (store_url/cart_mode, edited in the
-  // editor's "Store settings" dialog) each time a catalog loads — see
-  // openBytes(). "instant" turns every Buy button into the old single-item
-  // instant-navigate link, even for rows that could otherwise be combined
-  // into a cart (see rowHtml/parsePayhipCartId).
+  // Set from the catalog's own meta (store_url/cart_mode/cart_id_pattern/...,
+  // edited in the editor's "Store settings" dialog) each time a catalog
+  // loads — see openBytes(). "instant" turns every Buy button into the old
+  // single-item instant-navigate link, even for rows that could otherwise be
+  // combined into a cart (see rowHtml/parseCartItemId).
   let cartMode: "accumulate" | "instant" = "accumulate";
+  let cartIdPattern = DEFAULT_CART_ID_PATTERN;
+  let cartItemParam = DEFAULT_CART_ITEM_PARAM;
+  let cartCheckoutBaseUrl = DEFAULT_CART_CHECKOUT_BASE_URL;
   // render() replaces the container's innerHTML wholesale, which recreates
   // #stage-scroll from scratch (a fresh element always starts scrolled to
   // 0,0) — tracked so render() can restore the pan position instead of
@@ -471,7 +500,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       const meta = readMeta(db);
       statusMessage = `Opened catalog "${meta.catalogName}".`;
     }
-    cartMode = readMeta(db).cartMode;
+    const loadedMeta = readMeta(db);
+    cartMode = loadedMeta.cartMode;
+    cartIdPattern = loadedMeta.cartIdPattern;
+    cartItemParam = loadedMeta.cartItemParam;
+    cartCheckoutBaseUrl = loadedMeta.cartCheckoutBaseUrl;
     cartItems = new Set(); // a freshly (re)loaded catalog starts with an empty cart
     activeImageId = listImages(db)[0]?.id ?? null;
     selectedLinkId = null;
@@ -589,16 +622,15 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     render();
   }
 
-  /** Opens one combined Payhip checkout for every cart item, then leaves the cart as-is (mirrors the single-item Buy button, which never cleared itself either). */
+  /** Opens one combined checkout for every cart item, then leaves the cart as-is (mirrors the single-item Buy button, which never cleared itself either). */
   function actionOpenCart() {
     if (!db || cartItems.size === 0) return;
     const ids = listAllRows(db)
       .filter((r) => cartItems.has(r.url))
-      .map((r) => parsePayhipCartId(typeof r.extra.buy_url === "string" ? r.extra.buy_url : ""))
+      .map((r) => parseCartItemId(typeof r.extra.buy_url === "string" ? r.extra.buy_url : "", cartIdPattern))
       .filter((id): id is string => id !== null);
     if (ids.length === 0) return;
-    const params = ids.map((id) => `cart_links[]=${encodeURIComponent(id)}&qty[${encodeURIComponent(id)}]=1`).join("&");
-    window.open(`https://payhip.com/buy?s=1&${params}`, "_blank", "noopener,noreferrer");
+    window.open(buildCartCheckoutUrl(ids, cartItemParam, cartCheckoutBaseUrl), "_blank", "noopener,noreferrer");
   }
 
   /** Clicking a search result: unlike actionSelectRowByUrl, this may switch images first. */
@@ -707,7 +739,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                  <button id="btn-open-remote" title="Open a catalog hosted at a URL">Open remote catalog…</button>
                  <button id="btn-refresh" ${currentSrcUrl || openedFileHandle ? "" : "disabled"} title="Re-read the catalog from its source (URL or local file) — see changes someone else just saved">${refreshing ? "Refreshing…" : "Refresh"}</button>
                  <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
-                 ${cartMode === "accumulate" ? `<button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="Open one combined Payhip checkout for everything added to cart">🛒 Cart (${cartItems.size})</button>` : ""}
+                 ${cartMode === "accumulate" ? `<button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="Open one combined checkout for everything added to cart">🛒 Cart (${cartItems.size})</button>` : ""}
                  <span class="spacer"></span>
                  <button id="btn-theme" title="Toggle light/dark theme">${currentTheme(themeTarget) === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
                  <span class="hint">${escapeHtml(statusMessage)}</span>
@@ -912,7 +944,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function rowHtml(r: CatalogRow, selectedUrl: string | null): string {
     const selected = r.url === selectedUrl ? "selected" : "";
     const buyUrl = typeof r.extra.buy_url === "string" && r.extra.buy_url ? r.extra.buy_url : null;
-    const cartId = buyUrl && cartMode === "accumulate" ? parsePayhipCartId(buyUrl) : null;
+    const cartId = buyUrl && cartMode === "accumulate" ? parseCartItemId(buyUrl, cartIdPattern) : null;
     const extra = Object.entries(r.extra)
       .filter(([k]) => k !== "buy_url")
       .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(String(v))}`)

@@ -1,5 +1,11 @@
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
-import { CATALOG_SCHEMA_META_DEFAULTS, CATALOG_SCHEMA_SQL } from "./schema.js";
+import {
+  CATALOG_SCHEMA_META_DEFAULTS,
+  CATALOG_SCHEMA_SQL,
+  DEFAULT_CART_CHECKOUT_BASE_URL,
+  DEFAULT_CART_ID_PATTERN,
+  DEFAULT_CART_ITEM_PARAM,
+} from "./schema.js";
 import type { CatalogImage, CatalogLink, CatalogMeta, CatalogRow, LinkConflict } from "./types.js";
 
 let sqlJsPromise: Promise<SqlJsStatic> | null = null;
@@ -115,12 +121,18 @@ export function readMeta(db: Database): CatalogMeta {
     // key/value table, so a missing key just falls back to the default here.
     storeUrl: kv.get("store_url") ?? "",
     cartMode: kv.get("cart_mode") === "instant" ? "instant" : "accumulate",
+    cartIdPattern: kv.get("cart_id_pattern") ?? DEFAULT_CART_ID_PATTERN,
+    cartItemParam: kv.get("cart_item_param") ?? DEFAULT_CART_ITEM_PARAM,
+    cartCheckoutBaseUrl: kv.get("cart_checkout_base_url") ?? DEFAULT_CART_CHECKOUT_BASE_URL,
   };
 }
 
 export interface StoreSettingsInput {
   storeUrl: string;
   cartMode: "accumulate" | "instant";
+  cartIdPattern: string;
+  cartItemParam: string;
+  cartCheckoutBaseUrl: string;
 }
 
 /** Writes the editor's "Store settings" modal fields into the meta table. */
@@ -130,6 +142,9 @@ export function updateStoreSettings(db: Database, input: StoreSettingsInput): vo
   );
   stmt.run(["store_url", input.storeUrl]);
   stmt.run(["cart_mode", input.cartMode]);
+  stmt.run(["cart_id_pattern", input.cartIdPattern]);
+  stmt.run(["cart_item_param", input.cartItemParam]);
+  stmt.run(["cart_checkout_base_url", input.cartCheckoutBaseUrl]);
   stmt.free();
 }
 

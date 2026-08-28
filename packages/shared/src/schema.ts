@@ -76,6 +76,26 @@ CREATE INDEX IF NOT EXISTS idx_rows_image_id  ON rows(image_id);
 CREATE INDEX IF NOT EXISTS idx_rows_url       ON rows(url);
 `;
 
+/**
+ * How a combined multi-item cart URL gets built from several rows' buy_url
+ * values, when cart_mode is "accumulate" — see CatalogMeta.cartMode. These
+ * three defaults describe Payhip's own URL scheme specifically (the only
+ * store this was originally built against), but are just the catalog's
+ * starting values, editable in the editor's "Store settings" dialog — any
+ * other platform whose multi-item cart URL is built from repeated query
+ * parameters (one per item) can be described the same way:
+ * - cart_id_pattern: a regex (one capture group) that recognizes a
+ *   combinable buy_url and extracts that item's id from it. A buy_url that
+ *   doesn't match always falls back to an individual instant-navigate link.
+ * - cart_item_param: a fragment with `{id}` placeholder(s), repeated once
+ *   per item in the cart and joined with "&".
+ * - cart_checkout_base_url: prefixed before the joined per-item fragments
+ *   to form the final checkout URL.
+ */
+export const DEFAULT_CART_ID_PATTERN = "^https://payhip\\.com/buy\\?link=([^&]+)$";
+export const DEFAULT_CART_ITEM_PARAM = "cart_links[]={id}&qty[{id}]=1";
+export const DEFAULT_CART_CHECKOUT_BASE_URL = "https://payhip.com/buy?s=1&";
+
 export const CATALOG_SCHEMA_META_DEFAULTS: Record<string, string> = {
   schema_version: String(CATALOG_SCHEMA_VERSION),
   catalog_name: "Untitled catalog",
@@ -84,4 +104,7 @@ export const CATALOG_SCHEMA_META_DEFAULTS: Record<string, string> = {
   store_url: "",
   // "accumulate" | "instant" — see CatalogMeta.cartMode for what this controls.
   cart_mode: "accumulate",
+  cart_id_pattern: DEFAULT_CART_ID_PATTERN,
+  cart_item_param: DEFAULT_CART_ITEM_PARAM,
+  cart_checkout_base_url: DEFAULT_CART_CHECKOUT_BASE_URL,
 };

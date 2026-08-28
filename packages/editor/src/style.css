@@ -380,6 +380,27 @@ tr.clickable-row.editing {
   cursor: pointer;
 }
 
+.cart-recipe {
+  margin: 0.75rem 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+}
+
+.cart-recipe summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.cart-recipe[open] summary {
+  margin-bottom: 0.5rem;
+}
+
+.cart-recipe .field {
+  width: auto;
+}
+
 button {
   padding: 0.35rem 0.75rem;
   border: 1px solid var(--border);

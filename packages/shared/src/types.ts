@@ -57,6 +57,10 @@ export interface CatalogMeta {
    * combined always behave as instant, regardless of this setting.
    */
   cartMode: "accumulate" | "instant";
+  /** See schema.ts DEFAULT_CART_ID_PATTERN for what these three describe. */
+  cartIdPattern: string;
+  cartItemParam: string;
+  cartCheckoutBaseUrl: string;
 }
 
 /**

@@ -8,6 +8,9 @@ import {
   collectExtraKeys,
   collectFolders,
   createEmptyCatalog,
+  DEFAULT_CART_CHECKOUT_BASE_URL,
+  DEFAULT_CART_ID_PATTERN,
+  DEFAULT_CART_ITEM_PARAM,
   deleteLink,
   deleteRow,
   detectFileKind,
@@ -99,6 +102,12 @@ let searchField: SearchField = "all";
 let storeSettingsOpen = false;
 let storeSettingsUrlValue = "";
 let storeSettingsCartMode: "accumulate" | "instant" = "accumulate";
+// "Advanced" cart-URL recipe fields — how a combined checkout URL is built
+// from several rows' buy_url values (see schema.ts DEFAULT_CART_ID_PATTERN).
+// Default to Payhip's own scheme, same as an unset catalog falls back to.
+let storeSettingsCartIdPattern = DEFAULT_CART_ID_PATTERN;
+let storeSettingsCartItemParam = DEFAULT_CART_ITEM_PARAM;
+let storeSettingsCartCheckoutBaseUrl = DEFAULT_CART_CHECKOUT_BASE_URL;
 
 // ---------- resizable layout (side panels + table columns) ----------
 // User-adjustable, remembered per-browser via localStorage (same pattern as
@@ -385,6 +394,9 @@ function actionOpenStoreSettings() {
   const meta = readMeta(db);
   storeSettingsUrlValue = meta.storeUrl;
   storeSettingsCartMode = meta.cartMode;
+  storeSettingsCartIdPattern = meta.cartIdPattern;
+  storeSettingsCartItemParam = meta.cartItemParam;
+  storeSettingsCartCheckoutBaseUrl = meta.cartCheckoutBaseUrl;
   storeSettingsOpen = true;
   render();
 }
@@ -396,7 +408,13 @@ function actionCancelStoreSettings() {
 
 function actionSubmitStoreSettings() {
   if (!db) return;
-  updateStoreSettings(db, { storeUrl: storeSettingsUrlValue.trim(), cartMode: storeSettingsCartMode });
+  updateStoreSettings(db, {
+    storeUrl: storeSettingsUrlValue.trim(),
+    cartMode: storeSettingsCartMode,
+    cartIdPattern: storeSettingsCartIdPattern.trim() || DEFAULT_CART_ID_PATTERN,
+    cartItemParam: storeSettingsCartItemParam.trim() || DEFAULT_CART_ITEM_PARAM,
+    cartCheckoutBaseUrl: storeSettingsCartCheckoutBaseUrl.trim() || DEFAULT_CART_CHECKOUT_BASE_URL,
+  });
   storeSettingsOpen = false;
   setStatus("Updated store settings.");
 }
@@ -1075,6 +1093,10 @@ function renderRemoteDialog(): string {
 
 function renderStoreSettingsDialog(): string {
   if (!storeSettingsOpen) return "";
+  const usingDefaultRecipe =
+    storeSettingsCartIdPattern === DEFAULT_CART_ID_PATTERN &&
+    storeSettingsCartItemParam === DEFAULT_CART_ITEM_PARAM &&
+    storeSettingsCartCheckoutBaseUrl === DEFAULT_CART_CHECKOUT_BASE_URL;
   return `
     <div class="confirm-overlay">
       <div class="confirm-box">
@@ -1094,7 +1116,22 @@ function renderStoreSettingsDialog(): string {
             Go straight to payment for each item
           </label>
         </div>
-        <p class="hint">Only affects rows whose Extra has a buy_url your store can combine into one cart (currently: Payhip direct-checkout links). Other buy_url values always open individually, regardless of this setting.</p>
+        <details class="cart-recipe" ${usingDefaultRecipe ? "" : "open"}>
+          <summary>Advanced: how to combine items into one cart (defaults work for Payhip)</summary>
+          <div class="field">
+            <label for="cart-id-pattern-input">Item ID pattern (regex, one capture group)</label>
+            <input type="text" id="cart-id-pattern-input" value="${escapeHtml(storeSettingsCartIdPattern)}" />
+          </div>
+          <div class="field">
+            <label for="cart-item-param-input">Per-item cart parameter (use {id})</label>
+            <input type="text" id="cart-item-param-input" value="${escapeHtml(storeSettingsCartItemParam)}" />
+          </div>
+          <div class="field">
+            <label for="cart-base-url-input">Cart checkout base URL</label>
+            <input type="text" id="cart-base-url-input" value="${escapeHtml(storeSettingsCartCheckoutBaseUrl)}" />
+          </div>
+          <p class="hint">A row's buy_url is only combinable if it matches the Item ID pattern above. Its captured id is substituted into the per-item parameter (once per item, joined with "&"), then appended to the base URL. Anything that doesn't match always opens individually, regardless of the Buy button behavior above.</p>
+        </details>
         <div class="confirm-actions">
           <button id="store-settings-cancel">Cancel</button>
           <button id="store-settings-submit">Save</button>
@@ -1380,6 +1417,18 @@ function wireEvents(links: CatalogLink[]) {
     radio.addEventListener("change", () => {
       if (radio.checked) storeSettingsCartMode = radio.value as "accumulate" | "instant";
     });
+  });
+  const cartIdPatternInput = document.getElementById("cart-id-pattern-input") as HTMLInputElement | null;
+  cartIdPatternInput?.addEventListener("input", () => {
+    storeSettingsCartIdPattern = cartIdPatternInput.value;
+  });
+  const cartItemParamInput = document.getElementById("cart-item-param-input") as HTMLInputElement | null;
+  cartItemParamInput?.addEventListener("input", () => {
+    storeSettingsCartItemParam = cartItemParamInput.value;
+  });
+  const cartBaseUrlInput = document.getElementById("cart-base-url-input") as HTMLInputElement | null;
+  cartBaseUrlInput?.addEventListener("input", () => {
+    storeSettingsCartCheckoutBaseUrl = cartBaseUrlInput.value;
   });
   if (storeSettingsOpen) {
     storeUrlInput?.focus();
