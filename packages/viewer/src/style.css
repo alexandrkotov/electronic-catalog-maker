@@ -432,6 +432,11 @@ td:last-child:hover .cell-text {
 
 .buy-btn {
   display: inline-block;
+  position: relative;
+  /* Above td:hover .cell-text's expanded tooltip (z-index: 20) — otherwise
+     hovering the row to read the full extra text covers the button and
+     the click never lands. */
+  z-index: 21;
   margin-left: 0.4rem;
   padding: 0.1rem 0.5rem;
   font-size: 0.7rem;
