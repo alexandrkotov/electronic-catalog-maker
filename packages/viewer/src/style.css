@@ -443,10 +443,20 @@ td:last-child:hover .cell-text {
   font-weight: 600;
   color: #fff;
   background: var(--accent);
+  /* .buy-btn is a real <button> for cart-toggle rows (an <a> for the
+     instant-navigate fallback) — override the generic button rule's border
+     so both render as the same plain pill. */
+  border: none;
   border-radius: 999px;
   text-decoration: none;
   white-space: nowrap;
   vertical-align: middle;
+}
+
+/* Deliberately a fixed green rather than a theme token — reads as an
+   unambiguous "added" state in both light and dark mode. */
+.buy-btn.in-cart {
+  background: #16a34a;
 }
 
 .buy-btn:hover {
