@@ -912,7 +912,10 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     let buyControl = "";
     if (cartId) {
       const inCart = cartItems.has(r.url);
-      buyControl = `<button type="button" class="buy-btn ${inCart ? "in-cart" : ""}" data-cart-url="${escapeHtml(r.url)}" title="${inCart ? "Remove from cart" : "Add to cart"}">${inCart ? "In cart ✓" : "Buy"}</button>`;
+      // No title/native tooltip here — it stacked with the cell's own hover
+      // popover (.cell-text) into an unreadable double-tooltip mess, and the
+      // button's own label ("Buy" / "In cart ✓") already says what it does.
+      buyControl = `<button type="button" class="buy-btn ${inCart ? "in-cart" : ""}" data-cart-url="${escapeHtml(r.url)}">${inCart ? "In cart ✓" : "Buy"}</button>`;
     } else if (buyUrl) {
       // Some other/unrecognized store link — can't be combined into the cart, so it's still an instant single-item link.
       buyControl = `<a class="buy-btn" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer" title="Buy this item">Buy</a>`;

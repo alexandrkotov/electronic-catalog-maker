@@ -391,10 +391,6 @@ td {
   overflow: hidden;
 }
 
-td:hover {
-  overflow: visible;
-}
-
 .cell-text {
   display: block;
   overflow: hidden;
@@ -402,32 +398,46 @@ td:hover {
   white-space: nowrap;
 }
 
-td:hover .cell-text {
-  position: absolute;
-  top: -1px;
-  left: -1px;
-  z-index: 20;
-  display: block;
-  width: max-content;
-  max-width: 18rem;
-  white-space: normal;
-  /* Deliberately a fixed pale yellow rather than a theme token — reads as
-     a "note" being highlighted in both light and dark mode, unlike most
-     of this file's colors which flip with the theme. Dark text throughout,
-     since a light background needs it regardless of which theme is active. */
-  background: #fef9c3;
-  color: #1a1a1a;
-  border: 1px solid #eab308;
-  border-radius: 4px;
-  padding: 0.3rem 0.5rem;
-  box-shadow: 0 4px 12px rgb(0 0 0 / 0.35);
-}
+/* Hover-to-expand only where a real pointer can hover without "using up" a
+   tap to get there — on iOS Safari, a touch on an element with :hover
+   styles fires the hover state on the *first* tap instead of a click (the
+   layout then shifts under the finger, e.g. reflowing the Buy button out
+   from under it), so adding to cart needed a second, separate tap that
+   often missed. Same class of bug as the mobile-tab :focus-visible fix (see
+   that commit) — scoping to devices that actually support hovering
+   sidesteps it entirely rather than chasing z-index/position fixes. */
+@media (hover: hover) {
+  td:hover {
+    overflow: visible;
+  }
 
-/* The rightmost column would otherwise expand past the panel's edge and
-   get clipped — grow it leftward from the cell's right edge instead. */
-td:last-child:hover .cell-text {
-  left: auto;
-  right: -1px;
+  td:hover .cell-text {
+    position: absolute;
+    top: -1px;
+    left: -1px;
+    z-index: 20;
+    display: block;
+    width: max-content;
+    max-width: 18rem;
+    white-space: normal;
+    /* Deliberately a fixed pale yellow rather than a theme token — reads as
+       a "note" being highlighted in both light and dark mode, unlike most
+       of this file's colors which flip with the theme. Dark text throughout,
+       since a light background needs it regardless of which theme is active. */
+    background: #fef9c3;
+    color: #1a1a1a;
+    border: 1px solid #eab308;
+    border-radius: 4px;
+    padding: 0.3rem 0.5rem;
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.35);
+  }
+
+  /* The rightmost column would otherwise expand past the panel's edge and
+     get clipped — grow it leftward from the cell's right edge instead. */
+  td:last-child:hover .cell-text {
+    left: auto;
+    right: -1px;
+  }
 }
 
 .buy-btn {
