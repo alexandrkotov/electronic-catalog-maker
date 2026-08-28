@@ -430,6 +430,24 @@ td:last-child:hover .cell-text {
   right: -1px;
 }
 
+.buy-btn {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 999px;
+  text-decoration: none;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.buy-btn:hover {
+  filter: brightness(1.1);
+}
+
 tbody tr {
   cursor: pointer;
   user-select: none;

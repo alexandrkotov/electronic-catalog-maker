@@ -861,11 +861,18 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   function rowHtml(r: CatalogRow, selectedUrl: string | null): string {
     const selected = r.url === selectedUrl ? "selected" : "";
+    const buyUrl = typeof r.extra.buy_url === "string" && r.extra.buy_url ? r.extra.buy_url : null;
     const extra = Object.entries(r.extra)
+      .filter(([k]) => k !== "buy_url")
       .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(String(v))}`)
       .join(", ");
     const cell = (text: string) => `<td><span class="cell-text">${text}</span></td>`;
-    return `<tr data-url="${escapeHtml(r.url)}" class="${selected}">${cell(escapeHtml(r.name))}${cell(escapeHtml(r.sku))}${cell(escapeHtml(r.description))}${cell(extra)}</tr>`;
+    const extraCell = `<td><span class="cell-text">${extra}</span>${
+      buyUrl
+        ? `<a class="buy-btn" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer" title="Buy this item">Buy</a>`
+        : ""
+    }</td>`;
+    return `<tr data-url="${escapeHtml(r.url)}" class="${selected}">${cell(escapeHtml(r.name))}${cell(escapeHtml(r.sku))}${cell(escapeHtml(r.description))}${extraCell}</tr>`;
   }
 
   function wireEvents() {
