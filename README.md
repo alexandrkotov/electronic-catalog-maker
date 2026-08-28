@@ -101,6 +101,8 @@ A few other things worth knowing:
   (see the matching sections below) — either way, what you get is an
   editable, unattached copy: Save prompts for a location, and nothing is
   ever written back to wherever the data came from.
+- **⚙️ Store settings…** configures the viewer's Buy button for this
+  catalog — see "Selling from a catalog" below.
 
 ## Using the viewer
 
@@ -122,6 +124,43 @@ A few other things worth knowing:
 Someone shared a catalog with you as a link instead of a file? Click
 **Open remote catalog…** and paste it in, or just open the link directly —
 see "Sharing a catalog via link" below.
+
+## Selling from a catalog
+
+Add a `buy_url` key to a row's free-form `extra` JSON (see "Using the
+editor" above) — a link to wherever that item can be bought — and the
+viewer shows a **Buy** button next to that row, in its own column so it
+never shifts around as other rows' `extra` text changes length.
+
+By default, Buy adds the item to an in-memory cart (session-only, never
+saved anywhere): the toolbar's **🛒 Cart (N)** button opens one combined
+checkout for everything in it — but only for rows whose `buy_url` matches
+the catalog's configured cart recipe, tuned out of the box for
+[Payhip](https://payhip.com/)'s direct-checkout links. A `buy_url`
+pointing anywhere else always opens as an ordinary single-item link
+instead, regardless of any setting below.
+
+Configure this from the editor's **⚙️ Store settings…** button:
+
+- **Store URL** — free text, just for your own reference; not used for
+  anything else.
+- **Buy button behavior** — "Add to cart, checkout for everything at
+  once" (the default above) or "Go straight to payment for each item"
+  (Buy always opens that row's own `buy_url` right away, never turns into
+  a green "In cart" state, and no Cart button appears in the toolbar).
+- **Advanced: how to combine items into one cart** — three fields
+  describing *your* store's multi-item cart URL format, for stores other
+  than Payhip: a regex (one capture group) that recognizes a combinable
+  `buy_url` and extracts that item's id from it; a per-item parameter
+  template (containing `{id}`, substituted once per cart item and joined
+  with `&`); and the base URL those get appended to. This works for any
+  store whose multi-item cart is built from repeated per-item query
+  parameters, not just Payhip's.
+
+All of this is saved into the catalog file itself (new `meta` keys — see
+"Catalog file format" below), so it travels with the file: open the same
+`.ecatm` in a different browser, or hand it to someone else, and the Buy
+button behaves the same way for them too.
 
 ## Embedding the viewer
 
@@ -165,6 +204,11 @@ applies to `ecm-viewer` (or a matching id/class) overrides that.
 
 One `.ecatm` file (a SQLite database under the hood) = one catalog. Tables:
 
+- `meta` — one plain key/value row per setting: catalog name, and the
+  Buy-button/cart settings from "Selling from a catalog" above
+  (`store_url`, `cart_mode`, and the cart-recipe fields). A key a given
+  file predates just falls back to a sensible default — no migration
+  needed when this list grows.
 - `images` — one row per picture (name, embedded image data, size, and an
   optional `folder` label for grouping in the image list)
 - `links` — one row per clickable hotspot on an image (name, url, pixel
@@ -172,7 +216,7 @@ One `.ecatm` file (a SQLite database under the hood) = one catalog. Tables:
   the same part gets drawn at multiple positions on one exploded diagram.
 - `rows` — one row of data per link, joined by `url`. Fixed columns (`name`,
   `sku`, `description`) plus a free-form `extra` JSON column for whatever
-  characteristics a given catalog needs.
+  characteristics a given catalog needs (including `buy_url`, above).
 
 See [`packages/shared/src/schema.ts`](packages/shared/src/schema.ts) for
 the exact DDL.
@@ -323,8 +367,11 @@ new one, highlights every hotspot that row's `url` is shared by), save/
 export, group images into folders, search the whole catalog at once, open
 a catalog by URL or re-fetch it later with the viewer's **Refresh** to
 watch for changes saved elsewhere, open a legacy `.sch` catalog (read-only
-in the viewer, as an editable copy in the editor), light/dark theme. The
-viewer is also embeddable elsewhere as `<ecm-viewer>` (see "Embedding the
+in the viewer, as an editable copy in the editor), light/dark theme, and
+a Buy button per row (from an `extra.buy_url`) that can accumulate into a
+combined multi-item checkout — configurable per catalog, and not tied to
+any one store (see "Selling from a catalog"). The viewer is also
+embeddable elsewhere as `<ecm-viewer>` (see "Embedding the
 viewer"), distributed straight from this repo via jsDelivr — its built
 `dist/ecm-viewer.js` is deliberately committed (everywhere else, `dist/`
 is gitignored) since that file *is* what gets served. The editor and
