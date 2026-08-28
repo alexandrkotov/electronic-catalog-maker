@@ -367,6 +367,19 @@ tr.clickable-row.editing {
   color: var(--text);
 }
 
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.radio-option input {
+  cursor: pointer;
+}
+
 button {
   padding: 0.35rem 0.75rem;
   border: 1px solid var(--border);

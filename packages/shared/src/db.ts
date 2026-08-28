@@ -110,7 +110,27 @@ export function readMeta(db: Database): CatalogMeta {
     catalogName: kv.get("catalog_name") ?? "Untitled catalog",
     createdBy: kv.get("created_by") ?? "",
     createdAt: kv.get("created_at") ?? "",
+    // Both keys are simply absent in a catalog saved before this setting
+    // existed — no ALTER TABLE migration needed, `meta` is already a plain
+    // key/value table, so a missing key just falls back to the default here.
+    storeUrl: kv.get("store_url") ?? "",
+    cartMode: kv.get("cart_mode") === "instant" ? "instant" : "accumulate",
   };
+}
+
+export interface StoreSettingsInput {
+  storeUrl: string;
+  cartMode: "accumulate" | "instant";
+}
+
+/** Writes the editor's "Store settings" modal fields into the meta table. */
+export function updateStoreSettings(db: Database, input: StoreSettingsInput): void {
+  const stmt = db.prepare(
+    "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+  );
+  stmt.run(["store_url", input.storeUrl]);
+  stmt.run(["cart_mode", input.cartMode]);
+  stmt.free();
 }
 
 export function listImages(db: Database): CatalogImage[] {

@@ -176,6 +176,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // since there's no general way to merge arbitrary stores' URLs. Session-only
   // by design (not persisted) — this is a demo-catalog feature, not a real cart.
   let cartItems = new Set<string>(); // row urls
+  // Set from the catalog's own meta (store_url/cart_mode, edited in the
+  // editor's "Store settings" dialog) each time a catalog loads — see
+  // openBytes(). "instant" turns every Buy button into the old single-item
+  // instant-navigate link, even for rows that could otherwise be combined
+  // into a cart (see rowHtml/parsePayhipCartId).
+  let cartMode: "accumulate" | "instant" = "accumulate";
   // render() replaces the container's innerHTML wholesale, which recreates
   // #stage-scroll from scratch (a fresh element always starts scrolled to
   // 0,0) — tracked so render() can restore the pan position instead of
@@ -465,6 +471,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       const meta = readMeta(db);
       statusMessage = `Opened catalog "${meta.catalogName}".`;
     }
+    cartMode = readMeta(db).cartMode;
+    cartItems = new Set(); // a freshly (re)loaded catalog starts with an empty cart
     activeImageId = listImages(db)[0]?.id ?? null;
     selectedLinkId = null;
     zoom = 1;
@@ -699,7 +707,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                  <button id="btn-open-remote" title="Open a catalog hosted at a URL">Open remote catalog…</button>
                  <button id="btn-refresh" ${currentSrcUrl || openedFileHandle ? "" : "disabled"} title="Re-read the catalog from its source (URL or local file) — see changes someone else just saved">${refreshing ? "Refreshing…" : "Refresh"}</button>
                  <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
-                 <button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="Open one combined Payhip checkout for everything added to cart">🛒 Cart (${cartItems.size})</button>
+                 ${cartMode === "accumulate" ? `<button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="Open one combined Payhip checkout for everything added to cart">🛒 Cart (${cartItems.size})</button>` : ""}
                  <span class="spacer"></span>
                  <button id="btn-theme" title="Toggle light/dark theme">${currentTheme(themeTarget) === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
                  <span class="hint">${escapeHtml(statusMessage)}</span>
@@ -904,7 +912,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function rowHtml(r: CatalogRow, selectedUrl: string | null): string {
     const selected = r.url === selectedUrl ? "selected" : "";
     const buyUrl = typeof r.extra.buy_url === "string" && r.extra.buy_url ? r.extra.buy_url : null;
-    const cartId = buyUrl ? parsePayhipCartId(buyUrl) : null;
+    const cartId = buyUrl && cartMode === "accumulate" ? parsePayhipCartId(buyUrl) : null;
     const extra = Object.entries(r.extra)
       .filter(([k]) => k !== "buy_url")
       .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(String(v))}`)

@@ -81,4 +81,7 @@ export const CATALOG_SCHEMA_META_DEFAULTS: Record<string, string> = {
   catalog_name: "Untitled catalog",
   created_by: "",
   created_at: "",
+  store_url: "",
+  // "accumulate" | "instant" — see CatalogMeta.cartMode for what this controls.
+  cart_mode: "accumulate",
 };

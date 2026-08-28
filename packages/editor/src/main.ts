@@ -31,6 +31,7 @@ import {
   updateLink,
   updateLinkPosition,
   updateRow,
+  updateStoreSettings,
   type CatalogImage,
   type CatalogLink,
   type CatalogRow,
@@ -91,6 +92,13 @@ let remoteError: string | null = null;
 let searchOpen = false;
 let searchQuery = "";
 let searchField: SearchField = "all";
+// "Store settings" dialog state — edits the catalog's store_url/cart_mode
+// meta (see db.ts updateStoreSettings), which the viewer reads to decide how
+// its Buy button behaves. Opened fresh from the catalog's current meta each
+// time (not kept live in sync with it), same lifecycle as the remote dialog.
+let storeSettingsOpen = false;
+let storeSettingsUrlValue = "";
+let storeSettingsCartMode: "accumulate" | "instant" = "accumulate";
 
 // ---------- resizable layout (side panels + table columns) ----------
 // User-adjustable, remembered per-browser via localStorage (same pattern as
@@ -370,6 +378,27 @@ async function actionSubmitRemoteDialog() {
   remoteDialogOpen = false;
   // No file handle — a "copy", not opened in place — same as any .sch import.
   await openCatalogFromBytes(bytes, null, baseName(new URL(url, location.href).pathname));
+}
+
+function actionOpenStoreSettings() {
+  if (!db) return;
+  const meta = readMeta(db);
+  storeSettingsUrlValue = meta.storeUrl;
+  storeSettingsCartMode = meta.cartMode;
+  storeSettingsOpen = true;
+  render();
+}
+
+function actionCancelStoreSettings() {
+  storeSettingsOpen = false;
+  render();
+}
+
+function actionSubmitStoreSettings() {
+  if (!db) return;
+  updateStoreSettings(db, { storeUrl: storeSettingsUrlValue.trim(), cartMode: storeSettingsCartMode });
+  storeSettingsOpen = false;
+  setStatus("Updated store settings.");
 }
 
 function suggestedFileName(): string {
@@ -892,6 +921,7 @@ function render() {
       <button id="btn-save" ${db ? "" : "disabled"} title="Save in place (overwrites the opened file where your browser supports it)">Save</button>
       <button id="btn-export" ${db ? "" : "disabled"} title="Always downloads a new copy">Export .${CATALOG_FILE_EXTENSION}</button>
       <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
+      <button id="btn-store-settings" ${db ? "" : "disabled"} title="Configure this catalog's store link and Buy-button behavior">⚙️ Store settings…</button>
       <span class="spacer"></span>
       <button id="btn-theme" title="Toggle light/dark theme">${currentTheme() === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
       <span class="hint">${escapeHtml(statusMessage)}</span>
@@ -940,6 +970,7 @@ function render() {
 
     ${renderConfirmOverlay()}
     ${renderRemoteDialog()}
+    ${renderStoreSettingsDialog()}
   `;
 
   if (savedScroll) {
@@ -1036,6 +1067,37 @@ function renderRemoteDialog(): string {
         <div class="confirm-actions">
           <button id="remote-cancel" ${remoteLoading ? "disabled" : ""}>Cancel</button>
           <button id="remote-submit" ${remoteLoading || !remoteUrlValue.trim() ? "disabled" : ""}>${remoteLoading ? "Copying…" : "Copy"}</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderStoreSettingsDialog(): string {
+  if (!storeSettingsOpen) return "";
+  return `
+    <div class="confirm-overlay">
+      <div class="confirm-box">
+        <h2>Store settings</h2>
+        <div class="field">
+          <label for="store-url-input">Store URL (for your own reference)</label>
+          <input type="text" id="store-url-input" value="${escapeHtml(storeSettingsUrlValue)}" placeholder="https://payhip.com/YourStore" />
+        </div>
+        <div class="field">
+          <label>Buy button behavior</label>
+          <label class="radio-option">
+            <input type="radio" name="cart-mode" value="accumulate" ${storeSettingsCartMode === "accumulate" ? "checked" : ""} />
+            Add to cart, checkout for everything at once
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="cart-mode" value="instant" ${storeSettingsCartMode === "instant" ? "checked" : ""} />
+            Go straight to payment for each item
+          </label>
+        </div>
+        <p class="hint">Only affects rows whose Extra has a buy_url your store can combine into one cart (currently: Payhip direct-checkout links). Other buy_url values always open individually, regardless of this setting.</p>
+        <div class="confirm-actions">
+          <button id="store-settings-cancel">Cancel</button>
+          <button id="store-settings-submit">Save</button>
         </div>
       </div>
     </div>
@@ -1305,6 +1367,23 @@ function wireEvents(links: CatalogLink[]) {
   if (remoteDialogOpen && !remoteLoading) {
     remoteUrlInput?.focus();
     remoteUrlInput?.setSelectionRange(remoteUrlInput.value.length, remoteUrlInput.value.length);
+  }
+
+  document.getElementById("btn-store-settings")?.addEventListener("click", actionOpenStoreSettings);
+  document.getElementById("store-settings-cancel")?.addEventListener("click", actionCancelStoreSettings);
+  document.getElementById("store-settings-submit")?.addEventListener("click", actionSubmitStoreSettings);
+  const storeUrlInput = document.getElementById("store-url-input") as HTMLInputElement | null;
+  storeUrlInput?.addEventListener("input", () => {
+    storeSettingsUrlValue = storeUrlInput.value;
+  });
+  document.querySelectorAll<HTMLInputElement>('input[name="cart-mode"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      if (radio.checked) storeSettingsCartMode = radio.value as "accumulate" | "instant";
+    });
+  });
+  if (storeSettingsOpen) {
+    storeUrlInput?.focus();
+    storeUrlInput?.setSelectionRange(storeUrlInput.value.length, storeUrlInput.value.length);
   }
 
   document.getElementById("btn-search")?.addEventListener("click", actionToggleSearch);
