@@ -171,6 +171,41 @@ body {
   padding-left: 1.25rem;
 }
 
+/* Mobile tab bar (Images / Diagram / Details) — always rendered (see
+   main.ts render()) but only shown below the mobile breakpoint, where the
+   three-column desktop grid collapses to one panel at a time. Harmless
+   above the breakpoint: `display: none` removes it from grid layout
+   entirely regardless of the `grid-area: tabs` it's given, and "tabs" isn't
+   even a named area in the desktop grid-template-areas. Same pattern (and
+   the same iOS Safari :focus-visible pitfall — see .mobile-tab-btn.active
+   below) as packages/viewer/src/style.css. */
+.mobile-tabs {
+  display: none;
+  grid-area: tabs;
+  gap: 0.25rem;
+  padding: 0.4rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.mobile-tab-btn {
+  flex: 1;
+}
+
+/* Also cover :hover/:focus-visible on the active tab itself — tapping a
+   button on iOS Safari leaves it matching :focus-visible, and the generic
+   button rule further below outspecifies a plain `.mobile-tab-btn.active`.
+   Without this, the just-tapped tab fell back to the unselected button's
+   pale background while `color: white` still won — white text on a
+   near-white background, unreadable. */
+.mobile-tab-btn.active,
+.mobile-tab-btn.active:hover,
+.mobile-tab-btn.active:focus-visible {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
 .stage {
   grid-area: stage;
   position: relative;
@@ -184,12 +219,19 @@ body {
   background: repeating-conic-gradient(var(--stage-a) 0% 25%, var(--stage-b) 0% 50%) 50% / 20px 20px;
   display: flex;
   align-items: flex-start;
-  justify-content: center;
+  /* No `justify-content: center` — combined with `overflow: auto` that
+     traps a wider-than-panel image's start-side overflow behind a
+     scrollLeft that can never go negative (found via mobile testing: an
+     870px-wide demo image left ~240px of its own left edge permanently
+     unreachable, unscrollable). `margin: 0 auto` on .stage-inner below
+     still centers a small image the same way, but simply lets you scroll
+     to see the rest of a big one instead — same fix as .confirm-box. */
 }
 
 .stage-inner {
   position: relative;
   display: inline-block;
+  margin: 0 auto;
   transform-origin: top left;
 }
 
@@ -553,22 +595,37 @@ td {
 
 /* In-app confirm dialog — deliberately not window.confirm(), which browsers
    can silently auto-deny after a page has shown several native dialogs
-   without a fresh user gesture in between. */
+   without a fresh user gesture in between. Also backs the longer Store
+   settings dialog, tall enough on a phone (title + URL field + 2 radios +
+   an expandable "advanced" block with 3 more fields + a hint paragraph) to
+   exceed the viewport, especially with the on-screen keyboard eating
+   vertical space — the fixes below make sure Cancel/Save stay reachable
+   instead of landing off-screen with nothing to scroll them into view. */
 .confirm-overlay {
   position: fixed;
   inset: 0;
   background: rgb(0 0 0 / 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: 1000;
+  overflow-y: auto;
+  padding: 2rem 1rem;
+  display: flex;
+  justify-content: center;
+  /* No `align-items: center` — combined with `overflow-y: auto` that traps
+     whatever sticks out above the fold behind an unreachable negative
+     scroll offset (a well-known flexbox+overflow interaction). `margin:
+     auto` on .confirm-box below centers it vertically when it fits, and
+     just lets the overlay scroll to the rest when it doesn't. */
 }
 
 .confirm-box {
   background: var(--bg-page);
   border-radius: 8px;
   padding: 1.25rem;
-  max-width: 26rem;
+  /* Was a bare 26rem — unconstrained by viewport width, so .confirm-box
+     .field's own 22rem (below) forced this box to ~24rem wide even on a
+     ~23rem-wide phone screen, overflowing it sideways. */
+  max-width: min(26rem, calc(100vw - 2rem));
+  margin: auto 0;
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
 }
 
@@ -592,4 +649,61 @@ td {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+/* Mobile layout — below this width the desktop three-column grid (fixed-px
+   side panels + a flexible stage, see #app above) no longer fits:
+   --images-w/--inspector-w alone already exceed a phone's viewport, which
+   pushed the stage to ~0 width and shoved the toolbar/inspector off-screen
+   with no way to scroll back to them (same bug as the standalone viewer
+   had — see packages/viewer/src/style.css). Below the breakpoint, collapse
+   to a single full-width panel at a time, switched via .mobile-tabs
+   (grid-area "tabs", hidden above the breakpoint — see there). Panel-resize
+   dividers make no sense with only one panel visible, so they're hidden
+   too; their drag handlers (startPanelResize) simply never fire without a
+   divider to grab. */
+@media (max-width: 860px) {
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "toolbar"
+      "tabs"
+      "content";
+  }
+
+  .mobile-tabs {
+    display: flex;
+  }
+
+  .panel-divider {
+    display: none;
+  }
+
+  /* All three occupy the same grid cell; data-mobile-tab (set on #app
+     itself, see main.ts render()) picks which one is actually shown. */
+  .panel-images,
+  .stage,
+  .inspector {
+    grid-area: content;
+    width: 100%;
+    min-width: 0;
+    display: none;
+  }
+
+  #app[data-mobile-tab="images"] .panel-images,
+  #app[data-mobile-tab="stage"] .stage,
+  #app[data-mobile-tab="inspector"] .inspector {
+    display: block;
+  }
+
+  /* Fixed-width columns (see colgroup in renderLinksSection/renderRowsSection)
+     can still add up to more than a phone's width — scroll each table
+     sideways within its own <section> instead of letting it push the page
+     wider than the viewport. (Not `display: block` on the <table> itself —
+     that would blockify it out of table layout and break row/cell
+     rendering; harmless on sections without a table.) */
+  .inspector section {
+    overflow-x: auto;
+  }
 }

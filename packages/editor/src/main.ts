@@ -114,6 +114,14 @@ let storeSettingsCartIdPattern = DEFAULT_CART_ID_PATTERN;
 let storeSettingsCartItemParam = DEFAULT_CART_ITEM_PARAM;
 let storeSettingsCartCheckoutBaseUrl = DEFAULT_CART_CHECKOUT_BASE_URL;
 
+// Which single panel is shown below the mobile breakpoint (see .mobile-tabs
+// / #app[data-mobile-tab] in style.css) — irrelevant above it, where all
+// three panels sit side by side per the desktop grid regardless of this
+// value. Starts on "images" so a freshly opened catalog shows its image
+// list first, same as the desktop layout's left panel. Same pattern as the
+// viewer's mobileTab (packages/viewer/src/viewerEngine.ts).
+let mobileTab: "images" | "stage" | "inspector" = "images";
+
 // ---------- resizable layout (side panels + table columns) ----------
 // User-adjustable, remembered per-browser via localStorage (same pattern as
 // theme.ts) — these are editor-local UI preferences, not part of the
@@ -311,6 +319,7 @@ function actionNewCatalog() {
   activeImageId = null;
   openedFileHandle = null;
   resetTransientEditState();
+  mobileTab = "images"; // fresh catalog — start from the image list, same as opening one
   setStatus(`Created new catalog "${name}".`);
 }
 
@@ -339,6 +348,7 @@ async function openCatalogFromBytes(
       activeImageId = currentImages()[0]?.id ?? null;
       openedFileHandle = null;
       resetTransientEditState();
+      mobileTab = "images"; // fresh catalog — start from the image list
       setStatus(
         `Converted legacy catalog "${sourceName}" (${result.imageCount} image${result.imageCount === 1 ? "" : "s"}${result.skippedDiagrams ? `, ${result.skippedDiagrams} skipped` : ""}). Save to keep it as a .${CATALOG_FILE_EXTENSION} file.`,
       );
@@ -348,6 +358,7 @@ async function openCatalogFromBytes(
       activeImageId = currentImages()[0]?.id ?? null;
       openedFileHandle = handle;
       resetTransientEditState();
+      mobileTab = "images"; // fresh catalog — start from the image list
       setStatus(`Opened catalog "${meta.catalogName}".`);
     }
   } catch (err) {
@@ -554,6 +565,12 @@ function actionUpdateImageMeta() {
 function actionSelectImage(id: number) {
   activeImageId = id;
   resetTransientEditState();
+  mobileTab = "stage"; // no-op above the mobile breakpoint — see mobileTab's declaration
+  render();
+}
+
+function actionSetMobileTab(tab: "images" | "stage" | "inspector") {
+  mobileTab = tab;
   render();
 }
 
@@ -596,6 +613,9 @@ function startStageInteraction(evt: MouseEvent, img: HTMLImageElement, scrollEl:
       pendingHotspot = { top, left };
       editingLinkId = null;
       editingRowId = null;
+      // Jump to the "New link" form — no-op above the mobile breakpoint,
+      // see mobileTab's declaration.
+      mobileTab = "inspector";
       render();
     }
   }
@@ -692,6 +712,9 @@ function startDragHotspot(evt: MouseEvent, link: CatalogLink, el: HTMLElement, i
       editingLinkId = link.id;
       editingRowId = null;
       pendingHotspot = null;
+      // Jump to the "Edit link" form — no-op above the mobile breakpoint,
+      // see mobileTab's declaration.
+      mobileTab = "inspector";
       render();
       centerOnHotspot(link.id);
       scrollInspectorToEditLink();
@@ -759,6 +782,9 @@ function actionGoToSearchResult(imageId: number, url: string) {
   const link = listLinksForImage(db, imageId).find((l) => l.url === url);
   editingLinkId = link ? link.id : null;
   editingRowId = null;
+  // Found a hotspot to edit → jump to its form; otherwise just show the
+  // image. No-op above the mobile breakpoint — see mobileTab's declaration.
+  mobileTab = link ? "inspector" : "stage";
   render();
   if (link) {
     centerOnHotspot(link.id);
@@ -959,6 +985,11 @@ function render() {
     prevInspector && activeImageId === lastRenderedImageId ? prevInspector.scrollTop : null;
   lastRenderedImageId = activeImageId;
 
+  // Read by the mobile breakpoint's CSS (#app[data-mobile-tab=...]) to
+  // decide which single panel to show — see mobileTab's declaration. Set on
+  // #app itself (not inside innerHTML below) so it survives the wholesale
+  // rebuild, same reasoning as applyPanelWidths()'s CSS custom properties.
+  app.setAttribute("data-mobile-tab", mobileTab);
   app.innerHTML = `
     <div class="toolbar">
       <h1>Electronic Catalog — Editor</h1>
@@ -976,6 +1007,12 @@ function render() {
       <button id="btn-theme" title="Toggle light/dark theme">${currentTheme() === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
       <span class="hint">${escapeHtml(statusMessage)}</span>
       ${searchOpen ? renderSearchPanel() : ""}
+    </div>
+
+    <div class="mobile-tabs">
+      <button type="button" class="mobile-tab-btn ${mobileTab === "images" ? "active" : ""}" data-tab="images">Images</button>
+      <button type="button" class="mobile-tab-btn ${mobileTab === "stage" ? "active" : ""}" data-tab="stage">Diagram</button>
+      <button type="button" class="mobile-tab-btn ${mobileTab === "inspector" ? "active" : ""}" data-tab="inspector">Details</button>
     </div>
 
     <div class="panel-images">
@@ -1495,6 +1532,10 @@ function wireEvents(links: CatalogLink[]) {
 
   document.querySelectorAll<HTMLLIElement>(".panel-images li[data-id]").forEach((li) => {
     li.addEventListener("click", () => actionSelectImage(Number(li.dataset.id)));
+  });
+
+  document.querySelectorAll<HTMLButtonElement>(".mobile-tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => actionSetMobileTab(btn.dataset.tab as "images" | "stage" | "inspector"));
   });
 
   document.getElementById("btn-save-image")?.addEventListener("click", actionUpdateImageMeta);
