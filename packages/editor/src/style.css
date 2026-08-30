@@ -556,6 +556,11 @@ td {
   color: var(--muted);
 }
 
+.collab-status {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
 .error {
   color: var(--danger);
   font-size: 0.8rem;

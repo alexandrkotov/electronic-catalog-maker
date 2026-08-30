@@ -270,6 +270,11 @@ export function findLinkConflicts(
 }
 
 export interface AddImageInput {
+  // Set only when replaying this add from a shared session (see
+  // packages/editor/src/collab.ts) — every connected tab must land the new
+  // row at the *same* id, since links/rows reference it by id afterward;
+  // left unset for a normal local add, which lets SQLite autoincrement it.
+  id?: number;
   name: string;
   mimeType: string;
   imageData: string;
@@ -280,10 +285,16 @@ export interface AddImageInput {
 }
 
 export function addImage(db: Database, input: AddImageInput): number {
-  const stmt = db.prepare(
-    "INSERT INTO images (name, mime_type, image_data, width, height, sort_order, folder) VALUES (?, ?, ?, ?, ?, ?, ?)",
-  );
+  const stmt =
+    input.id === undefined
+      ? db.prepare(
+          "INSERT INTO images (name, mime_type, image_data, width, height, sort_order, folder) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+      : db.prepare(
+          "INSERT INTO images (id, name, mime_type, image_data, width, height, sort_order, folder) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        );
   stmt.run([
+    ...(input.id === undefined ? [] : [input.id]),
     input.name,
     input.mimeType,
     input.imageData,
@@ -293,7 +304,7 @@ export function addImage(db: Database, input: AddImageInput): number {
     input.folder ?? "",
   ]);
   stmt.free();
-  return lastInsertRowId(db);
+  return input.id ?? lastInsertRowId(db);
 }
 
 export interface UpdateImageInput {
@@ -325,6 +336,8 @@ export function deleteImage(db: Database, imageId: number): void {
 }
 
 export interface AddLinkInput {
+  // See AddImageInput's `id` for why this exists.
+  id?: number;
   imageId: number;
   name: string;
   url: string;
@@ -338,12 +351,21 @@ export interface AddLinkInput {
  * findLinkConflicts() first if you want to warn the user before saving.
  */
 export function addLink(db: Database, input: AddLinkInput): number {
-  const stmt = db.prepare(
-    "INSERT INTO links (image_id, name, url, top, left, font_size) VALUES (?, ?, ?, ?, ?, ?)",
-  );
-  stmt.run([input.imageId, input.name, input.url, input.top, input.left, input.fontSize ?? 12]);
+  const stmt =
+    input.id === undefined
+      ? db.prepare("INSERT INTO links (image_id, name, url, top, left, font_size) VALUES (?, ?, ?, ?, ?, ?)")
+      : db.prepare("INSERT INTO links (id, image_id, name, url, top, left, font_size) VALUES (?, ?, ?, ?, ?, ?, ?)");
+  stmt.run([
+    ...(input.id === undefined ? [] : [input.id]),
+    input.imageId,
+    input.name,
+    input.url,
+    input.top,
+    input.left,
+    input.fontSize ?? 12,
+  ]);
   stmt.free();
-  return lastInsertRowId(db);
+  return input.id ?? lastInsertRowId(db);
 }
 
 export interface UpdateLinkInput {
@@ -412,6 +434,9 @@ export function rowExistsForUrl(db: Database, url: string): boolean {
 }
 
 export interface AddRowInput {
+  // See AddImageInput's `id` for why this exists — a later updateRow()/
+  // deleteRow() op targets this row by id, so every tab needs the same one.
+  id?: number;
   imageId: number;
   url: string;
   name?: string;
@@ -422,10 +447,12 @@ export interface AddRowInput {
 
 /** Inserts a data row. `url` should match an existing link's url on the same image. */
 export function addRow(db: Database, input: AddRowInput): number {
-  const stmt = db.prepare(
-    "INSERT INTO rows (image_id, url, name, sku, description, extra) VALUES (?, ?, ?, ?, ?, ?)",
-  );
+  const stmt =
+    input.id === undefined
+      ? db.prepare("INSERT INTO rows (image_id, url, name, sku, description, extra) VALUES (?, ?, ?, ?, ?, ?)")
+      : db.prepare("INSERT INTO rows (id, image_id, url, name, sku, description, extra) VALUES (?, ?, ?, ?, ?, ?, ?)");
   stmt.run([
+    ...(input.id === undefined ? [] : [input.id]),
     input.imageId,
     input.url,
     input.name ?? "",
@@ -434,7 +461,7 @@ export function addRow(db: Database, input: AddRowInput): number {
     JSON.stringify(input.extra ?? {}),
   ]);
   stmt.free();
-  return lastInsertRowId(db);
+  return input.id ?? lastInsertRowId(db);
 }
 
 export interface UpdateRowInput {

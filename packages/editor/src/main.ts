@@ -47,6 +47,7 @@ import {
   type SqlJsStatic,
 } from "@ecm/shared";
 import { slugify } from "./slugify";
+import { CollabConnection, createRoom, downloadSnapshot, listOpsSince, type CollabStatus, type Op } from "./collab";
 
 // Applied before the first render so there's no flash of the wrong theme.
 applyTheme(resolveInitialTheme());
@@ -63,6 +64,12 @@ const CATALOG_PICKER_TYPE: FilePickerAcceptType = {
   // here too, but always as an unattached copy (see openCatalogFromBytes).
   accept: { "application/x-sqlite3": [`.${CATALOG_FILE_EXTENSION}`, ".sch"] },
 };
+
+// @ecm/collab-server isn't deployed anywhere yet (Phase 1's own README —
+// needs a real Cloudflare account this project doesn't have set up here),
+// so this defaults to wrangler's local-dev port. Override with a real
+// deployed URL via VITE_COLLAB_SERVER_URL once one exists.
+const COLLAB_SERVER_URL = import.meta.env.VITE_COLLAB_SERVER_URL ?? "http://127.0.0.1:8787";
 
 let SQL: SqlJsStatic;
 let db: Database | null = null;
@@ -82,6 +89,21 @@ let openedFileHandle: FileSystemFileHandle | null = null;
 // anyone else touching the same file) gets caught instead of silently lost.
 // Null whenever there's nothing on disk yet to compare against.
 let openedFileStamp: { size: number; lastModified: number } | null = null;
+// ---------- live collaboration (Phase 2) ----------
+// Non-null exactly while this tab is connected to a shared session. While
+// it's set, this tab's own edits are sent to the room (see
+// applyAndBroadcast below) instead of only ever landing in this tab.
+let collab: CollabConnection | null = null;
+let collabRoomId: string | null = null;
+let collabStatus: CollabStatus = "disconnected";
+// Only meaningful right after actionStartCollaboration() — shown once so
+// it can be copied, not persisted or shown again after a reload (deleting
+// a room isn't built yet — that's Phase 5 — so there's nowhere to use it
+// again this early anyway).
+let collabOwnerToken: string | null = null;
+// The highest op seq applied so far — lets a fresh join or reconnect ask
+// the room for only what it's missing (see connectAndSync).
+let lastAppliedSeq = 0;
 // render() replaces #app's innerHTML wholesale, which recreates #stage-scroll
 // from scratch (a fresh element always starts scrolled to 0,0) — tracked so
 // render() can restore the pan position instead of losing it on every
@@ -280,11 +302,16 @@ function notify(message: string) {
 // the address bar: matches "Copy remote catalog…"'s existing semantics
 // (an unattached copy to edit, not a live link back to the source).
 const initialSrcParam = new URLSearchParams(location.search).get("src");
+// `?collab=<roomId>` joins a shared session automatically on load — the
+// link actionStartCollaboration() hands the initiator to pass along.
+const initialCollabParam = new URLSearchParams(location.search).get("collab");
 
 async function boot() {
   app.innerHTML = `<p style="padding:1rem">Loading SQLite (sql.js)…</p>`;
   SQL = await initSqlite(wasmUrl);
-  if (initialSrcParam) {
+  if (initialCollabParam) {
+    await actionJoinCollaboration(initialCollabParam);
+  } else if (initialSrcParam) {
     await loadInitialFromUrl(initialSrcParam);
   } else {
     render();
@@ -356,6 +383,10 @@ async function openCatalogFromBytes(
   sourceName = "Legacy catalog",
   fileStamp: { size: number; lastModified: number } | null = null,
 ) {
+  // Opening a different local file while still connected to a shared
+  // session for a *different* catalog would silently keep sending that
+  // session edits meant for this new one — leave it instead of guessing.
+  if (collab) actionLeaveCollaboration();
   try {
     const kind = detectFileKind(SQL, bytes);
     if (kind === "legacy-sch") {
@@ -474,7 +505,7 @@ function actionCancelStoreSettings() {
 
 function actionSubmitStoreSettings() {
   if (!db) return;
-  updateStoreSettings(db, {
+  applyAndBroadcast("updateStoreSettings", updateStoreSettings, {
     storeUrl: storeSettingsUrlValue.trim(),
     cartMode: storeSettingsCartMode,
     cartIdPattern: storeSettingsCartIdPattern.trim() || DEFAULT_CART_ID_PATTERN,
@@ -581,6 +612,162 @@ async function writeToOpenedHandle(bytes: Uint8Array) {
   }
 }
 
+// ---------- actions: live collaboration ----------
+
+/**
+ * Every @ecm/shared mutation an operation is allowed to name — deliberately
+ * a fixed allowlist keyed by name, not "call whatever function string
+ * arrives", since the room relays whatever any connected tab sends.
+ * Each one is the *exact* function already used for local edits elsewhere
+ * in this file (see the "actions: images"/"hotspots"/etc. sections below)
+ * — that reuse is the whole point (see room.ts's class doc on the server).
+ */
+const OP_HANDLERS: Record<string, (db: Database, ...args: never[]) => unknown> = {
+  addImage,
+  updateImage,
+  deleteImage,
+  addLink,
+  updateLink,
+  deleteLink,
+  updateLinkPosition,
+  addRow,
+  updateRow,
+  deleteRow,
+  updateStoreSettings,
+};
+
+/**
+ * Calls one of the functions above and, if this tab is in a shared
+ * session, sends the same call over the wire so everyone else applies it
+ * too. `db` is deliberately not part of what's sent — every tab (including
+ * the one that receives this later) supplies its own local one.
+ */
+function applyAndBroadcast<Args extends unknown[], R>(fnName: string, fn: (db: Database, ...args: Args) => R, ...args: Args): R {
+  const result = fn(db as Database, ...args);
+  collab?.sendOp(fnName, args);
+  return result;
+}
+
+/**
+ * Same idea, for addImage/addLink/addRow specifically: they hand back a
+ * new row's id (assigned by SQLite's autoincrement locally), and a later
+ * op might target that exact row (an edit, a delete) — so every other tab
+ * has to land it at the *same* id, not its own independently-assigned one.
+ * The broadcast args carry the id explicitly; addImage/addLink/addRow all
+ * accept it as `input.id` to insert at a specific id instead of a fresh one.
+ */
+function applyAddAndBroadcast<Input extends { id?: number }>(
+  fnName: string,
+  fn: (db: Database, input: Input) => number,
+  input: Input,
+): number {
+  const id = fn(db as Database, input);
+  collab?.sendOp(fnName, [{ ...input, id }]);
+  return id;
+}
+
+/** Applies one op relayed from someone else (or replayed from the log) — never re-sent, that would echo it right back out. */
+function applyRemoteOp(op: Op) {
+  if (op.seq <= lastAppliedSeq) return; // already applied — the join replay and the live buffer can overlap, see connectAndSync
+  lastAppliedSeq = op.seq;
+  if (!db) return;
+  const handler = OP_HANDLERS[op.fn];
+  if (!handler) return; // unrecognized fn — ignore rather than crash this tab over it
+  handler(db, ...(op.args as never[]));
+  render();
+}
+
+/**
+ * Opens the live connection and brings this tab's copy fully up to date —
+ * used both right after creating a room and right after joining one.
+ *
+ * Ordering note: CollabConnection starts delivering messages the moment
+ * it's constructed, so buffering from construction (not from some later
+ * "connected" event) is what makes this gap-free — anything logged before
+ * this tab even connects is necessarily covered by the listOpsSince() call
+ * below (which runs after construction), and anything logged after this
+ * tab connects arrives live into `pending` either way. There's no ordering
+ * requirement between the two calls for that to hold.
+ */
+async function connectAndSync(roomId: string) {
+  const pending: Op[] = [];
+  let syncing = true;
+
+  collab = new CollabConnection(
+    COLLAB_SERVER_URL,
+    roomId,
+    (op) => {
+      if (syncing) pending.push(op);
+      else applyRemoteOp(op);
+    },
+    (status) => {
+      collabStatus = status;
+      render();
+    },
+  );
+  collabRoomId = roomId;
+
+  const missed = await listOpsSince(COLLAB_SERVER_URL, roomId, lastAppliedSeq);
+  for (const op of missed) applyRemoteOp(op);
+  syncing = false;
+  for (const op of pending) applyRemoteOp(op);
+}
+
+/** Uploads the current catalog as a brand-new shared session and connects to it. */
+async function actionStartCollaboration() {
+  if (!db) return;
+  setStatus("Starting a shared session…");
+  try {
+    const bytes = exportCatalog(db);
+    const room = await createRoom(COLLAB_SERVER_URL, bytes);
+    collabOwnerToken = room.ownerToken;
+    lastAppliedSeq = 0;
+    await connectAndSync(room.roomId);
+    setStatus("Started a shared session — share the link shown below with a colleague.");
+  } catch (err) {
+    setStatus(`Could not start a shared session: ${(err as Error).message}`);
+  }
+}
+
+/** Joins an existing shared session by id — downloads its original snapshot, then catches up to its current state via connectAndSync. */
+async function actionJoinCollaboration(roomId: string) {
+  setStatus("Joining the shared session…");
+  try {
+    const bytes = await downloadSnapshot(COLLAB_SERVER_URL, roomId);
+    db = openCatalog(SQL, bytes);
+    activeImageId = currentImages()[0]?.id ?? null;
+    openedFileHandle = null;
+    openedFileStamp = null;
+    collabOwnerToken = null; // only create() hands this out — a joiner never has it
+    lastAppliedSeq = 0;
+    resetTransientEditState();
+    await connectAndSync(roomId);
+    setStatus("Joined the shared session.");
+  } catch (err) {
+    setStatus(`Could not join that shared session: ${(err as Error).message}`);
+  }
+}
+
+/** Disconnects this tab only — the room itself and everyone else in it are unaffected (deleting a room outright is Phase 5). */
+function actionLeaveCollaboration() {
+  collab?.close();
+  collab = null;
+  collabRoomId = null;
+  collabOwnerToken = null;
+  collabStatus = "disconnected";
+  setStatus("Left the shared session — you're back to working locally.");
+}
+
+async function actionCopyCollabLink() {
+  if (!collabRoomId) return;
+  try {
+    await navigator.clipboard.writeText(collabShareLink());
+    setStatus("Copied the link — share it with whoever you want editing alongside you.");
+  } catch {
+    setStatus(`Couldn't copy automatically — here's the link: ${collabShareLink()}`);
+  }
+}
+
 // ---------- actions: images ----------
 
 async function actionAddImage(file: File) {
@@ -595,7 +782,7 @@ async function actionAddImage(file: File) {
   // Inherit the active image's folder — adding another page while working
   // inside a folder should keep it there, not drop it back to ungrouped.
   const activeFolder = currentImages().find((i) => i.id === activeImageId)?.folder ?? "";
-  const id = addImage(db, {
+  const id = applyAddAndBroadcast("addImage", addImage, {
     name: file.name,
     mimeType: mimeType ?? file.type,
     imageData: base64,
@@ -616,7 +803,7 @@ function actionUpdateImageMeta() {
   const folderInput = document.getElementById("image-folder-input") as HTMLInputElement | null;
   const name = nameInput?.value.trim() || "Untitled image";
   const folder = folderInput?.value.trim() ?? "";
-  updateImage(db, activeImageId, { name, folder });
+  applyAndBroadcast("updateImage", updateImage, activeImageId, { name, folder });
   setStatus(`Updated "${name}".`);
 }
 
@@ -640,7 +827,7 @@ function actionDeleteImage(imageId: number) {
   const consequence = rowCount ? ` It still has ${rowCount} data row${rowCount === 1 ? "" : "s"} with no hotspot, which go with it.` : "";
   askConfirm(`Delete "${image?.name ?? "this image"}"?${consequence} This can't be undone.`, () => {
     if (!db) return;
-    deleteImage(db, imageId);
+    applyAndBroadcast("deleteImage", deleteImage, imageId);
     if (activeImageId === imageId) {
       activeImageId = currentImages()[0]?.id ?? null;
       resetTransientEditState();
@@ -793,7 +980,7 @@ function startDragHotspot(evt: MouseEvent, link: CatalogLink, el: HTMLElement, i
     window.removeEventListener("mousemove", onMove);
     window.removeEventListener("mouseup", onUp);
     if (moved) {
-      if (db) updateLinkPosition(db, link.id, top, left);
+      if (db) applyAndBroadcast("updateLinkPosition", updateLinkPosition, link.id, top, left);
       render();
     } else {
       editingLinkId = link.id;
@@ -906,7 +1093,7 @@ function actionAddLink(name: string, url: string) {
   const doAdd = () => {
     if (!db) return;
     try {
-      addLink(db, { imageId, name, url, top, left });
+      applyAddAndBroadcast("addLink", addLink, { imageId, name, url, top, left });
       pendingHotspot = null;
       setStatus(`Link "${name}" added.`);
     } catch (err) {
@@ -929,7 +1116,7 @@ function actionUpdateLink(name: string, url: string) {
   const doUpdate = () => {
     if (!db) return;
     try {
-      updateLink(db, linkId, { name, url });
+      applyAndBroadcast("updateLink", updateLink, linkId, { name, url });
       editingLinkId = null;
       setStatus(`Link "${name}" updated.`);
     } catch (err) {
@@ -963,7 +1150,7 @@ function actionDeleteLink() {
   askConfirm("Delete this hotspot? This can't be undone.", () => {
     if (!db) return;
     try {
-      deleteLink(db, linkId);
+      applyAndBroadcast("deleteLink", deleteLink, linkId);
       editingLinkId = null;
       setStatus("Link deleted.");
     } catch (err) {
@@ -992,7 +1179,7 @@ function actionAddRow(url: string, name: string, sku: string, description: strin
   if (!db || activeImageId === null) return;
   const extra = parseExtraField(extraText);
   if (extra === null) return;
-  addRow(db, { imageId: activeImageId, url, name, sku, description, extra });
+  applyAddAndBroadcast("addRow", addRow, { imageId: activeImageId, url, name, sku, description, extra });
   setStatus(`Row for "${url}" added.`);
 }
 
@@ -1013,7 +1200,7 @@ function actionSaveRowEdit(name: string, sku: string, description: string, extra
   if (!db || editingRowId === null) return;
   const extra = parseExtraField(extraText);
   if (extra === null) return;
-  updateRow(db, editingRowId, { name, sku, description, extra });
+  applyAndBroadcast("updateRow", updateRow, editingRowId, { name, sku, description, extra });
   editingRowId = null;
   setStatus(`Row "${name}" updated.`);
 }
@@ -1023,7 +1210,7 @@ function actionDeleteRow() {
   const rowId = editingRowId;
   askConfirm("Delete this table row? Its hotspot stays on the image, just unassigned from any data. This can't be undone.", () => {
     if (!db) return;
-    deleteRow(db, rowId);
+    applyAndBroadcast("deleteRow", deleteRow, rowId);
     editingRowId = null;
     setStatus("Row deleted.");
   });
@@ -1100,6 +1287,8 @@ function render() {
       <button id="btn-export" ${db ? "" : "disabled"} title="Always downloads a new copy">Export .${CATALOG_FILE_EXTENSION}</button>
       <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
       <button id="btn-store-settings" ${db ? "" : "disabled"} title="Configure this catalog's store link and Buy-button behavior">⚙️ Store settings…</button>
+      ${db && !collabRoomId ? `<button id="btn-start-collab" title="Start a live session others can join to edit this catalog with you">🤝 Start collaboration</button>` : ""}
+      ${collabRoomId ? renderCollabStatus() : ""}
       <span class="spacer"></span>
       <button id="btn-theme" title="Toggle light/dark theme">${currentTheme() === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
       <span class="hint">${escapeHtml(statusMessage)}</span>
@@ -1237,6 +1426,20 @@ function renderZoomControls(): string {
       <button id="btn-zoom-in" title="Zoom in">+</button>
       <button id="btn-zoom-reset" title="Reset zoom">Reset</button>
     </div>
+  `;
+}
+
+function collabShareLink(): string {
+  return `${location.origin}${location.pathname}?collab=${collabRoomId}`;
+}
+
+function renderCollabStatus(): string {
+  const icon = collabStatus === "connected" ? "🟢" : collabStatus === "connecting" ? "🟡" : "🔴";
+  const label = collabStatus === "connected" ? "Live" : collabStatus === "connecting" ? "Connecting…" : "Disconnected";
+  return `
+    <span class="collab-status" title="Share this link so a colleague can join: ${escapeHtml(collabShareLink())}">${icon} ${label}</span>
+    <button type="button" id="btn-copy-collab-link">Copy link to share</button>
+    <button type="button" id="btn-leave-collab">Leave</button>
   `;
 }
 
@@ -1619,6 +1822,9 @@ function wireEvents(links: CatalogLink[]) {
   }
 
   document.getElementById("btn-store-settings")?.addEventListener("click", actionOpenStoreSettings);
+  document.getElementById("btn-start-collab")?.addEventListener("click", () => void actionStartCollaboration());
+  document.getElementById("btn-copy-collab-link")?.addEventListener("click", () => void actionCopyCollabLink());
+  document.getElementById("btn-leave-collab")?.addEventListener("click", actionLeaveCollaboration);
   document.getElementById("store-settings-cancel")?.addEventListener("click", actionCancelStoreSettings);
   document.getElementById("store-settings-submit")?.addEventListener("click", actionSubmitStoreSettings);
   const storeUrlInput = document.getElementById("store-url-input") as HTMLInputElement | null;
