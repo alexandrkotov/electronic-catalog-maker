@@ -73,6 +73,13 @@ let statusMessage = "";
 // Set when the catalog was opened (or first saved) via the File System
 // Access API, so subsequent Save calls can overwrite it in place.
 let openedFileHandle: FileSystemFileHandle | null = null;
+// Size + last-modified time of openedFileHandle's contents as of the last
+// time *we* read or wrote it — cheap metadata, not a hash, so it stays fast
+// even on a multi-hundred-MB catalog. Save compares this against the file's
+// current stamp right before overwriting, so a second editor's save (or
+// anyone else touching the same file) gets caught instead of silently lost.
+// Null whenever there's nothing on disk yet to compare against.
+let openedFileStamp: { size: number; lastModified: number } | null = null;
 // render() replaces #app's innerHTML wholesale, which recreates #stage-scroll
 // from scratch (a fresh element always starts scrolled to 0,0) — tracked so
 // render() can restore the pan position instead of losing it on every
@@ -337,6 +344,7 @@ async function openCatalogFromBytes(
   bytes: Uint8Array,
   handle: FileSystemFileHandle | null,
   sourceName = "Legacy catalog",
+  fileStamp: { size: number; lastModified: number } | null = null,
 ) {
   try {
     const kind = detectFileKind(SQL, bytes);
@@ -347,6 +355,7 @@ async function openCatalogFromBytes(
       db = result.db;
       activeImageId = currentImages()[0]?.id ?? null;
       openedFileHandle = null;
+      openedFileStamp = null;
       resetTransientEditState();
       mobileTab = "images"; // fresh catalog — start from the image list
       setStatus(
@@ -357,6 +366,7 @@ async function openCatalogFromBytes(
       const meta = readMeta(db);
       activeImageId = currentImages()[0]?.id ?? null;
       openedFileHandle = handle;
+      openedFileStamp = handle ? fileStamp : null;
       resetTransientEditState();
       mobileTab = "images"; // fresh catalog — start from the image list
       setStatus(`Opened catalog "${meta.catalogName}".`);
@@ -377,7 +387,10 @@ async function actionOpenCatalogClicked(fallbackInput: HTMLInputElement) {
       const [handle] = await window.showOpenFilePicker({ types: [CATALOG_PICKER_TYPE] });
       if (!handle) return;
       const file = await handle.getFile();
-      await openCatalogFromBytes(new Uint8Array(await file.arrayBuffer()), handle, baseName(file.name));
+      await openCatalogFromBytes(new Uint8Array(await file.arrayBuffer()), handle, baseName(file.name), {
+        size: file.size,
+        lastModified: file.lastModified,
+      });
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         setStatus(`Could not open file: ${(err as Error).message}`);
@@ -499,6 +512,7 @@ async function actionSave() {
         suggestedName: suggestedFileName(),
         types: [CATALOG_PICKER_TYPE],
       });
+      openedFileStamp = null; // nothing of ours on disk yet to compare against
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         setStatus(`Could not choose a save location: ${(err as Error).message}`);
@@ -508,19 +522,53 @@ async function actionSave() {
   }
 
   if (openedFileHandle) {
-    try {
-      const writable = await openedFileHandle.createWritable();
-      await writable.write(bytes as BufferSource);
-      await writable.close();
-      setStatus(`Saved "${openedFileHandle.name}".`);
-    } catch (err) {
-      setStatus(`Could not save: ${(err as Error).message}`);
+    if (openedFileStamp && (await fileChangedOnDisk(openedFileHandle, openedFileStamp))) {
+      askConfirm(
+        `"${openedFileHandle.name}" changed since you opened it — probably saved by someone else in the meantime. Overwrite it with your changes anyway? ("Export a copy…" keeps both instead of choosing.)`,
+        () => void writeToOpenedHandle(bytes),
+      );
+      return;
     }
+    await writeToOpenedHandle(bytes);
     return;
   }
 
   downloadBytes(bytes);
   setStatus('Downloaded a copy (this browser can\'t save in place — "Open catalog…" it again next time).');
+}
+
+/**
+ * True if the file's size or modification time no longer match what we last
+ * read or wrote — cheap metadata only (File System Access API gives this
+ * without touching content), so it stays fast even on a multi-hundred-MB
+ * catalog. Not a byte-for-byte guarantee, but enough to catch the case that
+ * actually happens: someone else's Save landing while we were still editing.
+ */
+async function fileChangedOnDisk(
+  handle: FileSystemFileHandle,
+  stamp: { size: number; lastModified: number },
+): Promise<boolean> {
+  try {
+    const current = await handle.getFile();
+    return current.size !== stamp.size || current.lastModified !== stamp.lastModified;
+  } catch {
+    return false; // can't check right now — proceed rather than block Save entirely
+  }
+}
+
+/** Writes to openedFileHandle and refreshes openedFileStamp to match what's now on disk. */
+async function writeToOpenedHandle(bytes: Uint8Array) {
+  if (!openedFileHandle) return;
+  try {
+    const writable = await openedFileHandle.createWritable();
+    await writable.write(bytes as BufferSource);
+    await writable.close();
+    const saved = await openedFileHandle.getFile();
+    openedFileStamp = { size: saved.size, lastModified: saved.lastModified };
+    setStatus(`Saved "${openedFileHandle.name}".`);
+  } catch (err) {
+    setStatus(`Could not save: ${(err as Error).message}`);
+  }
 }
 
 // ---------- actions: images ----------
