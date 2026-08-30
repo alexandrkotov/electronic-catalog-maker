@@ -142,16 +142,54 @@ body {
 }
 
 .panel-images li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
   padding: 0.4rem 0.5rem;
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.85rem;
+}
+
+.image-list-name {
   word-break: break-word;
 }
 
 .panel-images li.active {
   background: var(--accent);
   color: white;
+}
+
+.image-list-delete {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  padding: 0 0.3rem;
+  border-radius: 3px;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: #b91c1c;
+  cursor: pointer;
+}
+
+.image-list-delete:hover:not(:disabled) {
+  background: rgba(185, 28, 28, 0.15);
+}
+
+.image-list-delete:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* Red-on-blue reads worse than red-on-white — lighten it to stay legible
+   once the row itself goes solid blue for the active image. */
+.panel-images li.active .image-list-delete {
+  color: #fecaca;
+}
+
+.panel-images li.active .image-list-delete:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .image-folder {

@@ -11,6 +11,7 @@ import {
   DEFAULT_CART_CHECKOUT_BASE_URL,
   DEFAULT_CART_ID_PATTERN,
   DEFAULT_CART_ITEM_PARAM,
+  deleteImage,
   deleteLink,
   deleteRow,
   detectFileKind,
@@ -29,6 +30,7 @@ import {
   applyTheme,
   currentTheme,
   toggleTheme,
+  rowExistsForUrl,
   searchRows,
   setUpPwa,
   updateImage,
@@ -84,6 +86,9 @@ let lastRenderedImageId: number | null = null;
 // anyway?" fail silently with no visible error. This never touches the
 // browser's native dialog API, so it can't be suppressed that way.
 let pendingConfirmation: { message: string; onConfirm: () => void } | null = null;
+// Same idea as pendingConfirmation above, but for a plain "this isn't
+// allowed, here's why" notice with nothing to confirm — see notify().
+let pendingNotice: string | null = null;
 // "Copy remote catalog…" dialog state — fetches a catalog hosted at a URL
 // and opens it with no file handle attached (openCatalogFromBytes(bytes,
 // null)), so it behaves exactly like a freshly-imported copy: editable
@@ -253,6 +258,11 @@ function startColumnResize(evt: MouseEvent, tableKey: ColTableKey, colIndex: num
 
 function askConfirm(message: string, onConfirm: () => void) {
   pendingConfirmation = { message, onConfirm };
+  render();
+}
+
+function notify(message: string) {
+  pendingNotice = message;
   render();
 }
 
@@ -562,6 +572,35 @@ function actionUpdateImageMeta() {
   setStatus(`Updated "${name}".`);
 }
 
+/**
+ * Deletes an image — blocked entirely while it still has any hotspot on it
+ * (the list's × is disabled for exactly that reason, this is just the
+ * defense-in-depth backstop). By the time this runs there's normally
+ * nothing else attached, but a row can in rare cases still reference this
+ * image without a hotspot of its own (see deleteImage()'s doc comment), so
+ * that's called out too when it applies.
+ */
+function actionDeleteImage(imageId: number) {
+  if (!db) return;
+  const image = currentImages().find((i) => i.id === imageId);
+  const linkCount = listLinksForImage(db, imageId).length;
+  if (linkCount > 0) {
+    notify(`Can't delete "${image?.name ?? "this image"}" — it still has ${linkCount} hotspot${linkCount === 1 ? "" : "s"} on it.`);
+    return;
+  }
+  const rowCount = listRowsForImage(db, imageId).length;
+  const consequence = rowCount ? ` It still has ${rowCount} data row${rowCount === 1 ? "" : "s"} with no hotspot, which go with it.` : "";
+  askConfirm(`Delete "${image?.name ?? "this image"}"?${consequence} This can't be undone.`, () => {
+    if (!db) return;
+    deleteImage(db, imageId);
+    if (activeImageId === imageId) {
+      activeImageId = currentImages()[0]?.id ?? null;
+      resetTransientEditState();
+    }
+    setStatus(`Deleted "${image?.name ?? "image"}".`);
+  });
+}
+
 function actionSelectImage(id: number) {
   activeImageId = id;
   resetTransientEditState();
@@ -857,22 +896,32 @@ function actionUpdateLink(name: string, url: string) {
   }
 }
 
+/**
+ * Deleting a hotspot is blocked outright while a data row still uses its
+ * url — otherwise the row would silently disappear along with it. Delete
+ * the table row first (it's a separate, deliberate action — see
+ * actionDeleteRow()); the hotspot is then a bare, unassigned one and this
+ * can delete it.
+ */
 function actionDeleteLink() {
-  if (!db || editingLinkId === null) return;
+  if (!db || editingLinkId === null || activeImageId === null) return;
   const linkId = editingLinkId;
-  askConfirm(
-    "Delete this hotspot? Its data row is deleted too, unless another hotspot still shares it. This can't be undone.",
-    () => {
-      if (!db) return;
-      try {
-        deleteLink(db, linkId);
-        editingLinkId = null;
-        setStatus("Link deleted.");
-      } catch (err) {
-        setStatus(`Could not delete link: ${(err as Error).message}`);
-      }
-    },
-  );
+  const link = listLinksForImage(db, activeImageId).find((l) => l.id === linkId);
+  if (!link) return;
+  if (rowExistsForUrl(db, link.url)) {
+    notify(`Can't delete this hotspot — its table row ("${link.url}") is still there. Delete the row first.`);
+    return;
+  }
+  askConfirm("Delete this hotspot? This can't be undone.", () => {
+    if (!db) return;
+    try {
+      deleteLink(db, linkId);
+      editingLinkId = null;
+      setStatus("Link deleted.");
+    } catch (err) {
+      setStatus(`Could not delete link: ${(err as Error).message}`);
+    }
+  });
 }
 
 function actionCancelEditLink() {
@@ -1056,6 +1105,7 @@ function render() {
     </div>
 
     ${renderConfirmOverlay()}
+    ${renderNoticeOverlay()}
     ${renderRemoteDialog()}
     ${renderStoreSettingsDialog()}
   `;
@@ -1079,16 +1129,37 @@ function render() {
 function renderImageList(images: CatalogImage[]): string {
   return groupImagesByFolder(images)
     .map((group) => {
-      const items = group.images
-        .map(
-          (img) =>
-            `<li data-id="${img.id}" class="${img.id === activeImageId ? "active" : ""}">${escapeHtml(img.name)}</li>`,
-        )
-        .join("");
+      const items = group.images.map((img) => renderImageListItem(img)).join("");
       if (group.folder === "") return `<ul class="image-list">${items}</ul>`;
       return `<div class="image-folder"><div class="image-folder-name">${escapeHtml(group.folder)}</div><ul class="image-list">${items}</ul></div>`;
     })
     .join("");
+}
+
+/**
+ * The × only deletes when the image has zero hotspots left — otherwise it's
+ * disabled with a title listing exactly what's still attached, so there's
+ * always somewhere else to look before deleting an image out from under
+ * live data (see deleteImage()'s doc comment for why that matters).
+ */
+function renderImageListItem(img: CatalogImage): string {
+  const links = db ? listLinksForImage(db, img.id) : [];
+  const blocked = links.length > 0;
+  const title = blocked
+    ? `Can't delete — ${links.length} hotspot${links.length === 1 ? "" : "s"} still attached: ${links.map((l) => l.name).join(", ")}`
+    : `Delete "${img.name}"`;
+  return `
+    <li data-id="${img.id}" class="${img.id === activeImageId ? "active" : ""}">
+      <span class="image-list-name">${escapeHtml(img.name)}</span>
+      <button
+        type="button"
+        class="image-list-delete"
+        data-delete-id="${img.id}"
+        title="${escapeHtml(title)}"
+        ${blocked ? "disabled" : ""}
+      >×</button>
+    </li>
+  `;
 }
 
 function renderImageForm(image: CatalogImage, allImages: CatalogImage[]): string {
@@ -1130,6 +1201,26 @@ function renderConfirmOverlay(): string {
         <div class="confirm-actions">
           <button id="btn-confirm-no">Cancel</button>
           <button id="btn-confirm-yes">OK</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * A single-button variant of the confirm overlay, for "this isn't allowed,
+ * here's why" notices (e.g. deleting a hotspot whose row is still there) —
+ * the status bar's corner text is too easy to miss for something that
+ * blocked what the person just tried to do.
+ */
+function renderNoticeOverlay(): string {
+  if (!pendingNotice) return "";
+  return `
+    <div class="confirm-overlay">
+      <div class="confirm-box">
+        <p>${escapeHtml(pendingNotice)}</p>
+        <div class="confirm-actions">
+          <button id="btn-notice-ok">OK</button>
         </div>
       </div>
     </div>
@@ -1427,6 +1518,10 @@ function wireEvents(links: CatalogLink[]) {
     pendingConfirmation = null;
     render();
   });
+  document.getElementById("btn-notice-ok")?.addEventListener("click", () => {
+    pendingNotice = null;
+    render();
+  });
 
   document.getElementById("btn-theme")?.addEventListener("click", () => {
     toggleTheme();
@@ -1532,6 +1627,12 @@ function wireEvents(links: CatalogLink[]) {
 
   document.querySelectorAll<HTMLLIElement>(".panel-images li[data-id]").forEach((li) => {
     li.addEventListener("click", () => actionSelectImage(Number(li.dataset.id)));
+  });
+  document.querySelectorAll<HTMLButtonElement>(".image-list-delete").forEach((btn) => {
+    btn.addEventListener("click", (evt) => {
+      evt.stopPropagation(); // don't also trigger the <li>'s own click (select image)
+      actionDeleteImage(Number(btn.dataset.deleteId));
+    });
   });
 
   document.querySelectorAll<HTMLButtonElement>(".mobile-tab-btn").forEach((btn) => {
