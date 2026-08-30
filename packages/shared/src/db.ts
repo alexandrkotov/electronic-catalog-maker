@@ -309,6 +309,21 @@ export function updateImage(db: Database, imageId: number, input: UpdateImageInp
   stmt.free();
 }
 
+/**
+ * Deletes an image along with every hotspot and data row that lives on it.
+ * The schema declares ON DELETE CASCADE for both, but sql.js doesn't
+ * enforce foreign keys itself (same reason deleteLink() below does its own
+ * cascade), so this does it by hand. A row deleted this way may still be
+ * referenced by a hotspot on a *different* image (the many-to-one design —
+ * see schema.ts) — that hotspot is left in place, just unassigned from any
+ * data, the same outcome deleteRow() already produces on its own.
+ */
+export function deleteImage(db: Database, imageId: number): void {
+  db.run("DELETE FROM rows WHERE image_id = ?", [imageId]);
+  db.run("DELETE FROM links WHERE image_id = ?", [imageId]);
+  db.run("DELETE FROM images WHERE id = ?", [imageId]);
+}
+
 export interface AddLinkInput {
   imageId: number;
   name: string;
@@ -387,7 +402,8 @@ function linkExistsForUrl(db: Database, url: string): boolean {
   return exists;
 }
 
-function rowExistsForUrl(db: Database, url: string): boolean {
+/** True if a data row exists for this url — i.e. this url isn't just a bare, unassigned hotspot. */
+export function rowExistsForUrl(db: Database, url: string): boolean {
   const stmt = db.prepare("SELECT id FROM rows WHERE url = ?");
   stmt.bind([url]);
   const exists = stmt.step();
