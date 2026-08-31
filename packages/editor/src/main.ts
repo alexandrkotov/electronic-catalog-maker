@@ -30,6 +30,7 @@ import {
   applyTheme,
   currentTheme,
   toggleTheme,
+  findRowByUrl,
   rowExistsForUrl,
   searchRows,
   setUpPwa,
@@ -47,6 +48,18 @@ import {
   type SqlJsStatic,
 } from "@ecm/shared";
 import { slugify } from "./slugify";
+import {
+  CollabConnection,
+  createRoom,
+  deleteRoom,
+  downloadSnapshot,
+  listOpsSince,
+  type CollabClosedReason,
+  type CollabStatus,
+  type Op,
+  type PresenceUser,
+} from "./collab";
+import { clearOutbox, loadOutbox, saveOutbox, type QueuedOp } from "./collabStore";
 
 // Applied before the first render so there's no flash of the wrong theme.
 applyTheme(resolveInitialTheme());
@@ -64,6 +77,35 @@ const CATALOG_PICKER_TYPE: FilePickerAcceptType = {
   accept: { "application/x-sqlite3": [`.${CATALOG_FILE_EXTENSION}`, ".sch"] },
 };
 
+// There's no maintainer-hosted default collab server — self-hosting is the
+// only model (see the project's collaboration-hosting design notes). This
+// defaults to the standalone @ecm/collab-server app's own default local
+// port, so a fresh install of both just works together with nothing to
+// configure by hand — actionStartCollaboration() auto-detects a running
+// instance rather than relying on this being set correctly ahead of time;
+// this value mainly matters as what a fresh join or reconnect uses (set
+// from a shared link's `server=` param — see below — or the manual address
+// from the "can't find a collaboration server" dialog's escape hatch).
+const DEFAULT_COLLAB_SERVER_URL = "http://127.0.0.1:8787";
+let collabServerUrl = loadCollabServerUrl();
+
+function loadCollabServerUrl(): string {
+  try {
+    return localStorage.getItem("ecm-editor-collab-server-url") || DEFAULT_COLLAB_SERVER_URL;
+  } catch {
+    return DEFAULT_COLLAB_SERVER_URL; // localStorage unavailable (privacy mode, etc.)
+  }
+}
+
+function saveCollabServerUrl(url: string) {
+  collabServerUrl = url;
+  try {
+    localStorage.setItem("ecm-editor-collab-server-url", url);
+  } catch {
+    // Still applies for this session, just won't persist across a reload.
+  }
+}
+
 let SQL: SqlJsStatic;
 let db: Database | null = null;
 let activeImageId: number | null = null;
@@ -75,6 +117,39 @@ let statusMessage = "";
 // Set when the catalog was opened (or first saved) via the File System
 // Access API, so subsequent Save calls can overwrite it in place.
 let openedFileHandle: FileSystemFileHandle | null = null;
+// Size + last-modified time of openedFileHandle's contents as of the last
+// time *we* read or wrote it — cheap metadata, not a hash, so it stays fast
+// even on a multi-hundred-MB catalog. Save compares this against the file's
+// current stamp right before overwriting, so a second editor's save (or
+// anyone else touching the same file) gets caught instead of silently lost.
+// Null whenever there's nothing on disk yet to compare against.
+let openedFileStamp: { size: number; lastModified: number } | null = null;
+// ---------- live collaboration (Phase 2) ----------
+// Non-null exactly while this tab is connected to a shared session. While
+// it's set, this tab's own edits are sent to the room (see
+// applyAndBroadcast below) instead of only ever landing in this tab.
+let collab: CollabConnection | null = null;
+let collabRoomId: string | null = null;
+let collabStatus: CollabStatus = "disconnected";
+// Set only by beginCollaboration() (a joiner never gets one — see
+// actionJoinCollaboration) and never persisted across a reload. Its only
+// use is actionEndSessionForEveryone() (Phase 6) — also what the toolbar's
+// "End for everyone" button being shown at all is conditioned on, since
+// only its actual holder can end the session for everyone else.
+let collabOwnerToken: string | null = null;
+// The highest op seq applied so far — lets a fresh join or reconnect ask
+// the room for only what it's missing (see connectAndSync).
+let lastAppliedSeq = 0;
+// ---------- reconnect / offline outbox (Phase 3) ----------
+// Edits made while collabStatus isn't "connected" — applied locally right
+// away like any edit (see applyAndBroadcast), but held here instead of
+// sent, until a (re)connection is caught up enough to check each one for a
+// real conflict before resending it (see drainOutbox). Persisted to
+// IndexedDB (collabStore.ts) so it survives a reload, not just a blip.
+let outbox: QueuedOp[] = [];
+// Set only on an *unexpected* drop (never on an explicit Leave — see
+// actionLeaveCollaboration), so a retry doesn't fight a deliberate exit.
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 // render() replaces #app's innerHTML wholesale, which recreates #stage-scroll
 // from scratch (a fresh element always starts scrolled to 0,0) — tracked so
 // render() can restore the pan position instead of losing it on every
@@ -118,6 +193,111 @@ let storeSettingsCartMode: "accumulate" | "instant" = "accumulate";
 let storeSettingsCartIdPattern = DEFAULT_CART_ID_PATTERN;
 let storeSettingsCartItemParam = DEFAULT_CART_ITEM_PARAM;
 let storeSettingsCartCheckoutBaseUrl = DEFAULT_CART_CHECKOUT_BASE_URL;
+
+// "Can't find a collaboration server" dialog — shown when
+// actionStartCollaboration()'s auto-detect (see detectLocalCollabServer)
+// can't find a running @ecm/collab-server app on any port it might
+// plausibly be using. Lets a person retry (after actually starting the
+// app) or type in an address by hand for the rare case it's running
+// somewhere auto-detect can't reach (a different computer, a custom port).
+let collabNotFoundOpen = false;
+let collabManualUrlValue = "";
+
+// ---------- presence (Phase 5) ----------
+// A small fixed palette rather than an arbitrary generated color — every
+// entry is dark/saturated enough to stay readable with white avatar text
+// (see renderPresenceAvatar), and every entry is a plain `#rrggbb`, which
+// is also the exact shape collab-server/src/server.ts's sanitizeColor()
+// (and this file's own sanitizePresenceColor(), for a color that arrived
+// over the wire from a peer instead of from here) requires.
+const PRESENCE_COLORS = [
+  "#e63946",
+  "#f77f00",
+  "#2a9d8f",
+  "#264653",
+  "#3a86ff",
+  "#8338ec",
+  "#d90429",
+  "#588157",
+  "#ae2012",
+  "#6a4c93",
+];
+
+// Set once per joined session (see initPresenceIdentity, called when the
+// "join as…" name dialog is confirmed) — null whenever this tab isn't
+// currently part of a shared session. Regenerated fresh on every new
+// start/join, including a rejoin after Leave, matching the plan's "a
+// persistent color for the whole session" (not across separate sessions).
+let collabClientId: string | null = null;
+let collabDisplayName = "";
+let collabColor = "";
+// The room's currently-active participants, as last reported by the server
+// (see connectAndSync's onPresence callback) — kept around across a brief
+// reconnect blip rather than cleared, so the roster doesn't flicker empty
+// for every dropped connection, only genuinely updates when the server next
+// says otherwise.
+let collabPresence: PresenceUser[] = [];
+
+// "Join as…" name dialog — shown once, right before a brand-new
+// start/join actually happens (see promptForCollabNameThen), not on every
+// reconnect: the identity it establishes is reused for the rest of that
+// session's connectAndSync calls.
+let collabNameDialogOpen = false;
+let collabNameValue = "";
+let collabNameDialogOnConfirm: (() => void) | null = null;
+
+function loadCollabDisplayName(): string {
+  try {
+    return localStorage.getItem("ecm-editor-collab-display-name") ?? "";
+  } catch {
+    return ""; // localStorage unavailable (privacy mode, etc.)
+  }
+}
+
+function saveCollabDisplayName(name: string) {
+  try {
+    localStorage.setItem("ecm-editor-collab-display-name", name);
+  } catch {
+    // Still applies for this session, just won't be pre-filled next time.
+  }
+}
+
+function initPresenceIdentity(name: string) {
+  collabClientId = crypto.randomUUID();
+  collabDisplayName = name;
+  collabColor = PRESENCE_COLORS[Math.floor(Math.random() * PRESENCE_COLORS.length)]!;
+  saveCollabDisplayName(name);
+}
+
+/**
+ * Tab visible + recent mouse/keyboard activity — the same "real visitor vs
+ * abandoned tab" idea a lot of secured sites already use for their own
+ * session timeouts (see the plan doc for Phase 5), not merely "the socket
+ * is open". Module-level and wired once (see the bottom of this file),
+ * regardless of whether a shared session is currently open — cheap either
+ * way, and it means the very first presence-hello (right after connecting)
+ * already reflects a real, current reading instead of a hardcoded "true".
+ */
+const PRESENCE_IDLE_TIMEOUT_MS = 60_000;
+let lastActivityAt = Date.now();
+let presenceActive = true;
+
+function isPresenceActive(): boolean {
+  return document.visibilityState === "visible" && Date.now() - lastActivityAt < PRESENCE_IDLE_TIMEOUT_MS;
+}
+
+function notePresenceActivity() {
+  lastActivityAt = Date.now();
+  reconcilePresenceActive();
+}
+
+/** Only actually sends anything when the active/idle reading has flipped — called far more often than that (every mouse move), so this is what keeps that cheap. */
+function reconcilePresenceActive() {
+  const next = isPresenceActive();
+  if (next === presenceActive) return;
+  presenceActive = next;
+  if (collab && collabRoomId) collab.sendPresenceActive(presenceActive);
+}
 
 // Which single panel is shown below the mobile breakpoint (see .mobile-tabs
 // / #app[data-mobile-tab] in style.css) — irrelevant above it, where all
@@ -273,11 +453,23 @@ function notify(message: string) {
 // the address bar: matches "Copy remote catalog…"'s existing semantics
 // (an unattached copy to edit, not a live link back to the source).
 const initialSrcParam = new URLSearchParams(location.search).get("src");
+// `?collab=<roomId>` joins a shared session automatically on load — the
+// link actionStartCollaboration() hands the initiator to pass along.
+const initialCollabParam = new URLSearchParams(location.search).get("collab");
+// `&server=<url>` rides along with it — the self-hosted server that room
+// actually lives on isn't a fixed address the way a maintainer-hosted
+// default would be, so the link has to carry it. Adopted as this tab's own
+// collabServerUrl too (not just used for this one join) so a later
+// reconnect or reload of this same tab still knows where to look.
+const initialCollabServerParam = new URLSearchParams(location.search).get("server");
 
 async function boot() {
   app.innerHTML = `<p style="padding:1rem">Loading SQLite (sql.js)…</p>`;
   SQL = await initSqlite(wasmUrl);
-  if (initialSrcParam) {
+  if (initialCollabParam) {
+    if (initialCollabServerParam) saveCollabServerUrl(initialCollabServerParam);
+    promptForCollabNameThen(() => void actionJoinCollaboration(initialCollabParam));
+  } else if (initialSrcParam) {
     await loadInitialFromUrl(initialSrcParam);
   } else {
     render();
@@ -347,7 +539,12 @@ async function openCatalogFromBytes(
   bytes: Uint8Array,
   handle: FileSystemFileHandle | null,
   sourceName = "Legacy catalog",
+  fileStamp: { size: number; lastModified: number } | null = null,
 ) {
+  // Opening a different local file while still connected to a shared
+  // session for a *different* catalog would silently keep sending that
+  // session edits meant for this new one — leave it instead of guessing.
+  if (collab) actionLeaveCollaboration();
   try {
     const kind = detectFileKind(SQL, bytes);
     if (kind === "legacy-sch") {
@@ -357,6 +554,7 @@ async function openCatalogFromBytes(
       db = result.db;
       activeImageId = currentImages()[0]?.id ?? null;
       openedFileHandle = null;
+      openedFileStamp = null;
       resetTransientEditState();
       mobileTab = "images"; // fresh catalog — start from the image list
       setStatus(
@@ -367,6 +565,7 @@ async function openCatalogFromBytes(
       const meta = readMeta(db);
       activeImageId = currentImages()[0]?.id ?? null;
       openedFileHandle = handle;
+      openedFileStamp = handle ? fileStamp : null;
       resetTransientEditState();
       mobileTab = "images"; // fresh catalog — start from the image list
       setStatus(`Opened catalog "${meta.catalogName}".`);
@@ -387,7 +586,10 @@ async function actionOpenCatalogClicked(fallbackInput: HTMLInputElement) {
       const [handle] = await window.showOpenFilePicker({ types: [CATALOG_PICKER_TYPE] });
       if (!handle) return;
       const file = await handle.getFile();
-      await openCatalogFromBytes(new Uint8Array(await file.arrayBuffer()), handle, baseName(file.name));
+      await openCatalogFromBytes(new Uint8Array(await file.arrayBuffer()), handle, baseName(file.name), {
+        size: file.size,
+        lastModified: file.lastModified,
+      });
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         setStatus(`Could not open file: ${(err as Error).message}`);
@@ -461,7 +663,7 @@ function actionCancelStoreSettings() {
 
 function actionSubmitStoreSettings() {
   if (!db) return;
-  updateStoreSettings(db, {
+  applyAndBroadcast("updateStoreSettings", updateStoreSettings, {
     storeUrl: storeSettingsUrlValue.trim(),
     cartMode: storeSettingsCartMode,
     cartIdPattern: storeSettingsCartIdPattern.trim() || DEFAULT_CART_ID_PATTERN,
@@ -470,6 +672,25 @@ function actionSubmitStoreSettings() {
   });
   storeSettingsOpen = false;
   setStatus("Updated store settings.");
+}
+
+function actionCancelCollabNotFound() {
+  collabNotFoundOpen = false;
+  render();
+}
+
+/** Retries the whole auto-detect from scratch — the normal "I started the app, now let me try again" path. */
+async function actionRetryCollabDetect() {
+  collabNotFoundOpen = false;
+  await actionStartCollaboration();
+}
+
+/** The "it's running somewhere auto-detect can't reach" escape hatch — skips detection entirely and goes straight to using the typed address. */
+function actionUseManualCollabUrl() {
+  const url = collabManualUrlValue.trim();
+  if (!url) return;
+  collabNotFoundOpen = false;
+  void beginCollaboration(url);
 }
 
 function suggestedFileName(): string {
@@ -509,6 +730,7 @@ async function actionSave() {
         suggestedName: suggestedFileName(),
         types: [CATALOG_PICKER_TYPE],
       });
+      openedFileStamp = null; // nothing of ours on disk yet to compare against
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         setStatus(`Could not choose a save location: ${(err as Error).message}`);
@@ -518,19 +740,707 @@ async function actionSave() {
   }
 
   if (openedFileHandle) {
-    try {
-      const writable = await openedFileHandle.createWritable();
-      await writable.write(bytes as BufferSource);
-      await writable.close();
-      setStatus(`Saved "${openedFileHandle.name}".`);
-    } catch (err) {
-      setStatus(`Could not save: ${(err as Error).message}`);
+    if (openedFileStamp && (await fileChangedOnDisk(openedFileHandle, openedFileStamp))) {
+      askConfirm(
+        `"${openedFileHandle.name}" changed since you opened it — probably saved by someone else in the meantime. Overwrite it with your changes anyway? ("Export a copy…" keeps both instead of choosing.)`,
+        () => void writeToOpenedHandle(bytes),
+      );
+      return;
     }
+    await writeToOpenedHandle(bytes);
     return;
   }
 
   downloadBytes(bytes);
   setStatus('Downloaded a copy (this browser can\'t save in place — "Open catalog…" it again next time).');
+}
+
+/**
+ * True if the file's size or modification time no longer match what we last
+ * read or wrote — cheap metadata only (File System Access API gives this
+ * without touching content), so it stays fast even on a multi-hundred-MB
+ * catalog. Not a byte-for-byte guarantee, but enough to catch the case that
+ * actually happens: someone else's Save landing while we were still editing.
+ */
+async function fileChangedOnDisk(
+  handle: FileSystemFileHandle,
+  stamp: { size: number; lastModified: number },
+): Promise<boolean> {
+  try {
+    const current = await handle.getFile();
+    return current.size !== stamp.size || current.lastModified !== stamp.lastModified;
+  } catch {
+    return false; // can't check right now — proceed rather than block Save entirely
+  }
+}
+
+/** Writes to openedFileHandle and refreshes openedFileStamp to match what's now on disk. */
+async function writeToOpenedHandle(bytes: Uint8Array) {
+  if (!openedFileHandle) return;
+  try {
+    const writable = await openedFileHandle.createWritable();
+    await writable.write(bytes as BufferSource);
+    await writable.close();
+    const saved = await openedFileHandle.getFile();
+    openedFileStamp = { size: saved.size, lastModified: saved.lastModified };
+    setStatus(`Saved "${openedFileHandle.name}".`);
+  } catch (err) {
+    setStatus(`Could not save: ${(err as Error).message}`);
+  }
+}
+
+// ---------- actions: live collaboration ----------
+
+/**
+ * Every @ecm/shared mutation an operation is allowed to name — deliberately
+ * a fixed allowlist keyed by name, not "call whatever function string
+ * arrives", since the room relays whatever any connected tab sends.
+ * Each one is the *exact* function already used for local edits elsewhere
+ * in this file (see the "actions: images"/"hotspots"/etc. sections below)
+ * — that reuse is the whole point (see room.ts's class doc on the server).
+ */
+const OP_HANDLERS: Record<string, (db: Database, ...args: never[]) => unknown> = {
+  addImage,
+  updateImage,
+  deleteImage,
+  addLink,
+  updateLink,
+  deleteLink,
+  updateLinkPosition,
+  addRow,
+  updateRow,
+  deleteRow,
+  updateStoreSettings,
+};
+
+/**
+ * Calls one of the functions above and shares the same call with the room
+ * — sent immediately if connected, queued in the outbox otherwise (see
+ * shareOp). `db` is deliberately not part of what's shared — every tab
+ * (including the one that receives this later) supplies its own local one.
+ */
+function applyAndBroadcast<Args extends unknown[], R>(fnName: string, fn: (db: Database, ...args: Args) => R, ...args: Args): R {
+  const result = fn(db as Database, ...args);
+  shareOp(fnName, args);
+  return result;
+}
+
+/**
+ * Same idea, for addImage/addLink/addRow specifically: they hand back a
+ * new row's id (assigned by SQLite's autoincrement locally), and a later
+ * op might target that exact row (an edit, a delete) — so every other tab
+ * has to land it at the *same* id, not its own independently-assigned one.
+ * The broadcast args carry the id explicitly; addImage/addLink/addRow all
+ * accept it as `input.id` to insert at a specific id instead of a fresh one.
+ *
+ * While in a shared session, that id is a large random number, not this
+ * tab's own next autoincrement value — a real bug found by actually
+ * testing the offline case: two tabs both offline, each adding a record
+ * around the same time, independently compute the *same* next id from
+ * their own copy of the database (same starting point, same "next free
+ * id" arithmetic) — a real primary-key collision once they reconnect and
+ * try to apply each other's add. Outside a shared session this is unused
+ * and plain autoincrement applies, same as ever.
+ */
+function applyAddAndBroadcast<Input extends { id?: number }>(
+  fnName: string,
+  fn: (db: Database, input: Input) => number,
+  input: Input,
+): number {
+  if (collabRoomId && input.id === undefined) {
+    input = { ...input, id: Math.floor(Math.random() * 0x7fffffff) + 1 };
+  }
+  const id = fn(db as Database, input);
+  shareOp(fnName, [{ ...input, id }]);
+  return id;
+}
+
+/**
+ * Sends this tab's own edit to the room right away if connected; otherwise
+ * queues it in the outbox to resend (or flag as a conflict) once a
+ * connection is caught up enough to check it — see drainOutbox(). A no-op
+ * outside any shared session at all (collabRoomId null): plain local
+ * editing was never touched by any of this.
+ */
+function shareOp(fn: string, args: unknown[]) {
+  if (!collabRoomId) return;
+  if (collab?.status === "connected") {
+    collab.sendOp(fn, args);
+  } else {
+    outbox.push({ fn, args });
+    void saveOutbox(collabRoomId, outbox);
+    updateCollabStatusDisplay(); // reflects the new pending count without disturbing whatever else is on screen
+  }
+}
+
+/**
+ * The record one op targets, for drainOutbox()'s conflict check. Null for
+ * most adds — a brand-new record generally can't collide with one that
+ * already existed. addRow is the one exception: rows.url is unique, and
+ * two people offline at once, each filling in the *same* still-bare
+ * hotspot's data, both call addRow for that same url — a real conflict a
+ * blind resend doesn't survive (rows.url's uniqueness rejects the second
+ * insert). Keyed by url, not id, since that's the field the constraint —
+ * and the actual collision — is on.
+ */
+function opTarget(fn: string, args: unknown[]): string | null {
+  switch (fn) {
+    case "updateRow":
+    case "deleteRow":
+      return `rows:${args[0]}`;
+    case "updateLink":
+    case "deleteLink":
+    case "updateLinkPosition":
+      return `links:${args[0]}`;
+    case "updateImage":
+    case "deleteImage":
+      return `images:${args[0]}`;
+    case "updateStoreSettings":
+      return "storeSettings"; // catalog-wide, not keyed by id
+    case "addRow":
+      return `rows:url:${(args[0] as { url: string }).url}`;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Applies one op relayed from someone else (or replayed from the log) —
+ * never re-sent, that would echo it right back out.
+ *
+ * addRow gets special handling: rows.url is unique, and this tab may have
+ * *its own* not-yet-sent local row for the same url (both offline at once,
+ * both filling in the same still-bare hotspot — the mirror image of what
+ * applyQueuedOpAsOverwrite handles for the outbox side). Inserting theirs
+ * straight would crash on that uniqueness.
+ *
+ * A first version of this fix just updated the existing local row's
+ * *values* in place, keeping this tab's own id — which is exactly wrong:
+ * this tab's row and the other tab's row were independently created with
+ * *different* ids, and a later op (an edit, a delete) targets a row by id.
+ * Updating in place left every peer privately disagreeing about what id
+ * that row actually has — an op that resolved a conflict correctly on the
+ * sender's own copy then silently matched nothing on everyone else's,
+ * since their `rows` table has no row at that id at all. The fix is to
+ * drop this tab's own row and insert theirs — same id everywhere, not
+ * just same values — so a later reference to it by id resolves the same
+ * way on every connected tab, this tab's own included.
+ */
+function applyRemoteOp(op: Op) {
+  if (op.seq <= lastAppliedSeq) return; // already applied — the join replay and the live buffer can overlap, see connectAndSync
+  if (!db) {
+    lastAppliedSeq = op.seq;
+    return;
+  }
+  try {
+    if (op.fn === "addRow") {
+      const input = op.args[0] as Parameters<typeof addRow>[1];
+      const existing = findRowByUrl(db, input.url);
+      if (existing && existing.id !== input.id) {
+        deleteRow(db, existing.id);
+        addRow(db, input);
+      } else if (!existing) {
+        addRow(db, input);
+      }
+      // existing && existing.id === input.id: already there under the same id — nothing to do.
+    } else {
+      const handler = OP_HANDLERS[op.fn];
+      if (!handler) {
+        lastAppliedSeq = op.seq; // unrecognized fn — nothing to apply, but still move past it
+        return;
+      }
+      handler(db, ...(op.args as never[]));
+    }
+  } catch (err) {
+    // A relayed op should never fail against a caught-up copy — surfacing
+    // it beats a silently half-applied change, without taking the whole
+    // tab down over one bad op. Still counted as "applied" (see below) so
+    // a permanently-failing op can't wedge every future op behind it.
+    setStatus(`Couldn't apply a change from the shared session: ${(err as Error).message}`);
+    lastAppliedSeq = op.seq;
+    return;
+  }
+  lastAppliedSeq = op.seq;
+  render();
+}
+
+/**
+ * Applies one conflicting outbox entry after the person chose "overwrite
+ * with mine". Ordinarily that just means reapplying the same op and
+ * resending it — but a conflicting addRow can't be reapplied as another
+ * addRow: rows.url is unique, and the row that already exists there (the
+ * one that "won" the conflict) is *their* row, not the local optimistic
+ * one this tab had before the replay overwrote it. So this rewrites it
+ * into an updateRow against their row's actual id instead of trying to
+ * insert a second row for the same url.
+ */
+function applyQueuedOpAsOverwrite(queued: QueuedOp) {
+  if (!db) return;
+  if (queued.fn === "addRow") {
+    const input = queued.args[0] as Parameters<typeof addRow>[1];
+    const existing = findRowByUrl(db, input.url);
+    if (existing) {
+      const update = { name: input.name ?? "", sku: input.sku ?? "", description: input.description ?? "", extra: input.extra ?? {} };
+      applyAndBroadcast("updateRow", updateRow, existing.id, update);
+      return;
+    }
+    // Their row isn't actually there after all (e.g. it was since deleted) — a normal add is safe again.
+  }
+  OP_HANDLERS[queued.fn]?.(db, ...(queued.args as never[]));
+  shareOp(queued.fn, queued.args); // not collab?.sendOp directly — see drainOutbox's note on why that's unsafe here
+}
+
+/**
+ * A short, human-readable summary of what one op actually sets — shown
+ * side by side ("yours" vs. "current") in the conflict dialog below, since
+ * a bare "something conflicts" with no values to compare left no way to
+ * tell what's actually different, or judge which one to keep.
+ */
+function describeOp(fn: string, args: unknown[]): string {
+  switch (fn) {
+    case "addRow":
+    case "updateRow": {
+      const input = (fn === "addRow" ? args[0] : args[1]) as { name?: string; sku?: string };
+      return `row — name "${input.name || "(empty)"}", SKU "${input.sku || "(empty)"}"`;
+    }
+    case "deleteRow":
+      return "row — deleted";
+    case "updateLink": {
+      const input = args[1] as { name: string; url: string };
+      return `hotspot — name "${input.name}", address "${input.url}"`;
+    }
+    case "deleteLink":
+      return "hotspot — deleted";
+    case "updateLinkPosition":
+      return `hotspot position — top ${args[1]}, left ${args[2]}`;
+    case "updateImage": {
+      const input = args[1] as { name: string; folder: string };
+      return `image — name "${input.name}"${input.folder ? `, folder "${input.folder}"` : ""}`;
+    }
+    case "deleteImage":
+      return "image — deleted";
+    case "updateStoreSettings": {
+      const input = args[0] as { storeUrl: string };
+      return `store settings — URL "${input.storeUrl}"`;
+    }
+    default:
+      return fn;
+  }
+}
+
+/**
+ * Resends (or flags as a conflict) everything queued while disconnected,
+ * now that `elseDidWhileAway` — every op this tab just learned about, from
+ * a connect/reconnect's replay — is known. An outbox entry conflicts when
+ * something in that list targets the exact same record (see opTarget()):
+ * since ops are whole-value sets, not merges, the replay above already
+ * landed *their* value in `db` by the time this runs — so the choice is
+ * really just "leave their version standing" (Cancel) vs. "put mine back
+ * and share it" (OK), not a blind resend that would silently clobber it.
+ *
+ * All conflicts are batched into one confirm dialog, not one per entry —
+ * pendingConfirmation is a single slot (see askConfirm), so firing several
+ * in a row would silently overwrite all but the last one shown. Each one
+ * lists both values (see describeOp) — a real gap the first version of
+ * this had: "something conflicts, overwrite it?" with no way to tell what
+ * actually differs isn't a real choice.
+ *
+ * Non-conflicting entries go back through shareOp(), *not* a direct
+ * collab.sendOp() — a real bug this surfaced: connectAndSync's REST catch-up
+ * call and the WebSocket's own handshake race each other with no ordering
+ * guarantee, so the socket can still be mid-handshake (not yet OPEN) right
+ * here even though a reconnect is clearly underway. sendOp() alone just
+ * drops a message it can't send; shareOp() falls back to re-queuing it
+ * instead, so a same-round-trip resend attempt can't silently vanish.
+ */
+function drainOutbox(elseDidWhileAway: Op[]) {
+  if (outbox.length === 0 || !collabRoomId) return;
+  const roomId = collabRoomId;
+  const toProcess = outbox;
+  outbox = []; // shareOp() below re-populates this with anything that couldn't actually be sent this round
+  const theirsByTarget = new Map<string, Op>();
+  for (const op of elseDidWhileAway) {
+    const target = opTarget(op.fn, op.args);
+    if (target !== null) theirsByTarget.set(target, op); // last one logged is what's actually showing after the replay above
+  }
+  const conflicting: { queued: QueuedOp; theirs: Op }[] = [];
+  for (const queued of toProcess) {
+    const target = opTarget(queued.fn, queued.args);
+    const theirs = target !== null ? theirsByTarget.get(target) : undefined;
+    if (theirs) {
+      conflicting.push({ queued, theirs });
+    } else {
+      shareOp(queued.fn, queued.args);
+    }
+  }
+  if (conflicting.length > 0) {
+    const n = conflicting.length;
+    const details = conflicting
+      .map(({ queued, theirs }) => `Yours: ${describeOp(queued.fn, queued.args)}\nCurrent: ${describeOp(theirs.fn, theirs.args)}`)
+      .join("\n\n");
+    askConfirm(
+      `While you were disconnected, someone else also changed ${n === 1 ? "something" : `${n} things`} you also edited:\n\n${details}\n\nOverwrite ${n === 1 ? "it" : "them"} with your offline change${n === 1 ? "" : "s"}?`,
+      () => {
+        for (const { queued } of conflicting) applyQueuedOpAsOverwrite(queued);
+        render();
+      },
+    );
+    // Cancel needs no handling — their versions already stand, nothing more to do.
+  }
+  void saveOutbox(roomId, outbox); // reflects whatever's actually left — empty in the common case
+  updateCollabStatusDisplay();
+}
+
+/**
+ * Opens the live connection and brings this tab's copy fully up to date —
+ * used right after creating a room, right after joining one, and again on
+ * every reconnect after an unexpected drop.
+ *
+ * Ordering note: CollabConnection starts delivering messages the moment
+ * it's constructed, so buffering from construction (not from some later
+ * "connected" event) is what makes this gap-free — anything logged before
+ * this tab even connects is necessarily covered by the listOpsSince() call
+ * below (which runs after construction), and anything logged after this
+ * tab connects arrives live into `pending` either way. There's no ordering
+ * requirement between the two calls for that to hold.
+ */
+async function connectAndSync(roomId: string) {
+  const pending: Op[] = [];
+  let syncing = true;
+
+  collab = new CollabConnection(
+    collabServerUrl,
+    roomId,
+    (op) => {
+      if (syncing) pending.push(op);
+      else applyRemoteOp(op);
+    },
+    (users) => {
+      collabPresence = users;
+      updatePresenceRosterDisplay();
+    },
+    (reason) => handleCollabClosed(reason),
+    (status) => {
+      collabStatus = status;
+      updateCollabStatusDisplay();
+      if (status === "disconnected") scheduleReconnect(roomId);
+    },
+  );
+  collabRoomId = roomId;
+
+  // The socket's own handshake and this REST call have no ordering
+  // guarantee otherwise — waiting here is what makes drainOutbox() below
+  // safe to assume "connected really means connected", not just "the
+  // status flag says so a few milliseconds ahead of the socket itself".
+  await collab.waitUntilOpen();
+
+  // Re-announced on every reconnect too, not just the first connect — a
+  // fresh WebSocket is a fresh connection server-side even with the same
+  // clientId, so without this a reconnect would silently stay off
+  // everyone else's roster. collabClientId is only ever unset if this got
+  // called outside the normal start/join path, which shouldn't happen.
+  if (collabClientId) collab.sendPresenceHello(collabClientId, collabDisplayName, collabColor, presenceActive);
+
+  const missed = await listOpsSince(collabServerUrl, roomId, lastAppliedSeq);
+  for (const op of missed) applyRemoteOp(op);
+  syncing = false;
+  for (const op of pending) applyRemoteOp(op);
+
+  drainOutbox([...missed, ...pending]);
+}
+
+/**
+ * Retries a dropped connection after a short flat delay — no backoff, kept
+ * simple for this phase. Only ever one retry pending at a time, and only
+ * while this tab is still supposed to be in `roomId` (actionLeaveCollaboration
+ * clears collabRoomId first specifically so this becomes a no-op instead of
+ * fighting a deliberate exit).
+ */
+function scheduleReconnect(roomId: string) {
+  if (reconnectTimer !== null) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    if (collabRoomId === roomId && collabStatus !== "connected") {
+      // A retry failing (the server's still down) is the routine, expected
+      // case here, not an exceptional one — connectAndSync's REST calls
+      // rejecting shouldn't become an unhandled rejection every ~3s while
+      // genuinely offline. The next retry is already scheduled by the
+      // status callback's own "disconnected" transition either way.
+      connectAndSync(roomId).catch(() => {});
+    }
+  }, 3000);
+}
+
+// Bounded port range this tab can auto-detect a locally-running
+// @ecm/collab-server app on — must match PORT_SCAN_COUNT in
+// packages/collab-server/src/main.ts. A fully random ephemeral port (used
+// there only once this whole range is also busy, a rare case) can't be
+// scanned for from a web page; past this range, the "can't find a
+// collaboration server" dialog's manual-address field is the fallback.
+const COLLAB_AUTO_DETECT_BASE_PORT = 8787;
+const COLLAB_AUTO_DETECT_PORT_COUNT = 10;
+
+interface DetectedCollabServer {
+  /** What to actually use — the server's public tunnel address if it has one, otherwise its bare local address (still usable for this tab; see the mixed-content note on collabServerUrl above for why that's *only* useful for this tab, not a colleague's). */
+  url: string;
+  hasPublicUrl: boolean;
+}
+
+async function probeCollabServerPort(port: number): Promise<DetectedCollabServer | null> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/status.json`, { signal: AbortSignal.timeout(800) });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { publicUrl?: string | null; tunnelError?: string | null };
+    // Something answered, but not shaped like our own status.json — some
+    // unrelated local service happens to be on this port. Not our server.
+    if (!("publicUrl" in data) || !("tunnelError" in data)) return null;
+    return data.publicUrl ? { url: data.publicUrl, hasPublicUrl: true } : { url: `http://127.0.0.1:${port}`, hasPublicUrl: false };
+  } catch {
+    return null; // nothing listening there, or it didn't answer in time
+  }
+}
+
+/**
+ * Scans the bounded port range in parallel for a locally-running
+ * collab-server app. Prefers one that already has a public tunnel address
+ * (works for a colleague too); falls back to one that's up but not yet
+ * tunneled — still connecting, or its tunnel failed — since that's still
+ * usable for *this* tab even before (or without) a share link working.
+ */
+async function detectLocalCollabServer(): Promise<DetectedCollabServer | null> {
+  const ports = Array.from({ length: COLLAB_AUTO_DETECT_PORT_COUNT }, (_, i) => COLLAB_AUTO_DETECT_BASE_PORT + i);
+  const found = (await Promise.all(ports.map(probeCollabServerPort))).filter((r) => r !== null);
+  return found.find((r) => r.hasPublicUrl) ?? found[0] ?? null;
+}
+
+/** Kicks off a brand-new shared session — auto-detects a running collab-server app first (see detectLocalCollabServer) rather than relying on anyone having typed an address in anywhere. */
+async function actionStartCollaboration() {
+  if (!db) return;
+  setStatus("Looking for your collaboration server…");
+  const detected = await detectLocalCollabServer();
+  if (!detected) {
+    // Deliberately blank, not collabServerUrl — that's very often the
+    // address of a server that *used* to be running (e.g. this same
+    // computer's, from an earlier session) and just got stopped, which
+    // auto-detect already ruled out above. Pre-filling it here reads as
+    // the app claiming to already know a live address, which it doesn't;
+    // a real bug report from the user confirmed this was genuinely
+    // confusing in exactly that scenario, not just a hypothetical.
+    collabManualUrlValue = "";
+    collabNotFoundOpen = true;
+    setStatus("Could not find a running collaboration server.");
+    return;
+  }
+  if (!detected.hasPublicUrl) {
+    pendingConfirmation = {
+      message:
+        "Found your collaboration server, but it doesn't have a public address yet (still connecting, or its tunnel isn't available). You can continue — this tab will work — but the link won't work for a colleague until that's ready. Continue anyway?",
+      onConfirm: () => promptForCollabNameThen(() => void beginCollaboration(detected.url)),
+    };
+    render();
+    return;
+  }
+  promptForCollabNameThen(() => void beginCollaboration(detected.url));
+}
+
+/**
+ * Shows the "join as…" name dialog, then runs `action` once a name's been
+ * confirmed (see initPresenceIdentity) — used right before both ways a
+ * brand-new shared session actually begins (starting one, joining one via
+ * a link), never on a plain reconnect: connectAndSync reuses whatever
+ * identity this already established for the rest of that session.
+ */
+function promptForCollabNameThen(action: () => void) {
+  collabNameValue = loadCollabDisplayName();
+  collabNameDialogOnConfirm = action;
+  collabNameDialogOpen = true;
+  render();
+}
+
+function actionCancelCollabNameDialog() {
+  collabNameDialogOpen = false;
+  collabNameDialogOnConfirm = null;
+  render();
+}
+
+function actionSubmitCollabNameDialog() {
+  const name = collabNameValue.trim();
+  if (!name) return; // the submit button is disabled for this too — see wireEvents
+  collabNameDialogOpen = false;
+  const action = collabNameDialogOnConfirm;
+  collabNameDialogOnConfirm = null;
+  initPresenceIdentity(name);
+  render();
+  action?.();
+}
+
+/** Uploads the current catalog as a brand-new shared session against `serverUrl` and connects to it. */
+async function beginCollaboration(serverUrl: string) {
+  if (!db) return;
+  saveCollabServerUrl(serverUrl);
+  setStatus("Starting a shared session…");
+  try {
+    const bytes = exportCatalog(db);
+    const room = await createRoom(collabServerUrl, bytes);
+    collabOwnerToken = room.ownerToken;
+    lastAppliedSeq = 0;
+    // So reloading *this* tab re-joins the same room via the same
+    // ?collab= boot path a shared link uses, instead of losing it. Carries
+    // the server address too — collabShareLink() below is what a colleague
+    // actually gets, but this tab's own address bar needs it just as much
+    // for its own reload/reconnect to know where to look.
+    history.replaceState(null, "", `?collab=${room.roomId}&server=${encodeURIComponent(collabServerUrl)}`);
+    await connectAndSync(room.roomId);
+    setStatus("Started a shared session — share the link shown below with a colleague.");
+  } catch (err) {
+    setStatus(collabErrorMessage("start a shared session", err));
+  }
+}
+
+/** Joins an existing shared session by id — downloads its original snapshot, replays the full history, then catches up via connectAndSync. */
+async function actionJoinCollaboration(roomId: string) {
+  setStatus("Joining the shared session…");
+  try {
+    const bytes = await downloadSnapshot(collabServerUrl, roomId);
+    db = openCatalog(SQL, bytes);
+    activeImageId = currentImages()[0]?.id ?? null;
+    openedFileHandle = null;
+    openedFileStamp = null;
+    collabOwnerToken = null; // only create() hands this out — a joiner never has it
+    lastAppliedSeq = 0;
+    resetTransientEditState();
+    // A previous visit to this same room may have left offline edits
+    // queued (e.g. the tab reloaded, or was closed, before reconnecting) —
+    // restore them so connectAndSync's drainOutbox() gets a chance to
+    // resend (or flag as a conflict) rather than silently losing them.
+    outbox = await loadOutbox(roomId);
+    await connectAndSync(roomId);
+    setStatus("Joined the shared session.");
+  } catch (err) {
+    setStatus(collabErrorMessage("join that shared session", err));
+  }
+}
+
+/**
+ * A failed join (or, more rarely, a create that got past auto-detect but
+ * still failed) is very often just "nothing's listening at collabServerUrl
+ * anymore" — e.g. a shared link's server has since been stopped — rather
+ * than an actual server-side rejection. The raw fetch error alone ("Failed
+ * to fetch") doesn't tell a non-technical person that; naming the address
+ * it tried does.
+ */
+function collabErrorMessage(action: string, err: unknown): string {
+  const detail = err instanceof Error ? err.message : String(err);
+  return `Could not ${action} — is the collaboration server at ${collabServerUrl} still running? (${detail})`;
+}
+
+/**
+ * Tears down every bit of this tab's local collaboration state — shared by
+ * a deliberate Leave, and by the two ways a session can end out from under
+ * this tab entirely (see handleCollabClosed below). Never shows a status
+ * message itself — every caller picks whatever wording fits how it got
+ * here.
+ */
+function exitCollaboration() {
+  const roomId = collabRoomId;
+  collabRoomId = null; // first, so a reconnect already in flight (or a status callback about to fire from collab.close() below) becomes a no-op
+  if (reconnectTimer !== null) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  collab?.close();
+  collab = null;
+  collabOwnerToken = null;
+  collabStatus = "disconnected";
+  // The server already drops this tab's presence entry on the socket
+  // closing — this just clears the local echo of it (and this tab's own
+  // identity, so a later restart gets a fresh name prompt and color, per
+  // "persistent for the whole session" rather than forever).
+  collabPresence = [];
+  collabClientId = null;
+  outbox = [];
+  if (roomId) void clearOutbox(roomId);
+}
+
+/** Disconnects this tab only — the room itself and everyone else in it are unaffected. Ending it for everyone is actionEndSessionForEveryone(), a separate, deliberate action. */
+function actionLeaveCollaboration() {
+  exitCollaboration();
+  setStatus("Left the shared session — you're back to working locally.");
+}
+
+// Set for the duration of actionEndSessionForEveryone()'s own DELETE call.
+// This tab is still subscribed to the room while that request is in
+// flight, so its own "room-closed" broadcast can arrive back over the WS
+// before (or after — no ordering guarantee between an HTTP response and a
+// WS frame) the fetch() call itself resolves; this flag lets
+// handleCollabClosed recognize that echo as its own doing and skip
+// showing a redundant "session closed" notice on top of the one this
+// action already shows once the fetch resolves.
+let endingCollabSelf = false;
+
+/** Only ever reachable when collabOwnerToken is set — the toolbar button this backs is hidden otherwise (a joiner never holds the owner token; see actionJoinCollaboration). */
+async function actionEndSessionForEveryone() {
+  if (!collabRoomId || !collabOwnerToken) return;
+  const roomId = collabRoomId;
+  const ownerToken = collabOwnerToken;
+  endingCollabSelf = true;
+  try {
+    await deleteRoom(collabServerUrl, roomId, ownerToken, collabDisplayName);
+    exitCollaboration();
+    setStatus("Ended the shared session for everyone — you're back to working locally.");
+  } catch (err) {
+    setStatus(collabErrorMessage("end the shared session", err));
+  } finally {
+    endingCollabSelf = false;
+  }
+}
+
+function actionConfirmEndSessionForEveryone() {
+  if (!collabRoomId) return;
+  pendingConfirmation = {
+    message:
+      "End this shared session for everyone? Anyone still connected will be disconnected — they'll keep their own current copy, but the live session ends. This can't be undone.",
+    onConfirm: actionEndSessionForEveryone,
+  };
+  render();
+}
+
+/**
+ * A session ending out from under this tab, not by this tab's own choice —
+ * either someone (possibly this same tab, see endingCollabSelf above) ended
+ * it for everyone, or the whole collaboration-server process is going away
+ * (Stop button, Ctrl+C, the host's computer sleeping — see the project's
+ * Phase 4 self-hosting trade-off). Shown as a real notice, not folded into
+ * the ordinary "disconnected" status — that status is also what a genuine
+ * network blip looks like, and just quietly retrying every few seconds
+ * into a session that's actually gone for good isn't an honest reflection
+ * of what happened, which is the whole point of this existing.
+ */
+function handleCollabClosed(reason: CollabClosedReason) {
+  if (endingCollabSelf) return; // this tab's own actionEndSessionForEveryone() already handled its own echo
+  exitCollaboration();
+  const message =
+    reason.kind === "room-closed"
+      ? reason.by
+        ? `${reason.by} ended this shared session — you're back to working locally with your current copy.`
+        : "This shared session was ended — you're back to working locally with your current copy."
+      : "The collaboration server was stopped — you're back to working locally with your current copy.";
+  // Both the modal (the actual point of this — see this function's own doc)
+  // and the toolbar's corner hint, so it doesn't keep reading something
+  // stale like "Joined the shared session" after the modal's dismissed.
+  statusMessage = message;
+  pendingNotice = message;
+  render();
+}
+
+async function actionCopyCollabLink() {
+  if (!collabRoomId) return;
+  try {
+    await navigator.clipboard.writeText(collabShareLink());
+    setStatus("Copied the link — share it with whoever you want editing alongside you.");
+  } catch {
+    setStatus(`Couldn't copy automatically — here's the link: ${collabShareLink()}`);
+  }
 }
 
 // ---------- actions: images ----------
@@ -547,7 +1457,7 @@ async function actionAddImage(file: File) {
   // Inherit the active image's folder — adding another page while working
   // inside a folder should keep it there, not drop it back to ungrouped.
   const activeFolder = currentImages().find((i) => i.id === activeImageId)?.folder ?? "";
-  const id = addImage(db, {
+  const id = applyAddAndBroadcast("addImage", addImage, {
     name: file.name,
     mimeType: mimeType ?? file.type,
     imageData: base64,
@@ -568,7 +1478,7 @@ function actionUpdateImageMeta() {
   const folderInput = document.getElementById("image-folder-input") as HTMLInputElement | null;
   const name = nameInput?.value.trim() || "Untitled image";
   const folder = folderInput?.value.trim() ?? "";
-  updateImage(db, activeImageId, { name, folder });
+  applyAndBroadcast("updateImage", updateImage, activeImageId, { name, folder });
   setStatus(`Updated "${name}".`);
 }
 
@@ -592,7 +1502,7 @@ function actionDeleteImage(imageId: number) {
   const consequence = rowCount ? ` It still has ${rowCount} data row${rowCount === 1 ? "" : "s"} with no hotspot, which go with it.` : "";
   askConfirm(`Delete "${image?.name ?? "this image"}"?${consequence} This can't be undone.`, () => {
     if (!db) return;
-    deleteImage(db, imageId);
+    applyAndBroadcast("deleteImage", deleteImage, imageId);
     if (activeImageId === imageId) {
       activeImageId = currentImages()[0]?.id ?? null;
       resetTransientEditState();
@@ -745,7 +1655,7 @@ function startDragHotspot(evt: MouseEvent, link: CatalogLink, el: HTMLElement, i
     window.removeEventListener("mousemove", onMove);
     window.removeEventListener("mouseup", onUp);
     if (moved) {
-      if (db) updateLinkPosition(db, link.id, top, left);
+      if (db) applyAndBroadcast("updateLinkPosition", updateLinkPosition, link.id, top, left);
       render();
     } else {
       editingLinkId = link.id;
@@ -858,7 +1768,7 @@ function actionAddLink(name: string, url: string) {
   const doAdd = () => {
     if (!db) return;
     try {
-      addLink(db, { imageId, name, url, top, left });
+      applyAddAndBroadcast("addLink", addLink, { imageId, name, url, top, left });
       pendingHotspot = null;
       setStatus(`Link "${name}" added.`);
     } catch (err) {
@@ -881,7 +1791,7 @@ function actionUpdateLink(name: string, url: string) {
   const doUpdate = () => {
     if (!db) return;
     try {
-      updateLink(db, linkId, { name, url });
+      applyAndBroadcast("updateLink", updateLink, linkId, { name, url });
       editingLinkId = null;
       setStatus(`Link "${name}" updated.`);
     } catch (err) {
@@ -915,7 +1825,7 @@ function actionDeleteLink() {
   askConfirm("Delete this hotspot? This can't be undone.", () => {
     if (!db) return;
     try {
-      deleteLink(db, linkId);
+      applyAndBroadcast("deleteLink", deleteLink, linkId);
       editingLinkId = null;
       setStatus("Link deleted.");
     } catch (err) {
@@ -944,7 +1854,7 @@ function actionAddRow(url: string, name: string, sku: string, description: strin
   if (!db || activeImageId === null) return;
   const extra = parseExtraField(extraText);
   if (extra === null) return;
-  addRow(db, { imageId: activeImageId, url, name, sku, description, extra });
+  applyAddAndBroadcast("addRow", addRow, { imageId: activeImageId, url, name, sku, description, extra });
   setStatus(`Row for "${url}" added.`);
 }
 
@@ -965,7 +1875,7 @@ function actionSaveRowEdit(name: string, sku: string, description: string, extra
   if (!db || editingRowId === null) return;
   const extra = parseExtraField(extraText);
   if (extra === null) return;
-  updateRow(db, editingRowId, { name, sku, description, extra });
+  applyAndBroadcast("updateRow", updateRow, editingRowId, { name, sku, description, extra });
   editingRowId = null;
   setStatus(`Row "${name}" updated.`);
 }
@@ -975,7 +1885,7 @@ function actionDeleteRow() {
   const rowId = editingRowId;
   askConfirm("Delete this table row? Its hotspot stays on the image, just unassigned from any data. This can't be undone.", () => {
     if (!db) return;
-    deleteRow(db, rowId);
+    applyAndBroadcast("deleteRow", deleteRow, rowId);
     editingRowId = null;
     setStatus("Row deleted.");
   });
@@ -1052,6 +1962,8 @@ function render() {
       <button id="btn-export" ${db ? "" : "disabled"} title="Always downloads a new copy">Export .${CATALOG_FILE_EXTENSION}</button>
       <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
       <button id="btn-store-settings" ${db ? "" : "disabled"} title="Configure this catalog's store link and Buy-button behavior">⚙️ Store settings…</button>
+      ${db && !collabRoomId ? `<button id="btn-start-collab" title="Start a live session others can join to edit this catalog with you">🤝 Start collaboration</button>` : ""}
+      ${collabRoomId ? renderCollabStatus() : ""}
       <span class="spacer"></span>
       <button id="btn-theme" title="Toggle light/dark theme">${currentTheme() === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
       <span class="hint">${escapeHtml(statusMessage)}</span>
@@ -1108,6 +2020,8 @@ function render() {
     ${renderNoticeOverlay()}
     ${renderRemoteDialog()}
     ${renderStoreSettingsDialog()}
+    ${renderCollabNotFoundDialog()}
+    ${renderCollabNameDialog()}
   `;
 
   if (savedScroll) {
@@ -1190,6 +2104,81 @@ function renderZoomControls(): string {
       <button id="btn-zoom-reset" title="Reset zoom">Reset</button>
     </div>
   `;
+}
+
+function collabShareLink(): string {
+  return `${location.origin}${location.pathname}?collab=${collabRoomId}&server=${encodeURIComponent(collabServerUrl)}`;
+}
+
+function collabStatusText(): { icon: string; label: string; title: string } {
+  const icon = collabStatus === "connected" ? "🟢" : collabStatus === "connecting" ? "🟡" : "🔴";
+  let label = collabStatus === "connected" ? "Live" : collabStatus === "connecting" ? "Connecting…" : "Disconnected";
+  let title = `Share this link so a colleague can join: ${collabShareLink()}`;
+  if (outbox.length > 0) {
+    label += ` (${outbox.length} pending)`;
+    title = `${outbox.length} edit${outbox.length === 1 ? "" : "s"} not sent yet — still editing locally, will send once reconnected. ${title}`;
+  }
+  return { icon, label, title };
+}
+
+function renderCollabStatus(): string {
+  const { icon, label, title } = collabStatusText();
+  return `
+    <span class="collab-status" id="collab-status-text" title="${escapeHtml(title)}">${icon} ${label}</span>
+    <button type="button" id="btn-copy-collab-link">Copy link to share</button>
+    <button type="button" id="btn-leave-collab">Leave</button>
+    ${
+      collabOwnerToken
+        ? `<button type="button" id="btn-end-collab-session" title="Ends the session for everyone, not just this tab">End for everyone</button>`
+        : ""
+    }
+    ${renderPresenceRoster()}
+  `;
+}
+
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+/** Defense-in-depth alongside collab-server's own sanitizeColor() — this roster's `color` came in over the wire from another peer, not this tab, and ends up straight in a `style` attribute below. */
+function sanitizePresenceColor(color: string): string {
+  return HEX_COLOR.test(color) ? color : "#6c757d";
+}
+
+/** A row of small initial avatars — who's currently active in this session (see PresenceUser; someone connected but idle/hidden just isn't in the list, not shown greyed-out). */
+function renderPresenceRoster(): string {
+  return `<div class="collab-presence" id="collab-presence-list" title="Who's here right now">${collabPresence.map(renderPresenceAvatar).join("")}</div>`;
+}
+
+function renderPresenceAvatar(user: PresenceUser): string {
+  const initial = (user.name.trim()[0] ?? "?").toUpperCase();
+  const isMe = user.clientId === collabClientId;
+  const label = isMe ? `${user.name} (you)` : user.name;
+  return `<span class="presence-avatar${isMe ? " presence-avatar-me" : ""}" style="background:${sanitizePresenceColor(user.color)}" title="${escapeHtml(label)}">${escapeHtml(initial)}</span>`;
+}
+
+/** Same reasoning as updateCollabStatusDisplay() below — a roster change (someone else joining, going idle, leaving) can land at any moment, including mid-typing in an open form, so this patches the roster's own small DOM subtree instead of calling render(). */
+function updatePresenceRosterDisplay() {
+  const el = document.getElementById("collab-presence-list");
+  if (!el) return; // no active session currently rendered — the next real render() will pick this roster up
+  el.innerHTML = collabPresence.map(renderPresenceAvatar).join("");
+}
+
+/**
+ * Patches just the status text in place instead of calling render() — the
+ * connection flickering between connecting/disconnected while genuinely
+ * offline (each retry — see scheduleReconnect) would otherwise wholesale-
+ * rebuild #app every few seconds and silently wipe whatever's mid-typing
+ * in an open form (a real bug this surfaced: editing a row's SKU while
+ * offline got reverted out from under the person a few seconds later).
+ * Only status/pending-count changes go through here; an actual data change
+ * (a local edit, an applied remote op) still goes through the normal
+ * render() — this is purely for the parts of a status flicker that don't
+ * change what's on the page besides this one label.
+ */
+function updateCollabStatusDisplay() {
+  const el = document.getElementById("collab-status-text");
+  if (!el) return; // no active session currently rendered — nothing to patch
+  const { icon, label, title } = collabStatusText();
+  el.textContent = `${icon} ${label}`;
+  el.title = title;
 }
 
 function renderConfirmOverlay(): string {
@@ -1295,6 +2284,51 @@ function renderStoreSettingsDialog(): string {
         <div class="confirm-actions">
           <button id="store-settings-cancel">Cancel</button>
           <button id="store-settings-submit">Save</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCollabNotFoundDialog(): string {
+  if (!collabNotFoundOpen) return "";
+  return `
+    <div class="confirm-overlay">
+      <div class="confirm-box">
+        <h2>Can't find a collaboration server</h2>
+        <p>Make sure the <strong>ECM Collaboration Server</strong> app is running on your computer, then try again.</p>
+        <div class="confirm-actions">
+          <button id="collab-not-found-cancel">Cancel</button>
+          <button id="collab-not-found-retry">Try again</button>
+        </div>
+        <details style="margin-top: 0.75rem">
+          <summary>Or enter its address by hand</summary>
+          <p class="hint" style="margin-top: 0.5rem">If it's running on a different computer, paste in its address.</p>
+          <div class="field" style="margin-top: 0.5rem">
+            <label for="collab-manual-url-input">Its address</label>
+            <input type="text" id="collab-manual-url-input" value="${escapeHtml(collabManualUrlValue)}" placeholder="${DEFAULT_COLLAB_SERVER_URL}" />
+          </div>
+          <button id="collab-manual-url-submit">Use this address</button>
+        </details>
+      </div>
+    </div>
+  `;
+}
+
+function renderCollabNameDialog(): string {
+  if (!collabNameDialogOpen) return "";
+  return `
+    <div class="confirm-overlay">
+      <div class="confirm-box">
+        <h2>Join as…</h2>
+        <p>Pick a name so others in this session know who's who — no account needed.</p>
+        <div class="field">
+          <label for="collab-name-input">Your name</label>
+          <input type="text" id="collab-name-input" value="${escapeHtml(collabNameValue)}" placeholder="e.g. Alec" maxlength="60" />
+        </div>
+        <div class="confirm-actions">
+          <button id="collab-name-cancel">Cancel</button>
+          <button id="collab-name-submit" ${collabNameValue.trim() ? "" : "disabled"}>Join</button>
         </div>
       </div>
     </div>
@@ -1571,6 +2605,37 @@ function wireEvents(links: CatalogLink[]) {
   }
 
   document.getElementById("btn-store-settings")?.addEventListener("click", actionOpenStoreSettings);
+  document.getElementById("collab-not-found-cancel")?.addEventListener("click", actionCancelCollabNotFound);
+  document.getElementById("collab-not-found-retry")?.addEventListener("click", () => void actionRetryCollabDetect());
+  document.getElementById("collab-manual-url-submit")?.addEventListener("click", actionUseManualCollabUrl);
+  const collabManualUrlInput = document.getElementById("collab-manual-url-input") as HTMLInputElement | null;
+  collabManualUrlInput?.addEventListener("input", () => {
+    collabManualUrlValue = collabManualUrlInput.value;
+  });
+  collabManualUrlInput?.addEventListener("keydown", (evt) => {
+    if (evt.key === "Enter" && collabManualUrlInput.value.trim()) actionUseManualCollabUrl();
+    if (evt.key === "Escape") actionCancelCollabNotFound();
+  });
+  document.getElementById("btn-start-collab")?.addEventListener("click", () => void actionStartCollaboration());
+  document.getElementById("btn-copy-collab-link")?.addEventListener("click", () => void actionCopyCollabLink());
+  document.getElementById("btn-leave-collab")?.addEventListener("click", actionLeaveCollaboration);
+  document.getElementById("btn-end-collab-session")?.addEventListener("click", actionConfirmEndSessionForEveryone);
+  document.getElementById("collab-name-cancel")?.addEventListener("click", actionCancelCollabNameDialog);
+  document.getElementById("collab-name-submit")?.addEventListener("click", actionSubmitCollabNameDialog);
+  const collabNameInput = document.getElementById("collab-name-input") as HTMLInputElement | null;
+  const collabNameSubmitBtn = document.getElementById("collab-name-submit") as HTMLButtonElement | null;
+  collabNameInput?.addEventListener("input", () => {
+    collabNameValue = collabNameInput.value;
+    if (collabNameSubmitBtn) collabNameSubmitBtn.disabled = !collabNameInput.value.trim();
+  });
+  collabNameInput?.addEventListener("keydown", (evt) => {
+    if (evt.key === "Enter" && collabNameInput.value.trim()) actionSubmitCollabNameDialog();
+    if (evt.key === "Escape") actionCancelCollabNameDialog();
+  });
+  if (collabNameDialogOpen) {
+    collabNameInput?.focus();
+    collabNameInput?.setSelectionRange(collabNameInput.value.length, collabNameInput.value.length);
+  }
   document.getElementById("store-settings-cancel")?.addEventListener("click", actionCancelStoreSettings);
   document.getElementById("store-settings-submit")?.addEventListener("click", actionSubmitStoreSettings);
   const storeUrlInput = document.getElementById("store-url-input") as HTMLInputElement | null;
@@ -1752,5 +2817,20 @@ function wireEvents(links: CatalogLink[]) {
   document.getElementById("btn-cancel-edit-row")?.addEventListener("click", actionCancelEditRow);
   document.getElementById("btn-delete-row")?.addEventListener("click", actionDeleteRow);
 }
+
+// ---------- presence activity tracking (Phase 5) ----------
+// Wired once at module load, not inside wireEvents() (which reruns on every
+// render) — these listen on `document` regardless of what's currently
+// rendered, and adding a fresh copy on every render would pile up
+// duplicates. See isPresenceActive()'s doc for what these feed into.
+document.addEventListener("mousemove", notePresenceActivity, { passive: true });
+document.addEventListener("mousedown", notePresenceActivity);
+document.addEventListener("keydown", notePresenceActivity);
+document.addEventListener("touchstart", notePresenceActivity, { passive: true });
+document.addEventListener("visibilitychange", reconcilePresenceActive);
+// Catches the idle timeout expiring on its own — a still-visible tab with
+// zero further input wouldn't otherwise fire any of the listeners above
+// again to notice.
+setInterval(reconcilePresenceActive, 15_000);
 
 void boot();

@@ -34,7 +34,8 @@
 
   <p>Short version: these apps don't collect, store, or transmit any
   personal information. Everything runs locally, in your browser or in the
-  installed app, against files on your own device.</p>
+  installed app, against files on your own device — with one optional
+  exception, real-time collaboration, described below.</p>
 
   <h2>What the apps do</h2>
   <p>The Editor and Viewer read and write <code>.ecatm</code> catalog
@@ -42,8 +43,8 @@
   disk or from a URL you provide. All of the actual work (reading, editing,
   searching, rendering) happens on your device via
   <a href="https://sql.js.org/">sql.js</a>, a SQLite build compiled to
-  WebAssembly. There is no backend server, no account, and no sign-in — we
-  have nothing to store even if we wanted to.</p>
+  WebAssembly. There is no backend server run by this project, no account,
+  and no sign-in — we have nothing to store even if we wanted to.</p>
 
   <h2>Local files</h2>
   <p>When you open or save a catalog, the browser's File System Access API
@@ -51,6 +52,34 @@
   or write exactly the file you selected. That file never leaves your
   device unless you yourself choose to share it — nothing is uploaded to
   us or to any third party by the apps themselves.</p>
+
+  <h2>Real-time collaboration (optional)</h2>
+  <p>The Editor has an optional feature, real-time collaboration, that lets
+  more than one person edit the same catalog together and see each other's
+  changes live. This is the one feature that does talk to a server — but
+  never one this project operates. It only activates if you click
+  <strong>🤝 Start collaboration</strong> yourself, or open a link someone
+  sent you that joins a session they started.</p>
+  <p>The server on the other end is a small, separate, open-source app
+  (<a href="https://github.com/alexandrkotov/electronic-catalog-maker/tree/main/packages/collab-server">
+  <code>@ecm/collab-server</code></a>) that whoever starts a session runs on
+  their own computer — this project doesn't host or operate one on anyone's
+  behalf. Starting a session sends that catalog's contents to that server,
+  which relays live edits between everyone connected and holds them only in
+  memory, only for as long as that person keeps the app running; nothing is
+  written to that server's disk, and closing the app (or the session ending
+  any other way) discards everything it was holding. Joining a session also
+  means picking a display name — not tied to any account or identity — so
+  other participants can see who's currently there.</p>
+  <p>To be reachable by a collaborator outside its own computer, that
+  server routes its connection through a third-party tunneling service
+  (Cloudflare's free "quick tunnel," via a temporary
+  <code>trycloudflare.com</code> address) — a real third party in the data
+  path for that session, subject to
+  <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare's own
+  privacy policy</a>, not ours. See
+  <a href="https://github.com/alexandrkotov/electronic-catalog-maker/tree/main/packages/collab-server#readme">that
+  package's own documentation</a> for the full technical detail.</p>
 
   <h2>Opening a catalog from a URL</h2>
   <p>If you open a catalog via a remote link (for example, one of the demo
@@ -85,6 +114,7 @@
     <li><a href="https://www.goatcounter.com/">GoatCounter</a> — anonymous page-view counting on the public website (see "Analytics" above).</li>
     <li>Whatever host serves a catalog file you open by URL (e.g. GitHub Pages for the demo catalogs).</li>
     <li>Whatever store a catalog's "Buy" button links to, if you choose to use it.</li>
+    <li><a href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a> — only if you start or join a real-time collaboration session (see that section above); routes that session's traffic, run by whoever started it, not by this project.</li>
   </ul>
   <p>None of these are things the Editor or Viewer apps themselves run,
   operate, or receive data from beyond what's described above.</p>
@@ -100,7 +130,7 @@
   <footer>
     <a href="./">Electronic Catalog Maker</a> —
     <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Source on GitHub</a>
-    <div>Last updated: August 28, 2026.</div>
+    <div>Last updated: August 31, 2026.</div>
   </footer>
 </body>
 </html>
