@@ -39,14 +39,22 @@ const outPath = new URL(spec.outName, vendorDir).pathname;
 
 const downloadUrl = `https://github.com/cloudflare/cloudflared/releases/latest/download/${spec.asset}`;
 console.log(`Fetching ${downloadUrl} …`);
-const res = await fetch(downloadUrl);
-if (!res.ok) throw new Error(`Download failed: HTTP ${res.status} for ${downloadUrl}`);
+// Deliberately curl, not Bun's global fetch()+Bun.write — that combination
+// was confirmed by hand to hang indefinitely on this exact download (no
+// error, no progress, just stuck) on more than one machine, while curl on
+// the identical URL consistently finished in seconds. Whatever's behind
+// that (a Bun streaming-response quirk, most likely) wasn't worth chasing
+// down when curl already does the job reliably and ships by default on
+// Linux, macOS, and Windows 10 1803+ alike.
+async function curlDownload(target: string): Promise<void> {
+  await Bun.$`curl -fsSL --retry 3 --retry-delay 2 -o ${target} ${downloadUrl}`;
+}
 
 if (spec.archive === "raw") {
-  await Bun.write(outPath, res);
+  await curlDownload(outPath);
 } else {
   const tmpTgz = new URL(`_${spec.outName}.tgz`, vendorDir).pathname;
-  await Bun.write(tmpTgz, res);
+  await curlDownload(tmpTgz);
   // The archive contains one file, literally named "cloudflared" — extract
   // straight into vendor/ then rename to this platform's outName.
   await Bun.$`tar -xzf ${tmpTgz} -C ${vendorDir.pathname}`;
