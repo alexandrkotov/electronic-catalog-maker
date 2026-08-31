@@ -6,6 +6,11 @@ dist/
 # Downloaded-at-build-time cloudflared binaries for packages/collab-server's
 # compiled builds — fetched, not authored, so never committed.
 vendor/
+# packages/collab-server has no committed lockfile of its own (dependency
+# locking for the whole monorepo is pnpm-lock.yaml at the root) — running
+# `bun install`/`bun run` directly inside that package generates one
+# locally that was never meant to be tracked.
+packages/collab-server/bun.lock
 
 # The embeddable viewer's build IS the distributable — it's what jsDelivr
 # serves straight from this repo (see README "Embedding the viewer"), so
