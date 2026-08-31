@@ -49,6 +49,15 @@ export function startTunnel(opts: StartTunnelOptions): Tunnel {
   const proc = Bun.spawn(opts.command, {
     stdout: "pipe",
     stderr: "pipe",
+    // Without this, Windows pops up its own console window for this
+    // subprocess regardless of --windows-hide-console on *our* binary —
+    // that flag only covers our own process, and cloudflared.exe is a
+    // console-subsystem app Windows gives a fresh console to when spawned
+    // from a console-less parent. Confirmed live on Windows: an empty
+    // console window (its stdout/stderr are piped here, not inherited, so
+    // there was never anything visible in it anyway) opened right
+    // alongside the status page until this was added.
+    windowsHide: true,
   });
 
   let found = false;

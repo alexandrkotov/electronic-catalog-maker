@@ -61,15 +61,16 @@ export function renderStatusPage(): string {
   button:disabled { opacity: 0.5; cursor: default; }
   .hint { opacity: 0.75; font-size: 0.92rem; }
   .error { color: #b91c1c; }
-  .footer-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1.5rem; }
+  .card-actions { display: flex; justify-content: flex-end; margin-top: 1rem; }
   #stop { background: #b91c1c; }
+  #leave-hint { margin-top: 1.5rem; }
   #stopped-banner { display: none; }
   #stopped-banner.show { display: block; }
 </style>
 </head>
 <body>
   <h1>🤝 Electronic Catalog Maker — Collaboration Server</h1>
-  <p id="intro">This server is running on your computer. Give the address below to whoever's editing — they'll open it in the "Server settings…" dialog before starting or joining a shared session.</p>
+  <p id="intro">This server is running on your computer. In the editor, just click <strong>Start collaboration</strong> — it finds this automatically, nothing to copy in the usual case.</p>
   <div id="stopped-banner" class="card">
     <strong>Stopped.</strong> The session has ended — you can close this tab now.
   </div>
@@ -79,11 +80,11 @@ export function renderStatusPage(): string {
       <button id="copy" disabled>Copy</button>
     </div>
     <p class="hint" id="hint">This can take a few seconds the first time.</p>
+    <div class="card-actions">
+      <button id="stop" type="button">Stop</button>
+    </div>
   </div>
-  <div class="footer-row">
-    <p class="hint">Leave this open while you're collaborating — stopping it (or closing this app) ends the session for everyone.</p>
-    <button id="stop" type="button">Stop</button>
-  </div>
+  <p class="hint" id="leave-hint">Leave this open while you're collaborating — stopping it (or closing this app) ends the session for everyone.</p>
 <script>
   const urlInput = document.getElementById("url");
   const copyBtn = document.getElementById("copy");
@@ -91,6 +92,7 @@ export function renderStatusPage(): string {
   const hint = document.getElementById("hint");
   const intro = document.getElementById("intro");
   const liveCard = document.getElementById("live-card");
+  const leaveHint = document.getElementById("leave-hint");
   const stoppedBanner = document.getElementById("stopped-banner");
   let stopped = false;
 
@@ -116,8 +118,8 @@ export function renderStatusPage(): string {
     }
     stopped = true;
     intro.style.display = "none";
-    liveCard.style.display = "none";
-    stopBtn.style.display = "none";
+    liveCard.style.display = "none"; // takes the Stop button with it, it lives inside this card now
+    leaveHint.style.display = "none";
     stoppedBanner.classList.add("show");
   });
 
@@ -129,7 +131,8 @@ export function renderStatusPage(): string {
       if (data.publicUrl) {
         urlInput.value = data.publicUrl;
         copyBtn.disabled = false;
-        hint.textContent = "Ready — paste this into the editor's Server settings…";
+        hint.textContent =
+          "Ready — go click Start collaboration in the editor. You normally don't need to copy this: only paste it in by hand if a colleague's editor says it can't find a collaboration server automatically.";
         return; // stop polling once it's up; a fresh run gets a fresh page anyway
       }
       if (data.tunnelError) {

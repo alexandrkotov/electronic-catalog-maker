@@ -14,7 +14,7 @@ import { startTunnel } from "./tunnel";
  * this package's README for the packaged build.
  */
 
-const PORT = Number(process.env.PORT ?? 8787); // matches the editor's own default Server settings value, so a fresh install of both just works together
+const PORT = Number(process.env.PORT ?? 8787); // matches the base port the editor's auto-detect starts scanning from, so a fresh install of both just works together
 const CLOUDFLARED_PATH = process.env.CLOUDFLARED_PATH ?? "cloudflared"; // resolved off PATH unless a packaged build injects a bundled one
 
 // How many sequential ports past PORT to try before giving up and taking a
