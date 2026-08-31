@@ -20,14 +20,22 @@ behind self-hosting instead of a maintainer-run default server, and the
 2. It opens a status page in your default browser once the tunnel's up —
    this page *is* the app's UI (no separate desktop app window): the public
    address with a Copy button, and a **Stop** button to end the session
-   without having to go find a terminal window.
+   without having to go find a terminal window. On Windows, the compiled
+   binary runs with no console window at all (`--windows-hide-console`) —
+   the status page is the *only* UI; Ctrl+C isn't an option there since
+   there's nothing to Ctrl+C. Linux/macOS builds still show a plain console
+   (Ctrl+C works there too, as a second way to stop it).
 3. Paste that address into the editor's **🖥️ Server settings…** dialog, then
    **Start collaboration** as usual. The link the editor hands you to share
    already carries this address (`?collab=<roomId>&server=<url>`) — a
    colleague opening it doesn't need to configure anything themselves.
-4. Stop it (the status page's button, or Ctrl+C in the console window —
-   either works) when you're done. The tunnel drops, the room and
-   everything in it disappears — there's nothing to clean up.
+4. Stop it (the status page's Stop button, or Ctrl+C where there's a
+   console) when you're done. The tunnel drops, the room and everything in
+   it disappears — there's nothing to clean up. If the status page tab gets
+   closed by accident before you're done, ending the process from Task
+   Manager (Windows) / Activity Monitor (macOS) / your process manager of
+   choice (Linux) — look for `ecm-collab-server-*` — is the fallback; there's
+   no way to reopen the same status page instance once its tab is gone.
 
 **A room only lives as long as this process does.** Unlike a permanently
 hosted server, stopping this app (or the host's laptop going to sleep) ends
@@ -49,7 +57,15 @@ same-network collaborators who can already reach this machine directly) —
 there's just no public address to hand out until one is.
 
 Override the local port with `PORT` (default `8787`, matching the editor's
-own default in Server settings).
+own default in Server settings). If that port's already taken: by another
+copy of this same app (e.g. launched twice by accident), it just opens
+that instance's already-running status page instead of erroring; by
+anything else, it picks a random free port instead and shows the real one
+— either way, no crash. Confirmed by hand, not just in theory: started two
+copies pointed at the same port (second one opened the first's page,
+didn't start a second server) and started this app against a port held by
+an unrelated process (it silently picked a different one and worked
+normally).
 
 ## HTTP + WebSocket surface
 
@@ -115,9 +131,23 @@ Linux, compiled the Linux target with it embedded, and ran the resulting
 single ~120MB executable with *no* `cloudflared` installed anywhere on the
 system and no `CLOUDFLARED_PATH` set — it extracted its own embedded copy,
 connected a real tunnel, and relayed a real `POST /rooms` over the public
-`https://*.trycloudflare.com` address. The macOS/Windows builds use the
-identical mechanism but couldn't be *run* and verified from this Linux
-environment — worth a real smoke test on each platform before distributing.
+`https://*.trycloudflare.com` address. The Windows build was cross-compiled
+from this same Linux environment and then actually run by the project's
+maintainer on a real Windows machine — a real SmartScreen warning bypassed,
+a real `trycloudflare.com` address, a real two-tab collaboration session
+including the Stop button, confirmed working end to end. The macOS build
+uses the identical mechanism but hasn't been run on a real Mac yet — worth
+a real smoke test there before distributing.
+
+`--windows-hide-console` (see the compile script) runs the Windows build
+with no console window at all — confirmed by inspecting the compiled
+binary directly (`file` reports "PE32+ ... (GUI)" instead of "(console)"),
+not just by trusting the flag's documentation. The Windows-only metadata
+flags (`--windows-title`, `--windows-publisher`, `--windows-icon`, etc.)
+were tried too, but Bun refuses them when cross-compiling from a non-
+Windows host ("only available when compiling on Windows") — left out of
+`compile:windows-x64` for that reason; worth adding back if this package's
+build ever runs on native Windows (e.g. a `windows-latest` CI runner).
 
 ## Known gaps to close before real public distribution
 
@@ -127,13 +157,15 @@ environment — worth a real smoke test on each platform before distributing.
   at all for now; Windows is waiting on the same Partner Center identity
   verification already in progress for the Store submissions.
 - **No system-tray/menu-bar presence.** The status page is the app's real
-  UI (see "How it works" above), and its Stop button plus the console
-  window's Ctrl+C both actually end the session — but there's still a
-  console window at all, which a genuinely zero-terminal experience (a tray
-  icon, no visible window ever) would need a native app shell (Tauri or
-  similar) to remove. Deliberately not built — see the design notes for why
-  a bigger app framework was passed over in favor of Bun's single-binary
-  compile.
+  UI (see "How it works" above); Windows already has no console window at
+  all (`--windows-hide-console`), so there it's *already* a genuinely
+  single-window experience. Linux/macOS builds still show a plain console
+  alongside the status page — `bun build --compile` has no equivalent
+  hide-console flag for those platforms, and going further (a tray icon, no
+  window anywhere, on every platform) would need a native app shell (Tauri
+  or similar) instead of Bun's single-binary compile. Deliberately not
+  built — see the design notes for why that bigger framework was passed
+  over.
 - `readAll()` buffers a whole reassembled snapshot in memory before
   responding — same simplification the Durable Object version had; fine for
   realistic catalog sizes, revisit with real streaming before relying on

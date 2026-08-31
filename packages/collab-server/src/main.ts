@@ -1,5 +1,5 @@
 import { openInBrowser } from "./openInBrowser";
-import { startServer } from "./server";
+import { startServer, type ServerHandle } from "./server";
 import { startTunnel } from "./tunnel";
 
 /**
@@ -17,16 +17,66 @@ import { startTunnel } from "./tunnel";
 const PORT = Number(process.env.PORT ?? 8787); // matches the editor's own default Server settings value, so a fresh install of both just works together
 const CLOUDFLARED_PATH = process.env.CLOUDFLARED_PATH ?? "cloudflared"; // resolved off PATH unless a packaged build injects a bundled one
 
+/** True for the specific "something's already listening on this port" failure Bun.serve() throws — confirmed by hand (`code: "EADDRINUSE"`), not guessed at. */
+function isPortInUse(err: unknown): boolean {
+  return err instanceof Error && "code" in err && err.code === "EADDRINUSE";
+}
+
+/**
+ * A very plausible real scenario: the host double-clicks the app again
+ * (thinking the first launch didn't work, or just forgot it's still
+ * running) and hits this exact port already in use — by *this same app*.
+ * Rather than erroring, checking whether whatever's on the port answers
+ * like our own /status.json lets that case just open the already-running
+ * instance's status page instead, no error at all.
+ */
+async function isOwnServerAlreadyThere(port: number): Promise<boolean> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/status.json`, { signal: AbortSignal.timeout(1000) });
+    if (!res.ok) return false;
+    const data = (await res.json()) as Record<string, unknown>;
+    return "publicUrl" in data && "tunnelError" in data && "port" in data;
+  } catch {
+    return false; // not answering, or not answering like this app does — treat as "someone else's port"
+  }
+}
+
 async function main() {
-  const server = startServer(PORT);
   console.log("🤝 Electronic Catalog Maker — Collaboration Server");
+
+  let server: ServerHandle;
+  try {
+    server = startServer(PORT);
+  } catch (err) {
+    if (!isPortInUse(err)) throw err; // an unexpected failure to listen at all — let it surface rather than papering over something unknown
+
+    if (await isOwnServerAlreadyThere(PORT)) {
+      console.log(`   Already running on this computer — opening its status page instead of starting a second copy.`);
+      openInBrowser(`http://127.0.0.1:${PORT}/status`);
+      return;
+    }
+
+    // Occupied by something unrelated — an ephemeral port still works fine
+    // for the tunnel-based sharing this app exists for (the shared address
+    // is whatever cloudflared reports, not this local port); it only means
+    // a same-machine editor relying on the default Server settings value
+    // would need to be pointed at the real port shown below instead.
+    console.log(`   Port ${PORT} is already in use by something else — picking a different one.`);
+    server = startServer(0);
+  }
   console.log(`   Local: http://127.0.0.1:${server.port}`);
   console.log("   Connecting a public tunnel…");
 
   const statusUrl = `http://127.0.0.1:${server.port}/status`;
   openInBrowser(statusUrl);
   console.log(`   A page has opened in your browser (${statusUrl}) with the link to share.`);
-  console.log("   Use its Stop button, or close this window, to end the session.");
+  // The Windows build compiles with --windows-hide-console (see package.json)
+  // for exactly the "unprepared user" reason the status page exists at all —
+  // so on Windows there's no console window to reference at all, only the
+  // status page's own Stop button. This line still prints (console.log is
+  // harmless with no console attached), but phrasing it as "close this
+  // window" would be actively wrong there; kept platform-neutral instead.
+  console.log("   Use the status page's Stop button to end the session.");
 
   // A missing `cloudflared` binary (not installed, or a packaged build that
   // failed to bundle one) throws synchronously right out of Bun.spawn — the
