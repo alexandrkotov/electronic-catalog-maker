@@ -23,7 +23,7 @@ elsewhere in this repo refer back to these by number:
 | 4 | Self-hosting (this package) instead of a permanently-hosted server | Done |
 | 5 | Presence — who else is currently in the session | Done |
 | 6 | Ending a session, on purpose or automatically | Done |
-| 7 | Real-world verification at scale, and user-facing docs | Not started |
+| 7 | Real-world verification at scale, and user-facing docs | Done |
 
 The full design/planning document this table summarizes is not part of
 this repo — it's the maintainer's own working notes, kept elsewhere.
@@ -262,6 +262,51 @@ were tried too, but Bun refuses them when cross-compiling from a non-
 Windows host ("only available when compiling on Windows") — left out of
 `compile:windows-x64` for that reason; worth adding back if this package's
 build ever runs on native Windows (e.g. a `windows-latest` CI runner).
+
+## Verified at scale
+
+Phase 7 tested this against a synthetic ~355MB catalog (4,143 images, real
+JPEG bytes, not random data — several times larger than any real catalog
+this project has seen) rather than taking the "stays fast regardless of
+size" claim on faith:
+
+- **Creating and joining a session, at the protocol level:** uploading the
+  whole catalog in chunks took ~0.6s, downloading it back took ~1.3s
+  (loopback; real-world numbers depend on the actual network in between),
+  and the downloaded bytes matched the uploaded ones exactly.
+- **A day-to-day edit, once a session already exists:** relayed to another
+  connected client in well under a millisecond — genuinely independent of
+  how large the catalog itself is, since an edit only ever carries the
+  field or photo that changed, never the whole catalog (see "How it
+  works").
+- **The same flow, end-to-end through a real browser tab** (not just
+  direct HTTP calls) surfaced two real, worth-knowing caveats instead of
+  matching the protocol-level numbers exactly:
+  - The chunked upload itself — collab.ts sends each chunk with its own
+    sequential, awaited `fetch()` call — took closer to 20s for this same
+    catalog from a real Chromium tab, not ~0.6s. Each individual chunk
+    still moves fine; it's ninety-odd sequential request round-trips (not
+    the data itself) that adds up. Parallelizing that loop (or using fewer,
+    larger chunks) would likely help — not done here, flagged instead.
+  - The editor's own re-render after an edit arrives — unrelated to this
+    package, and just as true editing the same catalog with no
+    collaboration involved at all — currently rebuilds the whole image
+    list (and rewires every item's click handler) on *every* change, not
+    just the part that actually changed, which costs roughly 1ms per image
+    in the catalog, regardless of what the change actually was. Measured
+    directly (same synthetic-catalog approach, several sizes):
+
+    | Images | One re-render |
+    |---|---|
+    | 200 | ~165-230ms |
+    | 500 | ~410-550ms |
+    | 4,143 | ~4,400-6,000ms |
+
+    Comfortable up to a few hundred images (the real catalogs this project
+    has seen so far are all under 100), noticeable but not disruptive
+    around 500, and genuinely sluggish only well into the thousands — a
+    real catalog that large is an edge case today, so this is documented
+    as a known limitation rather than fixed here.
 
 ## Known gaps to close before real public distribution
 

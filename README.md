@@ -117,6 +117,8 @@ A few other things worth knowing:
   ever written back to wherever the data came from.
 - **⚙️ Store settings…** configures the viewer's Buy button for this
   catalog — see "Selling from a catalog" below.
+- **🤝 Start collaboration** invites a colleague to edit this catalog with
+  you live, in real time — see "Real-time collaboration" below.
 
 ## Using the viewer
 
@@ -265,24 +267,42 @@ same file on disk — so you can watch a catalog someone else is actively
 editing without reopening the page. It keeps your current image/hotspot/
 zoom selected across the refresh.
 
-### ⚠️ No conflict detection
+## Real-time collaboration
 
-There is no real-time collaboration here — no merge, no locking, no "this
-file changed" warning. Both apps keep the whole catalog in memory once
-opened, and Save always serializes and overwrites the *entire* file, with
-no check against what's currently on disk. If two people open the same
-`.ecatm` file (say, from a shared OneDrive/Google Drive folder synced on
-both machines) and edit it at the same time, whoever saves second silently
-wins — the first person's changes are gone, no warning, nothing to undo.
-Confirmed live: open the same file in two editor tabs, add a hotspot in
-each, save the first, then save the second — the first hotspot is simply
-not in the file anymore afterwards.
+Multiple people can edit the same catalog together and see each other's
+changes as they happen — click **🤝 Start collaboration** in the editor to
+get a link, send it to a colleague, and you're both editing live. A small
+always-visible toolbar shows who else is currently in the session (a name
+they pick once, no account needed) and lets either of you end it when
+you're done.
 
-Until this gets an actual fix, treat a shared `.ecatm` file the way you'd
-treat a shared spreadsheet with no co-authoring support: agree on who's
-editing before you start, and have the other person **re-open the file**
-(or hit **Refresh** in the viewer) to pick up the latest version *before*
-making their own changes — not after.
+This runs on a **self-hosted** collaboration server, not something the
+project runs on your behalf: whoever starts a session downloads and runs
+one small app on their own computer for as long as the session needs to
+exist (it makes itself reachable from outside that computer automatically,
+no router setup or account required), and closing it — or that computer
+going to sleep — ends the session for everyone. Nothing is ever lost when
+it does: everyone keeps their own current copy locally the whole time, the
+same familiar `.ecatm` file, downloadable at any point.
+
+See [`packages/collab-server`](packages/collab-server) for how to run that
+app, how the whole live-editing mechanism works (large catalogs are never
+resent whole — only the specific field or photo that changed), and its
+current known limitations (its binaries aren't code-signed yet, so
+Windows/macOS will warn on first run).
+
+### Editing locally, without a shared session
+
+Outside a shared session, the editor still works exactly as it always has:
+the whole catalog loads into memory, and Save overwrites the entire file.
+There's still no true conflict *resolution* here — but where Save writes
+back to the same file in place (Chrome/Edge — see "Using the editor"
+above), it now re-checks whether that file changed since you opened it
+(e.g. someone else's save landing while you were both editing a copy
+synced via the same OneDrive/Google Drive folder) and warns you instead of
+silently overwriting it. If you actually need two people editing at once, use a
+shared collaboration session instead (above) — it's built for exactly
+that.
 
 ## Reverse search
 
@@ -347,18 +367,24 @@ done in the browser with no server to offload to.
 - [`packages/viewer-embed`](packages/viewer-embed) — the same engine
   packaged as the `<ecm-viewer>` Web Component (see "Embedding the viewer"
   above), built as a single self-contained script.
+- [`packages/collab-server`](packages/collab-server) — the self-hosted
+  real-time collaboration server (see "Real-time collaboration" above): a
+  fourth, standalone app, not a static site — whoever starts a shared
+  session runs it themselves, on their own computer, for as long as it's
+  needed.
 
-All three apps render their own DOM directly — there's no UI framework,
-just the shared engine/data layer above.
+All three page-rendering apps render their own DOM directly — there's no
+UI framework, just the shared engine/data layer above.
 
 ## Development
 
 ```bash
 pnpm install
-pnpm dev:editor   # http://localhost:5173
-pnpm dev:viewer   # http://localhost:5174 (or next free port)
-pnpm dev:embed    # http://localhost:5175 (or next free port) — <ecm-viewer> dev preview
-pnpm -r build     # production build of all three -> packages/*/dist
+pnpm dev:editor         # http://localhost:5173
+pnpm dev:viewer         # http://localhost:5174 (or next free port)
+pnpm dev:embed          # http://localhost:5175 (or next free port) — <ecm-viewer> dev preview
+pnpm dev:collab-server  # http://127.0.0.1:8787 — see packages/collab-server for the rest
+pnpm -r build           # production build of editor/viewer/viewer-embed -> packages/*/dist
 ```
 
 For the editor/viewer, `pnpm -r build` output is genuinely everything
@@ -392,13 +418,17 @@ viewer"), distributed straight from this repo via jsDelivr — its built
 `dist/ecm-viewer.js` is deliberately committed (everywhere else, `dist/`
 is gitignored) since that file *is* what gets served. The editor and
 viewer themselves are hosted too, free, on GitHub Pages — see "Getting
-started" for the links. [CI](.github/workflows/ci.yml) typechecks and
-builds every package on each push/PR, rebuilds+recommits `ecm-viewer.js`
-if it's gone stale so the CDN URL can't silently drift from source, and
-redeploys the editor/viewer to Pages — all three on every push to `main`,
-no manual step. Known gap, confirmed via a live two-editor test: no
-conflict detection on concurrent edits (see "⚠️ No conflict detection"
-above).
+started" for the links. Real-time collaboration (see "Real-time
+collaboration" above) is functional end-to-end too, live-verified with
+real multiple-tab sessions: live editing without stepping on each other's
+changes, presence, recovering from a dropped connection, and a session
+ending cleanly (on purpose, or the host's server stopping) with an actual
+explanation instead of collaborators just going quiet. [CI](.github/workflows/ci.yml)
+typechecks and builds every package on each push/PR (plus runs
+`packages/collab-server`'s own test suite), rebuilds+recommits
+`ecm-viewer.js` if it's gone stale so the CDN URL can't silently drift
+from source, and redeploys the editor/viewer to Pages — all on every push
+to `main`, no manual step.
 
 ## License
 
