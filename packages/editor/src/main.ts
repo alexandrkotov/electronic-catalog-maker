@@ -1100,7 +1100,14 @@ async function actionStartCollaboration() {
   setStatus("Looking for your collaboration server…");
   const detected = await detectLocalCollabServer();
   if (!detected) {
-    collabManualUrlValue = collabServerUrl;
+    // Deliberately blank, not collabServerUrl — that's very often the
+    // address of a server that *used* to be running (e.g. this same
+    // computer's, from an earlier session) and just got stopped, which
+    // auto-detect already ruled out above. Pre-filling it here reads as
+    // the app claiming to already know a live address, which it doesn't;
+    // a real bug report from the user confirmed this was genuinely
+    // confusing in exactly that scenario, not just a hypothetical.
+    collabManualUrlValue = "";
     collabNotFoundOpen = true;
     setStatus("Could not find a running collaboration server.");
     return;
@@ -2031,7 +2038,8 @@ function renderCollabNotFoundDialog(): string {
           <button id="collab-not-found-retry">Try again</button>
         </div>
         <details style="margin-top: 0.75rem">
-          <summary>It's running on a different computer</summary>
+          <summary>Or enter its address by hand</summary>
+          <p class="hint" style="margin-top: 0.5rem">If it's running on a different computer, paste in its address.</p>
           <div class="field" style="margin-top: 0.5rem">
             <label for="collab-manual-url-input">Its address</label>
             <input type="text" id="collab-manual-url-input" value="${escapeHtml(collabManualUrlValue)}" placeholder="${DEFAULT_COLLAB_SERVER_URL}" />
