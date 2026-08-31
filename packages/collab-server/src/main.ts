@@ -171,14 +171,21 @@ async function main() {
 
   const shutdown = () => {
     console.log("\nShutting down…");
-    tunnel?.stop();
-    // Awaited, not fire-and-forget — server.stop() broadcasts a
+    // server.stop() first, awaited, and *then* the tunnel — not the other
+    // way around, and not fire-and-forget either. It broadcasts a
     // "server-shutting-down" notice to every connected client before it
-    // actually stops listening (see its own doc), and process.exit()
-    // doesn't wait for anything, pending timers included, so calling it
-    // right away was confirmed (live) to cut that broadcast off before it
-    // ever reached anyone.
-    void server.stop().then(() => process.exit(0));
+    // actually stops listening (see its own doc). A collaborator almost
+    // always reaches this server *through* the tunnel, not localhost — so
+    // stopping the tunnel first cuts off the very path that notice has to
+    // travel down before it can arrive, and process.exit() doesn't wait for
+    // anything, pending timers included, either. Both orderings were
+    // confirmed live (a real two-tab session over a real tunnel) to
+    // silently swallow the notice — collaborators saw a bare "🔴
+    // Disconnected" instead — before landing on this order.
+    void server.stop().then(() => {
+      tunnel?.stop();
+      process.exit(0);
+    });
   };
   server.onShutdownRequested = shutdown;
   process.on("SIGINT", shutdown);

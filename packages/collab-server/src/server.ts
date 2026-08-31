@@ -118,14 +118,18 @@ export function startServer(port: number): ServerHandle {
       // before it's actually flushed to the socket. This delay gives it a
       // moment first; resolving only once it's actually run is what lets a
       // caller about to process.exit() (main.ts) wait for that instead of
-      // racing it — an unawaited version of this exact delay was confirmed,
-      // live with a real browser tab, to still lose the message, because
-      // process.exit() doesn't wait for pending timers either.
+      // racing it. 300ms, not something tighter: most collaborators reach
+      // this server *through* the tunnel, not localhost, so the frame's
+      // real path is browser <-> Cloudflare edge <-> cloudflared <-> this
+      // process — real internet hops, not just a loopback flush. A shorter
+      // delay (and the tunnel being stopped before this instead of after —
+      // see main.ts's shutdown()) was confirmed live, over a real tunnel
+      // with two actual browser tabs, to still lose the message.
       return new Promise((resolve) => {
         setTimeout(() => {
           bunServer.stop(true);
           resolve();
-        }, 100);
+        }, 300);
       });
     },
   };
