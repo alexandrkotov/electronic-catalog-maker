@@ -3,8 +3,9 @@ dist/
 .DS_Store
 *.log
 .vite/
-# wrangler dev's local state (Miniflare's on-disk Durable Object storage, etc.)
-.wrangler/
+# Downloaded-at-build-time cloudflared binaries for packages/collab-server's
+# compiled builds — fetched, not authored, so never committed.
+vendor/
 
 # The embeddable viewer's build IS the distributable — it's what jsDelivr
 # serves straight from this repo (see README "Embedding the viewer"), so

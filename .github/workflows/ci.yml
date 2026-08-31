@@ -19,9 +19,11 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: oven-sh/setup-bun@v2 # packages/collab-server is a Bun-only package — its own tests (bun test) need the real runtime, not just Node
       - run: pnpm install --frozen-lockfile
       - run: pnpm run typecheck
       - run: pnpm run build
+      - run: pnpm --filter @ecm/collab-server test
 
   # packages/viewer-embed/dist/ecm-viewer.js is committed on purpose (see
   # README "Status") — it's the actual file jsDelivr serves straight from

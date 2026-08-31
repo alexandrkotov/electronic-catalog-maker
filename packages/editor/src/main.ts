@@ -67,11 +67,32 @@ const CATALOG_PICKER_TYPE: FilePickerAcceptType = {
   accept: { "application/x-sqlite3": [`.${CATALOG_FILE_EXTENSION}`, ".sch"] },
 };
 
-// @ecm/collab-server isn't deployed anywhere yet (Phase 1's own README —
-// needs a real Cloudflare account this project doesn't have set up here),
-// so this defaults to wrangler's local-dev port. Override with a real
-// deployed URL via VITE_COLLAB_SERVER_URL once one exists.
-const COLLAB_SERVER_URL = import.meta.env.VITE_COLLAB_SERVER_URL ?? "http://127.0.0.1:8787";
+// There's no maintainer-hosted default collab server — self-hosting is the
+// only model (see the project's collaboration-hosting design notes). This
+// defaults to the standalone @ecm/collab-server app's own default local
+// port, so a fresh install of both just works together with nothing to
+// configure; "Server settings…" lets a person point at a different address
+// (their own machine's tunnel, or someone else's, from a shared link's
+// `server=` param — see below).
+const DEFAULT_COLLAB_SERVER_URL = "http://127.0.0.1:8787";
+let collabServerUrl = loadCollabServerUrl();
+
+function loadCollabServerUrl(): string {
+  try {
+    return localStorage.getItem("ecm-editor-collab-server-url") || DEFAULT_COLLAB_SERVER_URL;
+  } catch {
+    return DEFAULT_COLLAB_SERVER_URL; // localStorage unavailable (privacy mode, etc.)
+  }
+}
+
+function saveCollabServerUrl(url: string) {
+  collabServerUrl = url;
+  try {
+    localStorage.setItem("ecm-editor-collab-server-url", url);
+  } catch {
+    // Still applies for this session, just won't persist across a reload.
+  }
+}
 
 let SQL: SqlJsStatic;
 let db: Database | null = null;
@@ -159,6 +180,14 @@ let storeSettingsCartMode: "accumulate" | "instant" = "accumulate";
 let storeSettingsCartIdPattern = DEFAULT_CART_ID_PATTERN;
 let storeSettingsCartItemParam = DEFAULT_CART_ITEM_PARAM;
 let storeSettingsCartCheckoutBaseUrl = DEFAULT_CART_CHECKOUT_BASE_URL;
+
+// "Server settings" dialog state — which self-hosted @ecm/collab-server
+// address this tab uses for Start/Join collaboration (see collabServerUrl
+// above). An app-level preference, not catalog-scoped, so unlike Store
+// settings it isn't reloaded from anything each time it's opened — it just
+// edits the same persisted value directly.
+let serverSettingsOpen = false;
+let serverSettingsUrlValue = "";
 
 // Which single panel is shown below the mobile breakpoint (see .mobile-tabs
 // / #app[data-mobile-tab] in style.css) — irrelevant above it, where all
@@ -317,11 +346,18 @@ const initialSrcParam = new URLSearchParams(location.search).get("src");
 // `?collab=<roomId>` joins a shared session automatically on load — the
 // link actionStartCollaboration() hands the initiator to pass along.
 const initialCollabParam = new URLSearchParams(location.search).get("collab");
+// `&server=<url>` rides along with it — the self-hosted server that room
+// actually lives on isn't a fixed address the way a maintainer-hosted
+// default would be, so the link has to carry it. Adopted as this tab's own
+// Server settings too (not just used for this one join) so a later
+// reconnect or reload of this same tab still knows where to look.
+const initialCollabServerParam = new URLSearchParams(location.search).get("server");
 
 async function boot() {
   app.innerHTML = `<p style="padding:1rem">Loading SQLite (sql.js)…</p>`;
   SQL = await initSqlite(wasmUrl);
   if (initialCollabParam) {
+    if (initialCollabServerParam) saveCollabServerUrl(initialCollabServerParam);
     await actionJoinCollaboration(initialCollabParam);
   } else if (initialSrcParam) {
     await loadInitialFromUrl(initialSrcParam);
@@ -526,6 +562,23 @@ function actionSubmitStoreSettings() {
   });
   storeSettingsOpen = false;
   setStatus("Updated store settings.");
+}
+
+function actionOpenServerSettings() {
+  serverSettingsUrlValue = collabServerUrl;
+  serverSettingsOpen = true;
+  render();
+}
+
+function actionCancelServerSettings() {
+  serverSettingsOpen = false;
+  render();
+}
+
+function actionSubmitServerSettings() {
+  saveCollabServerUrl(serverSettingsUrlValue.trim() || DEFAULT_COLLAB_SERVER_URL);
+  serverSettingsOpen = false;
+  setStatus(`Collaboration server set to ${collabServerUrl}.`);
 }
 
 function suggestedFileName(): string {
@@ -944,7 +997,7 @@ async function connectAndSync(roomId: string) {
   let syncing = true;
 
   collab = new CollabConnection(
-    COLLAB_SERVER_URL,
+    collabServerUrl,
     roomId,
     (op) => {
       if (syncing) pending.push(op);
@@ -964,7 +1017,7 @@ async function connectAndSync(roomId: string) {
   // status flag says so a few milliseconds ahead of the socket itself".
   await collab.waitUntilOpen();
 
-  const missed = await listOpsSince(COLLAB_SERVER_URL, roomId, lastAppliedSeq);
+  const missed = await listOpsSince(collabServerUrl, roomId, lastAppliedSeq);
   for (const op of missed) applyRemoteOp(op);
   syncing = false;
   for (const op of pending) applyRemoteOp(op);
@@ -1000,16 +1053,19 @@ async function actionStartCollaboration() {
   setStatus("Starting a shared session…");
   try {
     const bytes = exportCatalog(db);
-    const room = await createRoom(COLLAB_SERVER_URL, bytes);
+    const room = await createRoom(collabServerUrl, bytes);
     collabOwnerToken = room.ownerToken;
     lastAppliedSeq = 0;
     // So reloading *this* tab re-joins the same room via the same
-    // ?collab= boot path a shared link uses, instead of losing it.
-    history.replaceState(null, "", `?collab=${room.roomId}`);
+    // ?collab= boot path a shared link uses, instead of losing it. Carries
+    // the server address too — collabShareLink() below is what a colleague
+    // actually gets, but this tab's own address bar needs it just as much
+    // for its own reload/reconnect to know where to look.
+    history.replaceState(null, "", `?collab=${room.roomId}&server=${encodeURIComponent(collabServerUrl)}`);
     await connectAndSync(room.roomId);
     setStatus("Started a shared session — share the link shown below with a colleague.");
   } catch (err) {
-    setStatus(`Could not start a shared session: ${(err as Error).message}`);
+    setStatus(collabErrorMessage("start a shared session", err));
   }
 }
 
@@ -1017,7 +1073,7 @@ async function actionStartCollaboration() {
 async function actionJoinCollaboration(roomId: string) {
   setStatus("Joining the shared session…");
   try {
-    const bytes = await downloadSnapshot(COLLAB_SERVER_URL, roomId);
+    const bytes = await downloadSnapshot(collabServerUrl, roomId);
     db = openCatalog(SQL, bytes);
     activeImageId = currentImages()[0]?.id ?? null;
     openedFileHandle = null;
@@ -1033,8 +1089,21 @@ async function actionJoinCollaboration(roomId: string) {
     await connectAndSync(roomId);
     setStatus("Joined the shared session.");
   } catch (err) {
-    setStatus(`Could not join that shared session: ${(err as Error).message}`);
+    setStatus(collabErrorMessage("join that shared session", err));
   }
+}
+
+/**
+ * A failed create/join is very often just "nothing's listening at
+ * collabServerUrl" (the collaboration-server app isn't running, or Server
+ * settings still points at the wrong address) rather than an actual server-
+ * side rejection — the raw fetch error alone ("Failed to fetch") doesn't
+ * tell a non-technical person that. Points them at Server settings instead
+ * of just surfacing whatever the underlying error happened to say.
+ */
+function collabErrorMessage(action: string, err: unknown): string {
+  const detail = err instanceof Error ? err.message : String(err);
+  return `Could not ${action} — is the collaboration server running at ${collabServerUrl}? Check ⚙️ Server settings…. (${detail})`;
 }
 
 /** Disconnects this tab only — the room itself and everyone else in it are unaffected (deleting a room outright is Phase 5). */
@@ -1583,6 +1652,7 @@ function render() {
       <button id="btn-export" ${db ? "" : "disabled"} title="Always downloads a new copy">Export .${CATALOG_FILE_EXTENSION}</button>
       <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
       <button id="btn-store-settings" ${db ? "" : "disabled"} title="Configure this catalog's store link and Buy-button behavior">⚙️ Store settings…</button>
+      <button id="btn-server-settings" ${collabRoomId ? "disabled" : ""} title="Which self-hosted collaboration server to use for Start/Join collaboration">🖥️ Server settings…</button>
       ${db && !collabRoomId ? `<button id="btn-start-collab" title="Start a live session others can join to edit this catalog with you">🤝 Start collaboration</button>` : ""}
       ${collabRoomId ? renderCollabStatus() : ""}
       <span class="spacer"></span>
@@ -1641,6 +1711,7 @@ function render() {
     ${renderNoticeOverlay()}
     ${renderRemoteDialog()}
     ${renderStoreSettingsDialog()}
+    ${renderServerSettingsDialog()}
   `;
 
   if (savedScroll) {
@@ -1726,7 +1797,7 @@ function renderZoomControls(): string {
 }
 
 function collabShareLink(): string {
-  return `${location.origin}${location.pathname}?collab=${collabRoomId}`;
+  return `${location.origin}${location.pathname}?collab=${collabRoomId}&server=${encodeURIComponent(collabServerUrl)}`;
 }
 
 function collabStatusText(): { icon: string; label: string; title: string } {
@@ -1872,6 +1943,26 @@ function renderStoreSettingsDialog(): string {
         <div class="confirm-actions">
           <button id="store-settings-cancel">Cancel</button>
           <button id="store-settings-submit">Save</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderServerSettingsDialog(): string {
+  if (!serverSettingsOpen) return "";
+  return `
+    <div class="confirm-overlay">
+      <div class="confirm-box">
+        <h2>Server settings</h2>
+        <div class="field">
+          <label for="server-url-input">Collaboration server address</label>
+          <input type="text" id="server-url-input" value="${escapeHtml(serverSettingsUrlValue)}" placeholder="${DEFAULT_COLLAB_SERVER_URL}" />
+        </div>
+        <p class="hint">Run the <strong>ECM Collaboration Server</strong> app on your own computer, then paste the address it shows you here before starting or joining a shared session. A colleague opening your shared link picks this up automatically — they don't need to set anything themselves.</p>
+        <div class="confirm-actions">
+          <button id="server-settings-cancel">Cancel</button>
+          <button id="server-settings-submit">Save</button>
         </div>
       </div>
     </div>
@@ -2148,6 +2239,21 @@ function wireEvents(links: CatalogLink[]) {
   }
 
   document.getElementById("btn-store-settings")?.addEventListener("click", actionOpenStoreSettings);
+  document.getElementById("btn-server-settings")?.addEventListener("click", actionOpenServerSettings);
+  document.getElementById("server-settings-cancel")?.addEventListener("click", actionCancelServerSettings);
+  document.getElementById("server-settings-submit")?.addEventListener("click", actionSubmitServerSettings);
+  const serverUrlInput = document.getElementById("server-url-input") as HTMLInputElement | null;
+  serverUrlInput?.addEventListener("input", () => {
+    serverSettingsUrlValue = serverUrlInput.value;
+  });
+  serverUrlInput?.addEventListener("keydown", (evt) => {
+    if (evt.key === "Enter") actionSubmitServerSettings();
+    if (evt.key === "Escape") actionCancelServerSettings();
+  });
+  if (serverSettingsOpen) {
+    serverUrlInput?.focus();
+    serverUrlInput?.setSelectionRange(serverUrlInput.value.length, serverUrlInput.value.length);
+  }
   document.getElementById("btn-start-collab")?.addEventListener("click", () => void actionStartCollaboration());
   document.getElementById("btn-copy-collab-link")?.addEventListener("click", () => void actionCopyCollabLink());
   document.getElementById("btn-leave-collab")?.addEventListener("click", actionLeaveCollaboration);

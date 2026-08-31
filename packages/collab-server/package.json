@@ -1,19 +1,19 @@
 {
   "name": "@ecm/collab-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "dev": "bun run src/main.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "bun test",
+    "compile:linux-x64": "bun build --compile --target=bun-linux-x64 src/main.ts --outfile dist/ecm-collab-server-linux-x64",
+    "compile:macos-arm64": "bun build --compile --target=bun-darwin-arm64 src/main.ts --outfile dist/ecm-collab-server-macos-arm64",
+    "compile:macos-x64": "bun build --compile --target=bun-darwin-x64 src/main.ts --outfile dist/ecm-collab-server-macos-x64",
+    "compile:windows-x64": "bun build --compile --target=bun-windows-x64 src/main.ts --outfile dist/ecm-collab-server-windows-x64.exe"
   },
   "devDependencies": {
-    "@cloudflare/vitest-plugin": "^1.1.2",
-    "@cloudflare/workers-types": "^5.20260830.1",
-    "typescript": "^5.6.3",
-    "vitest": "^4.1.11",
-    "wrangler": "^4.42.0"
+    "@types/bun": "^1.2.0",
+    "typescript": "^5.6.3"
   }
 }
