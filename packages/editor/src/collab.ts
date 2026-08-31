@@ -26,6 +26,17 @@ export interface PresenceUser {
   color: string;
 }
 
+/**
+ * Why a session actually ended, as told to this tab explicitly (Phase 6) —
+ * distinct from a plain "disconnected" status, which today is also what a
+ * momentary network blip looks like and triggers main.ts's endless
+ * scheduleReconnect. `room-closed` names whoever closed it, if their tab
+ * sent one (see deleteRoom() below); `server-shutting-down` never does —
+ * the whole host process is going away, not necessarily because of
+ * anything a currently-connected participant did.
+ */
+export type CollabClosedReason = { kind: "room-closed"; by: string | null } | { kind: "server-shutting-down" };
+
 // Comfortably under Workers' request body limits regardless of exactly
 // where those sit — a real catalog's images are usually smaller than this
 // per-chunk anyway, so most uploads end up as one chunk per image.
@@ -70,6 +81,21 @@ export async function listOpsSince(baseUrl: string, roomId: string, sinceSeq: nu
   return (await res.json()) as Op[];
 }
 
+/**
+ * Ends the session for everyone, not just this tab — only the holder of
+ * `ownerToken` (from createRoom()'s return; a joiner never has it) can do
+ * this. `closedByName` rides along as X-Closed-By so still-connected
+ * participants' "room-closed" WS frame (see CollabClosedReason) can say who
+ * closed it, not just that it happened.
+ */
+export async function deleteRoom(baseUrl: string, roomId: string, ownerToken: string, closedByName: string): Promise<void> {
+  const res = await fetch(`${baseUrl}/rooms/${roomId}`, {
+    method: "DELETE",
+    headers: { "X-Owner-Token": ownerToken, "X-Closed-By": closedByName },
+  });
+  if (!res.ok) throw new Error(`Could not end the session (${res.status}).`);
+}
+
 export type CollabStatus = "connecting" | "connected" | "disconnected";
 
 /**
@@ -103,6 +129,7 @@ export class CollabConnection {
     readonly roomId: string,
     private readonly onOp: (op: Op) => void,
     private readonly onPresence: (users: PresenceUser[]) => void,
+    private readonly onClosed: (reason: CollabClosedReason) => void,
     private readonly onStatusChange: (status: CollabStatus) => void,
   ) {
     const wsUrl = `${baseUrl.replace(/^http/, "ws")}/rooms/${roomId}/live`;
@@ -117,7 +144,7 @@ export class CollabConnection {
     });
     this.ws.addEventListener("error", () => this.setStatus("disconnected"));
     this.ws.addEventListener("message", (evt) => {
-      let parsed: { type?: string; users?: PresenceUser[] };
+      let parsed: { type?: string; users?: PresenceUser[]; by?: string | null };
       try {
         parsed = JSON.parse(evt.data as string);
       } catch {
@@ -129,6 +156,14 @@ export class CollabConnection {
       }
       if (parsed.type === "presence-roster") {
         this.onPresence(parsed.users ?? []);
+        return;
+      }
+      if (parsed.type === "room-closed") {
+        this.onClosed({ kind: "room-closed", by: parsed.by ?? null });
+        return;
+      }
+      if (parsed.type === "server-shutting-down") {
+        this.onClosed({ kind: "server-shutting-down" });
         return;
       }
       this.onOp(parsed as Op);

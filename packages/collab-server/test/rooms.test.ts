@@ -19,8 +19,8 @@ describe("collab-server rooms", () => {
     base = `http://127.0.0.1:${server.port}`;
   });
 
-  afterEach(() => {
-    server.stop();
+  afterEach(async () => {
+    await server.stop();
   });
 
   it("creates a room, accepts a chunked upload, and returns the reassembled snapshot", async () => {
@@ -270,5 +270,100 @@ describe("collab-server rooms", () => {
     expect((await res.json()) as { ok: boolean }).toEqual({ ok: true });
     await new Promise((resolve) => setTimeout(resolve, 100)); // onShutdownRequested fires after a short delay, see server.ts
     expect(shutdownCalled).toBe(true);
+  });
+
+  it("tells everyone still connected the room is closed (with who closed it) when its owner deletes it, and rejects the wrong token without telling anyone anything", async () => {
+    const createRes = await fetch(`${base}/rooms`, { method: "POST" });
+    const { roomId, ownerToken } = (await createRes.json()) as { roomId: string; ownerToken: string };
+    const wsBase = base.replace(/^http/, "ws");
+
+    function connect(): Promise<WebSocket> {
+      return new Promise((resolve, reject) => {
+        const ws = new WebSocket(`${wsBase}/rooms/${roomId}/live`);
+        ws.addEventListener("open", () => resolve(ws), { once: true });
+        ws.addEventListener("error", reject, { once: true });
+      });
+    }
+    function nextMessage(ws: WebSocket): Promise<{ type: string; by?: string | null }> {
+      return new Promise((resolve) => {
+        ws.addEventListener("message", (evt) => resolve(JSON.parse(evt.data as string)), { once: true });
+      });
+    }
+
+    const wsA = await connect(); // the initiator's own tab, still connected
+    const wsB = await connect(); // a collaborator's tab
+
+    // A wrong token deletes nothing and notifies nobody.
+    const badDelete = await fetch(`${base}/rooms/${roomId}`, {
+      method: "DELETE",
+      headers: { "X-Owner-Token": "not-the-real-token", "X-Closed-By": "Mallory" },
+    });
+    expect(badDelete.status).toBe(403);
+    const infoStillThere = await fetch(`${base}/rooms/${roomId}/info`);
+    expect(((await infoStillThere.json()) as { exists: boolean }).exists).toBe(true);
+
+    // The real owner deletes it, naming themselves via X-Closed-By — both
+    // still-connected sockets get an explicit room-closed frame, not just a
+    // dropped connection to guess at.
+    const [aMsg, bMsg] = await Promise.all([
+      nextMessage(wsA),
+      nextMessage(wsB),
+      fetch(`${base}/rooms/${roomId}`, { method: "DELETE", headers: { "X-Owner-Token": ownerToken, "X-Closed-By": "Alex" } }).then((res) =>
+        expect(res.status).toBe(200),
+      ),
+    ]);
+    expect(aMsg).toEqual({ type: "room-closed", by: "Alex" });
+    expect(bMsg).toEqual(aMsg);
+
+    const infoGone = await fetch(`${base}/rooms/${roomId}/info`);
+    expect(((await infoGone.json()) as { exists: boolean }).exists).toBe(false);
+
+    // A stray op arriving right after (a message already in flight when the
+    // room vanished) doesn't crash the server — see server.ts's message
+    // handler.
+    wsA.send(JSON.stringify({ fn: "updateRow", args: [1, {}] }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const stillUp = await fetch(`${base}/status.json`);
+    expect(stillUp.status).toBe(200);
+
+    wsA.close();
+    wsB.close();
+  });
+
+  it("omits `by` when X-Closed-By wasn't sent", async () => {
+    const createRes = await fetch(`${base}/rooms`, { method: "POST" });
+    const { roomId, ownerToken } = (await createRes.json()) as { roomId: string; ownerToken: string };
+    const wsBase = base.replace(/^http/, "ws");
+    const ws = await new Promise<WebSocket>((resolve, reject) => {
+      const socket = new WebSocket(`${wsBase}/rooms/${roomId}/live`);
+      socket.addEventListener("open", () => resolve(socket), { once: true });
+      socket.addEventListener("error", reject, { once: true });
+    });
+    const [msg] = await Promise.all([
+      new Promise((resolve) => ws.addEventListener("message", (evt) => resolve(JSON.parse(evt.data as string)), { once: true })),
+      fetch(`${base}/rooms/${roomId}`, { method: "DELETE", headers: { "X-Owner-Token": ownerToken } }),
+    ]);
+    expect(msg).toEqual({ type: "room-closed", by: null });
+    ws.close();
+  });
+
+  it("broadcasts server-shutting-down to every open room right before actually stopping, and stop() is safe to call twice", async () => {
+    const createRes = await fetch(`${base}/rooms`, { method: "POST" });
+    const { roomId } = (await createRes.json()) as { roomId: string };
+    const wsBase = base.replace(/^http/, "ws");
+    const ws = await new Promise<WebSocket>((resolve, reject) => {
+      const socket = new WebSocket(`${wsBase}/rooms/${roomId}/live`);
+      socket.addEventListener("open", () => resolve(socket), { once: true });
+      socket.addEventListener("error", reject, { once: true });
+    });
+    const nextMessage = new Promise((resolve) => {
+      ws.addEventListener("message", (evt) => resolve(JSON.parse(evt.data as string)), { once: true });
+    });
+
+    const stopPromise = server.stop();
+    expect(await nextMessage).toEqual({ type: "server-shutting-down" });
+    await stopPromise;
+    await expect(server.stop()).resolves.toBeUndefined(); // afterEach calls this again too — must be a harmless no-op
+    ws.close();
   });
 });

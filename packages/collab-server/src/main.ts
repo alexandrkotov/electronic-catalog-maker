@@ -172,8 +172,13 @@ async function main() {
   const shutdown = () => {
     console.log("\nShutting down…");
     tunnel?.stop();
-    server.stop();
-    process.exit(0);
+    // Awaited, not fire-and-forget — server.stop() broadcasts a
+    // "server-shutting-down" notice to every connected client before it
+    // actually stops listening (see its own doc), and process.exit()
+    // doesn't wait for anything, pending timers included, so calling it
+    // right away was confirmed (live) to cut that broadcast off before it
+    // ever reached anyone.
+    void server.stop().then(() => process.exit(0));
   };
   server.onShutdownRequested = shutdown;
   process.on("SIGINT", shutdown);

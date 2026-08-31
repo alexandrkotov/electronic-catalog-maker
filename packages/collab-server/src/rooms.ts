@@ -151,6 +151,11 @@ export function deleteRoom(roomId: string, ownerToken: string): void {
   rooms.delete(roomId);
 }
 
+/** Every room id currently held — used only for a process-wide broadcast (the whole server shutting down, see server.ts's stop()) right before every connected client is about to be dropped anyway. Nothing else needs to enumerate rooms globally. */
+export function listRoomIds(): string[] {
+  return [...rooms.keys()];
+}
+
 /** Test-only: every real Room instance is this whole process, so tests need a way back to a clean slate between cases instead of restarting a Durable Object. */
 export function _resetAllRoomsForTests(): void {
   rooms.clear();

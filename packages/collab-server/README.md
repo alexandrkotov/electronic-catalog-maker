@@ -6,8 +6,27 @@ viewer — whoever wants to start a shared editing session downloads and runs
 one file, shares the address it shows, and stops it when they're done.
 
 See the project's collaboration-hosting design notes for the full "why"
-behind self-hosting instead of a maintainer-run default server, and the
-[Implementation Plan](../../) for how this fits the rest of the feature.
+behind self-hosting instead of a maintainer-run default server.
+
+## Project phases
+
+This package — and the rest of the real-time collaborative-editing
+feature — was built in phases; commit messages and code comments
+elsewhere in this repo refer back to these by number:
+
+| Phase | What | Status |
+|---|---|---|
+| 0 | A save-time guard for local (non-collaborative) editing | Done |
+| 1 | Foundations of a shared session (create/join, chunked upload) | Done |
+| 2 | Live editing — real-time op relay between connected clients | Done |
+| 3 | Recovering from dropped connections; an offline outbox | Done |
+| 4 | Self-hosting (this package) instead of a permanently-hosted server | Done |
+| 5 | Presence — who else is currently in the session | Done |
+| 6 | Ending a session, on purpose or automatically | Done |
+| 7 | Real-world verification at scale, and user-facing docs | Not started |
+
+The full design/planning document this table summarizes is not part of
+this repo — it's the maintainer's own working notes, kept elsewhere.
 
 ## How it works
 
@@ -65,6 +84,23 @@ forgotten background tab just quietly drops off the roster rather than
 looking like someone's still working in it. This server holds none of that
 itself; it only relays what each tab reports about its own visibility and
 activity.
+
+## Ending a session
+
+Leaving is purely personal — closing a tab, or its **Leave** button, only
+disconnects that one tab. Everyone else, and the room itself, are
+unaffected.
+
+Only whoever started the session (the one tab holding its `ownerToken`) sees
+an **End for everyone** button, which really does end it for everyone — a
+confirmation prompt first, then every other connected tab gets an explicit
+notice (naming who ended it) instead of just going quietly "disconnected"
+and endlessly retrying a room that's gone for good. The same explicit
+notice — without a name attached, since it's not any one room's doing —
+goes out to every room this process still has right before the whole app
+stops (the status page's **Stop** button, Ctrl+C, or the host's computer
+going to sleep). Either way, nothing is actually lost: everyone always has
+their own current copy locally; only the live, shared connection ends.
 
 ## Running it
 
@@ -161,7 +197,7 @@ onto a plain self-hosted server; only the base URL it's pointed at changed.
 | `GET /rooms/:id/info` | `{ exists, uploadComplete, chunkCount, totalBytes }`, without pulling the snapshot itself. |
 | `GET /rooms/:id/live` | Upgrades to the WebSocket used for live editing — relays an incoming op to every other connected client and logs it. Also carries presence (see below): `presence-hello`/`presence-active` frames in, a `presence-roster` frame back out to everyone (sender included) whenever who's active changes. |
 | `GET /rooms/:id/ops?since=N` | Every op logged after seq N — how a fresh joiner or reconnecting client catches up. |
-| `DELETE /rooms/:id` | Requires `X-Owner-Token: <ownerToken>`. Wrong or missing token → 401/403. |
+| `DELETE /rooms/:id` | Requires `X-Owner-Token: <ownerToken>`. Wrong or missing token → 401/403. Ends the session for everyone, not just the caller — broadcasts a `room-closed` frame (see below) to every still-connected client first. An optional `X-Closed-By: <name>` names who, for that frame's `by` field. |
 | `GET /status`, `GET /status.json` | The status page main.ts auto-opens (the app's actual UI) and the JSON it polls. `POST /shutdown` is the status page's Stop button. None of these three are part of the collaboration protocol itself. |
 
 ## Running the tests
@@ -248,3 +284,13 @@ build ever runs on native Windows (e.g. a `windows-latest` CI runner).
   responding — same simplification the Durable Object version had; fine for
   realistic catalog sizes, revisit with real streaming before relying on
   this for a true multi-hundred-MB one.
+- **A tab that's mid-reconnect when a session ends never sees the explicit
+  notice.** `room-closed`/`server-shutting-down` only reach tabs actually
+  subscribed at the moment they're sent — a tab that was already offline
+  (a network blip, or it just hadn't caught up yet) instead keeps retrying
+  the editor's normal reconnect loop against a room that's now permanently
+  gone, with no way to tell that apart from an ordinary, recoverable drop.
+  Rare (it needs two things going wrong within the same few seconds), and
+  not worse than every reconnect attempt behaved before this existed —
+  left as a known gap rather than adding a way for a reconnect to actively
+  probe "does this room still exist" before assuming it does.

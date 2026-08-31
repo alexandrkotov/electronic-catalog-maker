@@ -24,6 +24,18 @@ import { renderStatusPage } from "./statusPage";
  * because a roster update needs to reach the connection that triggered it
  * too (e.g. seeing your own avatar disappear when you go idle) — unlike an
  * op, which the sender already applied locally and shouldn't get echoed.
+ *
+ * Also new: session-ending notices (Phase 6) — a still-connected client
+ * finds out a session ended from an explicit "room-closed" or
+ * "server-shutting-down" WS frame, not merely from its connection dying
+ * (which the editor would otherwise read as a network blip and retry every
+ * few seconds forever — see the editor's scheduleReconnect). "room-closed"
+ * goes out on a successful DELETE /rooms/:id, before this process itself
+ * has any reason to exit; "server-shutting-down" goes out to every room
+ * this process still has, from ServerHandle.stop() itself, so it fires
+ * identically whether the host used the status page's Stop button, Ctrl+C,
+ * or the process got a SIGTERM — every one of those already funnels into
+ * stop() (see main.ts's shutdown()).
  */
 
 // The editor and this server are always different origins (a self-hosted
@@ -34,7 +46,7 @@ import { renderStatusPage } from "./statusPage";
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-Owner-Token",
+  "Access-Control-Allow-Headers": "Content-Type, X-Owner-Token, X-Closed-By",
 };
 
 function withCors(response: Response): Response {
@@ -67,7 +79,19 @@ export interface ServerHandle {
   tunnelError: string | null;
   /** Called when the status page's Stop button is used — main.ts wires this to actually tear down the tunnel and exit, the same cleanup the console window's Ctrl+C path runs. Optional only so a caller (e.g. the test suite) that doesn't need it can leave it unset. */
   onShutdownRequested?: () => void;
-  stop(): void;
+  /**
+   * Broadcasts "server-shutting-down" to every room this process still
+   * has, then actually stops listening — resolves once that's genuinely
+   * done. Idempotent — a second call is a harmless no-op — since main.ts's
+   * shutdown() and a test's own explicit stop() can both end up calling
+   * this on the same handle. Async specifically so a caller that's about
+   * to exit the whole process (main.ts) can await it first — a broadcast
+   * frame is only queued for sending when publish() is called, not
+   * necessarily flushed to the OS yet, and calling process.exit()
+   * immediately after was confirmed (live, with a real browser tab) to cut
+   * it off before it ever reached anyone.
+   */
+  stop(): Promise<void>;
 }
 
 /**
@@ -78,11 +102,32 @@ export interface ServerHandle {
  * address to auto-open.
  */
 export function startServer(port: number): ServerHandle {
+  let stopped = false;
   const handle: ServerHandle = {
     port: 0, // patched below once Bun assigns the real one
     publicUrl: null,
     tunnelError: null,
-    stop: () => bunServer.stop(true),
+    stop: () => {
+      if (stopped) return Promise.resolve();
+      stopped = true;
+      for (const roomId of rooms.listRoomIds()) {
+        bunServer.publish(roomId, JSON.stringify({ type: "server-shutting-down" }));
+      }
+      // publish() only queues the frame for sending — stop(true) force-closes
+      // every connection immediately, which can cut a just-queued frame off
+      // before it's actually flushed to the socket. This delay gives it a
+      // moment first; resolving only once it's actually run is what lets a
+      // caller about to process.exit() (main.ts) wait for that instead of
+      // racing it — an unawaited version of this exact delay was confirmed,
+      // live with a real browser tab, to still lose the message, because
+      // process.exit() doesn't wait for pending timers either.
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          bunServer.stop(true);
+          resolve();
+        }, 100);
+      });
+    },
   };
 
   // clientId is unset until this connection's first presence-hello — a
@@ -129,7 +174,7 @@ export function startServer(port: number): ServerHandle {
         return upgraded ? undefined : new Response("WebSocket upgrade failed.", { status: 500 });
       }
 
-      const response = await route(request, url, parts);
+      const response = await route(request, url, parts, broadcastRoomClosed);
       return withCors(response);
     },
     websocket: {
@@ -168,7 +213,15 @@ export function startServer(port: number): ServerHandle {
           return;
         }
         if (typeof parsed.fn !== "string" || !Array.isArray(parsed.args)) return;
-        const op = rooms.appendOp(ws.data.roomId, parsed.fn, parsed.args);
+        let op;
+        try {
+          op = rooms.appendOp(ws.data.roomId, parsed.fn, parsed.args);
+        } catch {
+          // The room was deleted out from under this connection (Phase 6) —
+          // its own "room-closed" broadcast already told the client, or is
+          // about to; nothing to append this stray, now-orphaned edit to.
+          return;
+        }
         ws.publish(ws.data.roomId, JSON.stringify(op));
       },
       close(ws) {
@@ -193,6 +246,19 @@ export function startServer(port: number): ServerHandle {
     bunServer.publish(roomId, JSON.stringify({ type: "presence-roster", users: rooms.listActivePresence(roomId) }));
   }
 
+  /**
+   * Tells everyone still connected to `roomId` that it's gone, right after
+   * rooms.deleteRoom() actually removed it (see route()'s DELETE handler) —
+   * deliberately no existence check here, unlike broadcastPresence above:
+   * the room being gone is exactly the point being announced. `by` is
+   * whatever the closer's own tab sent as X-Closed-By (its current
+   * presence display name), already length-capped by the caller; null if
+   * that header was missing.
+   */
+  function broadcastRoomClosed(roomId: string, by: string | null) {
+    bunServer.publish(roomId, JSON.stringify({ type: "room-closed", by }));
+  }
+
   handle.port = bunServer.port ?? port;
   return handle;
 }
@@ -203,7 +269,14 @@ function sanitizeColor(color: string): string {
   return HEX_COLOR.test(color) ? color : "#6c757d";
 }
 
-async function route(request: Request, url: URL, parts: string[]): Promise<Response> {
+const MAX_CLOSED_BY_LENGTH = 60; // matches the presence name cap — X-Closed-By is that same name, just carried on a different request
+
+async function route(
+  request: Request,
+  url: URL,
+  parts: string[],
+  broadcastRoomClosed: (roomId: string, by: string | null) => void,
+): Promise<Response> {
   if (parts[0] !== "rooms") {
     return new Response("Not found.", { status: 404 });
   }
@@ -262,12 +335,17 @@ async function route(request: Request, url: URL, parts: string[]): Promise<Respo
     return withErrors(() => json(rooms.listOpsSince(roomId, since)));
   }
 
-  // DELETE /rooms/:id — requires the owner token from creation, in a header (never the shareable room id itself).
+  // DELETE /rooms/:id — requires the owner token from creation, in a header
+  // (never the shareable room id itself). Ends the session for everyone,
+  // not just this request's caller — see broadcastRoomClosed's own doc for
+  // what that tells still-connected clients.
   if (parts.length === 2 && request.method === "DELETE") {
     return withErrors(() => {
       const ownerToken = request.headers.get("X-Owner-Token");
       if (!ownerToken) return new Response("Missing X-Owner-Token header.", { status: 401 });
-      rooms.deleteRoom(roomId, ownerToken);
+      rooms.deleteRoom(roomId, ownerToken); // throws (→ 403/404 via withErrors) before anything below runs if the token's wrong or the room's already gone
+      const closedBy = request.headers.get("X-Closed-By");
+      broadcastRoomClosed(roomId, closedBy ? closedBy.slice(0, MAX_CLOSED_BY_LENGTH) : null);
       return json({ ok: true });
     });
   }

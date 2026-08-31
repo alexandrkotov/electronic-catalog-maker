@@ -48,7 +48,17 @@ import {
   type SqlJsStatic,
 } from "@ecm/shared";
 import { slugify } from "./slugify";
-import { CollabConnection, createRoom, downloadSnapshot, listOpsSince, type CollabStatus, type Op, type PresenceUser } from "./collab";
+import {
+  CollabConnection,
+  createRoom,
+  deleteRoom,
+  downloadSnapshot,
+  listOpsSince,
+  type CollabClosedReason,
+  type CollabStatus,
+  type Op,
+  type PresenceUser,
+} from "./collab";
 import { clearOutbox, loadOutbox, saveOutbox, type QueuedOp } from "./collabStore";
 
 // Applied before the first render so there's no flash of the wrong theme.
@@ -121,10 +131,11 @@ let openedFileStamp: { size: number; lastModified: number } | null = null;
 let collab: CollabConnection | null = null;
 let collabRoomId: string | null = null;
 let collabStatus: CollabStatus = "disconnected";
-// Only meaningful right after actionStartCollaboration() — shown once so
-// it can be copied, not persisted or shown again after a reload (deleting
-// a room isn't built yet — that's Phase 6 — so there's nowhere to use it
-// again this early anyway).
+// Set only by beginCollaboration() (a joiner never gets one — see
+// actionJoinCollaboration) and never persisted across a reload. Its only
+// use is actionEndSessionForEveryone() (Phase 6) — also what the toolbar's
+// "End for everyone" button being shown at all is conditioned on, since
+// only its actual holder can end the session for everyone else.
 let collabOwnerToken: string | null = null;
 // The highest op seq applied so far — lets a fresh join or reconnect ask
 // the room for only what it's missing (see connectAndSync).
@@ -1108,6 +1119,7 @@ async function connectAndSync(roomId: string) {
       collabPresence = users;
       updatePresenceRosterDisplay();
     },
+    (reason) => handleCollabClosed(reason),
     (status) => {
       collabStatus = status;
       updateCollabStatusDisplay();
@@ -1322,10 +1334,16 @@ function collabErrorMessage(action: string, err: unknown): string {
   return `Could not ${action} — is the collaboration server at ${collabServerUrl} still running? (${detail})`;
 }
 
-/** Disconnects this tab only — the room itself and everyone else in it are unaffected (deleting a room outright is Phase 6). */
-function actionLeaveCollaboration() {
+/**
+ * Tears down every bit of this tab's local collaboration state — shared by
+ * a deliberate Leave, and by the two ways a session can end out from under
+ * this tab entirely (see handleCollabClosed below). Never shows a status
+ * message itself — every caller picks whatever wording fits how it got
+ * here.
+ */
+function exitCollaboration() {
   const roomId = collabRoomId;
-  collabRoomId = null; // first, so a reconnect already in flight becomes a no-op
+  collabRoomId = null; // first, so a reconnect already in flight (or a status callback about to fire from collab.close() below) becomes a no-op
   if (reconnectTimer !== null) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
@@ -1342,7 +1360,77 @@ function actionLeaveCollaboration() {
   collabClientId = null;
   outbox = [];
   if (roomId) void clearOutbox(roomId);
+}
+
+/** Disconnects this tab only — the room itself and everyone else in it are unaffected. Ending it for everyone is actionEndSessionForEveryone(), a separate, deliberate action. */
+function actionLeaveCollaboration() {
+  exitCollaboration();
   setStatus("Left the shared session — you're back to working locally.");
+}
+
+// Set for the duration of actionEndSessionForEveryone()'s own DELETE call.
+// This tab is still subscribed to the room while that request is in
+// flight, so its own "room-closed" broadcast can arrive back over the WS
+// before (or after — no ordering guarantee between an HTTP response and a
+// WS frame) the fetch() call itself resolves; this flag lets
+// handleCollabClosed recognize that echo as its own doing and skip
+// showing a redundant "session closed" notice on top of the one this
+// action already shows once the fetch resolves.
+let endingCollabSelf = false;
+
+/** Only ever reachable when collabOwnerToken is set — the toolbar button this backs is hidden otherwise (a joiner never holds the owner token; see actionJoinCollaboration). */
+async function actionEndSessionForEveryone() {
+  if (!collabRoomId || !collabOwnerToken) return;
+  const roomId = collabRoomId;
+  const ownerToken = collabOwnerToken;
+  endingCollabSelf = true;
+  try {
+    await deleteRoom(collabServerUrl, roomId, ownerToken, collabDisplayName);
+    exitCollaboration();
+    setStatus("Ended the shared session for everyone — you're back to working locally.");
+  } catch (err) {
+    setStatus(collabErrorMessage("end the shared session", err));
+  } finally {
+    endingCollabSelf = false;
+  }
+}
+
+function actionConfirmEndSessionForEveryone() {
+  if (!collabRoomId) return;
+  pendingConfirmation = {
+    message:
+      "End this shared session for everyone? Anyone still connected will be disconnected — they'll keep their own current copy, but the live session ends. This can't be undone.",
+    onConfirm: actionEndSessionForEveryone,
+  };
+  render();
+}
+
+/**
+ * A session ending out from under this tab, not by this tab's own choice —
+ * either someone (possibly this same tab, see endingCollabSelf above) ended
+ * it for everyone, or the whole collaboration-server process is going away
+ * (Stop button, Ctrl+C, the host's computer sleeping — see the project's
+ * Phase 4 self-hosting trade-off). Shown as a real notice, not folded into
+ * the ordinary "disconnected" status — that status is also what a genuine
+ * network blip looks like, and just quietly retrying every few seconds
+ * into a session that's actually gone for good isn't an honest reflection
+ * of what happened, which is the whole point of this existing.
+ */
+function handleCollabClosed(reason: CollabClosedReason) {
+  if (endingCollabSelf) return; // this tab's own actionEndSessionForEveryone() already handled its own echo
+  exitCollaboration();
+  const message =
+    reason.kind === "room-closed"
+      ? reason.by
+        ? `${reason.by} ended this shared session — you're back to working locally with your current copy.`
+        : "This shared session was ended — you're back to working locally with your current copy."
+      : "The collaboration server was stopped — you're back to working locally with your current copy.";
+  // Both the modal (the actual point of this — see this function's own doc)
+  // and the toolbar's corner hint, so it doesn't keep reading something
+  // stale like "Joined the shared session" after the modal's dismissed.
+  statusMessage = message;
+  pendingNotice = message;
+  render();
 }
 
 async function actionCopyCollabLink() {
@@ -2039,6 +2127,11 @@ function renderCollabStatus(): string {
     <span class="collab-status" id="collab-status-text" title="${escapeHtml(title)}">${icon} ${label}</span>
     <button type="button" id="btn-copy-collab-link">Copy link to share</button>
     <button type="button" id="btn-leave-collab">Leave</button>
+    ${
+      collabOwnerToken
+        ? `<button type="button" id="btn-end-collab-session" title="Ends the session for everyone, not just this tab">End for everyone</button>`
+        : ""
+    }
     ${renderPresenceRoster()}
   `;
 }
@@ -2526,6 +2619,7 @@ function wireEvents(links: CatalogLink[]) {
   document.getElementById("btn-start-collab")?.addEventListener("click", () => void actionStartCollaboration());
   document.getElementById("btn-copy-collab-link")?.addEventListener("click", () => void actionCopyCollabLink());
   document.getElementById("btn-leave-collab")?.addEventListener("click", actionLeaveCollaboration);
+  document.getElementById("btn-end-collab-session")?.addEventListener("click", actionConfirmEndSessionForEveryone);
   document.getElementById("collab-name-cancel")?.addEventListener("click", actionCancelCollabNameDialog);
   document.getElementById("collab-name-submit")?.addEventListener("click", actionSubmitCollabNameDialog);
   const collabNameInput = document.getElementById("collab-name-input") as HTMLInputElement | null;
