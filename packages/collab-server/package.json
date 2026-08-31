@@ -7,10 +7,11 @@
     "dev": "bun run src/main.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "compile:linux-x64": "bun build --compile --target=bun-linux-x64 src/main.ts --outfile dist/ecm-collab-server-linux-x64",
-    "compile:macos-arm64": "bun build --compile --target=bun-darwin-arm64 src/main.ts --outfile dist/ecm-collab-server-macos-arm64",
-    "compile:macos-x64": "bun build --compile --target=bun-darwin-x64 src/main.ts --outfile dist/ecm-collab-server-macos-x64",
-    "compile:windows-x64": "bun build --compile --target=bun-windows-x64 src/main.ts --outfile dist/ecm-collab-server-windows-x64.exe"
+    "compile:linux-x64": "bun run scripts/fetch-cloudflared.ts linux-x64 && bun build --compile --target=bun-linux-x64 src/main.compiled.linux-x64.ts --outfile dist/ecm-collab-server-linux-x64",
+    "compile:linux-arm64": "bun run scripts/fetch-cloudflared.ts linux-arm64 && bun build --compile --target=bun-linux-arm64 src/main.compiled.linux-arm64.ts --outfile dist/ecm-collab-server-linux-arm64",
+    "compile:macos-arm64": "bun run scripts/fetch-cloudflared.ts darwin-arm64 && bun build --compile --target=bun-darwin-arm64 src/main.compiled.darwin-arm64.ts --outfile dist/ecm-collab-server-macos-arm64",
+    "compile:macos-x64": "bun run scripts/fetch-cloudflared.ts darwin-x64 && bun build --compile --target=bun-darwin-x64 src/main.compiled.darwin-x64.ts --outfile dist/ecm-collab-server-macos-x64",
+    "compile:windows-x64": "bun run scripts/fetch-cloudflared.ts windows-x64 && bun build --compile --target=bun-windows-x64 src/main.compiled.windows-x64.ts --outfile dist/ecm-collab-server-windows-x64.exe"
   },
   "devDependencies": {
     "@types/bun": "^1.2.0",

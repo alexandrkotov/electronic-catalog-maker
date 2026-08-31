@@ -26,7 +26,7 @@ async function main() {
   const statusUrl = `http://127.0.0.1:${server.port}/status`;
   openInBrowser(statusUrl);
   console.log(`   A page has opened in your browser (${statusUrl}) with the link to share.`);
-  console.log("   Close this window to stop.");
+  console.log("   Use its Stop button, or close this window, to end the session.");
 
   // A missing `cloudflared` binary (not installed, or a packaged build that
   // failed to bundle one) throws synchronously right out of Bun.spawn — the
@@ -49,16 +49,18 @@ async function main() {
         // it until it's back. Surface it loudly rather than silently leaving
         // the status page showing a now-dead URL with no explanation.
         if (code !== 0 && code !== null) {
-          console.error(`   ⚠️  The tunnel exited unexpectedly (code ${code}) — the public address above no longer works.`);
-          console.error(`      Is 'cloudflared' installed? Set CLOUDFLARED_PATH if it's not on PATH. Restart this app to try again.`);
+          const message = `The tunnel exited unexpectedly (code ${code}) — the public address above no longer works. Restart this app to try again.`;
+          server.tunnelError = message;
+          console.error(`   ⚠️  ${message}`);
         }
       },
     });
   } catch {
-    console.error("   ⚠️  Could not start the tunnel — is 'cloudflared' installed and on PATH?");
+    const message = "Could not start the tunnel — is 'cloudflared' installed and on PATH? See this package's README.";
+    server.tunnelError = message;
+    console.error(`   ⚠️  ${message}`);
     console.error("      The server itself is still running (useful on a shared local network),");
     console.error("      but there's no public address to share until a tunnel is available.");
-    console.error("      See this package's README for how to install cloudflared.");
   }
 
   const shutdown = () => {
@@ -67,6 +69,7 @@ async function main() {
     server.stop();
     process.exit(0);
   };
+  server.onShutdownRequested = shutdown;
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 }

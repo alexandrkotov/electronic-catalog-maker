@@ -162,20 +162,35 @@ describe("collab-server rooms", () => {
   });
 
   it("serves a status page and reports the public URL once the tunnel sets it", async () => {
+    type StatusJson = { publicUrl: string | null; tunnelError: string | null; port: number };
     const before = await fetch(`${base}/status.json`);
-    expect((await before.json()) as { publicUrl: string | null; port: number }).toEqual({
-      publicUrl: null,
-      port: server.port,
-    });
+    expect((await before.json()) as StatusJson).toEqual({ publicUrl: null, tunnelError: null, port: server.port });
 
     server.publicUrl = "https://example.trycloudflare.com";
     const after = await fetch(`${base}/status.json`);
-    expect(((await after.json()) as { publicUrl: string | null; port: number }).publicUrl).toBe(
-      "https://example.trycloudflare.com",
-    );
+    expect(((await after.json()) as StatusJson).publicUrl).toBe("https://example.trycloudflare.com");
 
     const page = await fetch(`${base}/status`);
     expect(page.status).toBe(200);
     expect(page.headers.get("Content-Type")).toContain("text/html");
+  });
+
+  it("reports a tunnel error via status.json instead of leaving the client polling forever", async () => {
+    server.tunnelError = "Could not start the tunnel — is 'cloudflared' installed and on PATH?";
+    const res = await fetch(`${base}/status.json`);
+    const data = (await res.json()) as { tunnelError: string | null };
+    expect(data.tunnelError).toBe("Could not start the tunnel — is 'cloudflared' installed and on PATH?");
+  });
+
+  it("stops the server when the status page's Stop button posts to /shutdown", async () => {
+    let shutdownCalled = false;
+    server.onShutdownRequested = () => {
+      shutdownCalled = true;
+    };
+    const res = await fetch(`${base}/shutdown`, { method: "POST" });
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { ok: boolean }).toEqual({ ok: true });
+    await new Promise((resolve) => setTimeout(resolve, 100)); // onShutdownRequested fires after a short delay, see server.ts
+    expect(shutdownCalled).toBe(true);
   });
 });

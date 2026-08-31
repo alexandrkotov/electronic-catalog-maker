@@ -55,6 +55,10 @@ export interface ServerHandle {
   port: number;
   /** The public URL to share, once the tunnel's up — null until then. Set by main.ts as the tunnel reports it; read by the /status.json route. */
   publicUrl: string | null;
+  /** Set by main.ts if the tunnel couldn't be started at all (e.g. cloudflared missing) — lets the status page show a real explanation instead of "waiting" forever. */
+  tunnelError: string | null;
+  /** Called when the status page's Stop button is used — main.ts wires this to actually tear down the tunnel and exit, the same cleanup the console window's Ctrl+C path runs. Optional only so a caller (e.g. the test suite) that doesn't need it can leave it unset. */
+  onShutdownRequested?: () => void;
   stop(): void;
 }
 
@@ -69,6 +73,7 @@ export function startServer(port: number): ServerHandle {
   const handle: ServerHandle = {
     port: 0, // patched below once Bun assigns the real one
     publicUrl: null,
+    tunnelError: null,
     stop: () => bunServer.stop(true),
   };
 
@@ -84,7 +89,15 @@ export function startServer(port: number): ServerHandle {
         return new Response(renderStatusPage(), { headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
       if (url.pathname === "/status.json") {
-        return withCors(json({ publicUrl: handle.publicUrl, port: handle.port }));
+        return withCors(json({ publicUrl: handle.publicUrl, tunnelError: handle.tunnelError, port: handle.port }));
+      }
+      // POST /shutdown — the status page's Stop button. Lets a host end the
+      // session from the UI they're actually looking at, instead of the
+      // console window being the only off-switch (that window still works
+      // too — this is additive, not a replacement).
+      if (url.pathname === "/shutdown" && request.method === "POST") {
+        setTimeout(() => handle.onShutdownRequested?.(), 50); // small delay so this response finishes sending before the process tears down
+        return withCors(json({ ok: true }));
       }
 
       // GET /rooms/:id/live — upgrade to the WebSocket used for live editing.
