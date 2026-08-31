@@ -25,10 +25,17 @@ behind self-hosting instead of a maintainer-run default server, and the
    the status page is the *only* UI; Ctrl+C isn't an option there since
    there's nothing to Ctrl+C. Linux/macOS builds still show a plain console
    (Ctrl+C works there too, as a second way to stop it).
-3. Paste that address into the editor's **🖥️ Server settings…** dialog, then
-   **Start collaboration** as usual. The link the editor hands you to share
-   already carries this address (`?collab=<roomId>&server=<url>`) — a
-   colleague opening it doesn't need to configure anything themselves.
+3. In the editor, click **🤝 Start collaboration** as usual — no separate
+   address to paste in anywhere. The editor auto-detects a running copy of
+   this app on the local ports it might plausibly be using (see "Port
+   auto-detection" below) and picks up its public address on its own. The
+   link it hands you to share carries that address (`?collab=<roomId>&
+   server=<url>`) — a colleague opening it doesn't need to configure
+   anything themselves either. If nothing's found, the editor shows a
+   plain-language "can't find a collaboration server" prompt instead of a
+   raw connection error, with a manual-address field as a fallback for the
+   rare case this app is running somewhere auto-detection can't reach (a
+   different computer, or a custom `PORT`).
 4. Stop it (the status page's Stop button, or Ctrl+C where there's a
    console) when you're done. The tunnel drops, the room and everything in
    it disappears — there's nothing to clean up. If the status page tab gets
@@ -57,9 +64,9 @@ but only for the host's *own* browser tab pointed at `http://127.0.0.1:
 <port>`. That specific address is exempt from browsers' mixed-content
 block even though the public editor is `https://` (a long-standing
 exception for local development); a *colleague's own machine* on the same
-network is not exempt, and pointing their Server settings at your LAN IP
-(e.g. `http://192.168.1.50:8787`) will get silently blocked by their
-browser. To collaborate over a LAN with no tunnel/public address at all,
+network is not exempt, and their editor pointed at your LAN IP (e.g.
+`http://192.168.1.50:8787`) will get silently blocked by their browser. To
+collaborate over a LAN with no tunnel/public address at all,
 everyone — including the host — needs to load the editor itself from a
 plain `http://` copy served on that same LAN too (not the public `https://`
 site), since `ws://` from an `http://` page is never mixed content.
@@ -77,16 +84,31 @@ Genuinely appealing for anyone who doesn't want *any* traffic leaving their
 own network (a real motivation for self-hosting in the first place — see
 the design notes), but a full walkthrough for this isn't written yet.
 
-Override the local port with `PORT` (default `8787`, matching the editor's
-own default in Server settings). If that port's already taken: by another
-copy of this same app (e.g. launched twice by accident), it just opens
-that instance's already-running status page instead of erroring; by
-anything else, it picks a random free port instead and shows the real one
-— either way, no crash. Confirmed by hand, not just in theory: started two
-copies pointed at the same port (second one opened the first's page,
-didn't start a second server) and started this app against a port held by
-an unrelated process (it silently picked a different one and worked
-normally).
+## Port auto-detection
+
+Override the local port with `PORT` (default `8787`, matching the
+editor's own default auto-detect starting point). If that port's already
+taken:
+
+- By **another copy of this same app** (e.g. launched twice by accident)
+  — it just opens that instance's already-running status page instead of
+  erroring, and doesn't start a second server.
+- By **anything else** — it tries the next few ports in sequence
+  (`8788`, `8789`, … 9 tries past the requested one) before falling back
+  to a fully random one. This range isn't arbitrary: it's exactly what
+  the editor's own auto-detect probes (see `packages/editor/src/main.ts`,
+  `COLLAB_AUTO_DETECT_PORT_COUNT` — keep the two in sync if either
+  changes), since a browser page has no way to scan for a truly random
+  port. Land outside that range (every one of those nine also busy, a
+  rare case) and the editor's "can't find a collaboration server"
+  dialog's manual-address field is the fallback.
+
+Confirmed by hand, not just in theory: started two copies pointed at the
+same port (second one opened the first's page, didn't start a second
+server); started this app against a port held by an unrelated process
+with two more ports past it also occupied (it correctly skipped both and
+landed on the third free one); and confirmed the editor's own auto-detect
+found a server in exactly that scenario, end to end.
 
 **Not permanently coupled to Cloudflare's free tunnel, either.** It's a
 real (if unlikely) dependency risk — Cloudflare's own docs say this

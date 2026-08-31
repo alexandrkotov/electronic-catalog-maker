@@ -17,6 +17,17 @@ import { startTunnel } from "./tunnel";
 const PORT = Number(process.env.PORT ?? 8787); // matches the editor's own default Server settings value, so a fresh install of both just works together
 const CLOUDFLARED_PATH = process.env.CLOUDFLARED_PATH ?? "cloudflared"; // resolved off PATH unless a packaged build injects a bundled one
 
+// How many sequential ports past PORT to try before giving up and taking a
+// fully random one (see startServerNearby below). Keep this in sync with
+// the editor's own auto-detect probe range (packages/editor/src/main.ts,
+// COLLAB_AUTO_DETECT_PORT_COUNT) — a random ephemeral port can be anything
+// from 1024-65535, which a browser page has no way to scan for, so the
+// editor can only auto-discover a server that landed *somewhere in this
+// bounded range*. Past it, a person has to paste the address in by hand
+// (see the editor's "can't find a server" dialog) — a deliberate, accepted
+// limit rather than trying to make literally any port discoverable.
+const PORT_SCAN_COUNT = 10;
+
 /**
  * Which tunnel provider to run — defaults to Cloudflare's free quick-tunnel
  * mode via `cloudflared`, but not hard-wired to it: `TUNNEL_COMMAND` lets
@@ -64,6 +75,23 @@ async function isOwnServerAlreadyThere(port: number): Promise<boolean> {
   }
 }
 
+/** Tries each port after `preferredPort`, up to PORT_SCAN_COUNT of them, before falling back to a fully random one — see PORT_SCAN_COUNT's own comment for why the range is bounded at all. */
+function startServerNearby(preferredPort: number): ServerHandle {
+  for (let port = preferredPort + 1; port < preferredPort + PORT_SCAN_COUNT; port++) {
+    try {
+      return startServer(port);
+    } catch (err) {
+      if (!isPortInUse(err)) throw err;
+      // busy too — try the next candidate
+    }
+  }
+  // Every port in the scannable range was also taken (rare) — the editor's
+  // auto-detect can't find this app either way past that point, so a fully
+  // random port is no worse; the status page still shows the real address
+  // for manual copy-paste, which covers this case.
+  return startServer(0);
+}
+
 async function main() {
   console.log("🤝 Electronic Catalog Maker — Collaboration Server");
 
@@ -79,13 +107,11 @@ async function main() {
       return;
     }
 
-    // Occupied by something unrelated — an ephemeral port still works fine
-    // for the tunnel-based sharing this app exists for (the shared address
-    // is whatever cloudflared reports, not this local port); it only means
-    // a same-machine editor relying on the default Server settings value
-    // would need to be pointed at the real port shown below instead.
+    // Occupied by something unrelated — try nearby ports first (still
+    // auto-discoverable by the editor's probe) before giving up to a fully
+    // random one.
     console.log(`   Port ${PORT} is already in use by something else — picking a different one.`);
-    server = startServer(0);
+    server = startServerNearby(PORT);
   }
   console.log(`   Local: http://127.0.0.1:${server.port}`);
   console.log("   Connecting a public tunnel…");

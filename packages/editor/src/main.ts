@@ -71,9 +71,11 @@ const CATALOG_PICKER_TYPE: FilePickerAcceptType = {
 // only model (see the project's collaboration-hosting design notes). This
 // defaults to the standalone @ecm/collab-server app's own default local
 // port, so a fresh install of both just works together with nothing to
-// configure; "Server settings…" lets a person point at a different address
-// (their own machine's tunnel, or someone else's, from a shared link's
-// `server=` param — see below).
+// configure by hand — actionStartCollaboration() auto-detects a running
+// instance rather than relying on this being set correctly ahead of time;
+// this value mainly matters as what a fresh join or reconnect uses (set
+// from a shared link's `server=` param — see below — or the manual address
+// from the "can't find a collaboration server" dialog's escape hatch).
 const DEFAULT_COLLAB_SERVER_URL = "http://127.0.0.1:8787";
 let collabServerUrl = loadCollabServerUrl();
 
@@ -181,13 +183,14 @@ let storeSettingsCartIdPattern = DEFAULT_CART_ID_PATTERN;
 let storeSettingsCartItemParam = DEFAULT_CART_ITEM_PARAM;
 let storeSettingsCartCheckoutBaseUrl = DEFAULT_CART_CHECKOUT_BASE_URL;
 
-// "Server settings" dialog state — which self-hosted @ecm/collab-server
-// address this tab uses for Start/Join collaboration (see collabServerUrl
-// above). An app-level preference, not catalog-scoped, so unlike Store
-// settings it isn't reloaded from anything each time it's opened — it just
-// edits the same persisted value directly.
-let serverSettingsOpen = false;
-let serverSettingsUrlValue = "";
+// "Can't find a collaboration server" dialog — shown when
+// actionStartCollaboration()'s auto-detect (see detectLocalCollabServer)
+// can't find a running @ecm/collab-server app on any port it might
+// plausibly be using. Lets a person retry (after actually starting the
+// app) or type in an address by hand for the rare case it's running
+// somewhere auto-detect can't reach (a different computer, a custom port).
+let collabNotFoundOpen = false;
+let collabManualUrlValue = "";
 
 // Which single panel is shown below the mobile breakpoint (see .mobile-tabs
 // / #app[data-mobile-tab] in style.css) — irrelevant above it, where all
@@ -349,7 +352,7 @@ const initialCollabParam = new URLSearchParams(location.search).get("collab");
 // `&server=<url>` rides along with it — the self-hosted server that room
 // actually lives on isn't a fixed address the way a maintainer-hosted
 // default would be, so the link has to carry it. Adopted as this tab's own
-// Server settings too (not just used for this one join) so a later
+// collabServerUrl too (not just used for this one join) so a later
 // reconnect or reload of this same tab still knows where to look.
 const initialCollabServerParam = new URLSearchParams(location.search).get("server");
 
@@ -564,21 +567,23 @@ function actionSubmitStoreSettings() {
   setStatus("Updated store settings.");
 }
 
-function actionOpenServerSettings() {
-  serverSettingsUrlValue = collabServerUrl;
-  serverSettingsOpen = true;
+function actionCancelCollabNotFound() {
+  collabNotFoundOpen = false;
   render();
 }
 
-function actionCancelServerSettings() {
-  serverSettingsOpen = false;
-  render();
+/** Retries the whole auto-detect from scratch — the normal "I started the app, now let me try again" path. */
+async function actionRetryCollabDetect() {
+  collabNotFoundOpen = false;
+  await actionStartCollaboration();
 }
 
-function actionSubmitServerSettings() {
-  saveCollabServerUrl(serverSettingsUrlValue.trim() || DEFAULT_COLLAB_SERVER_URL);
-  serverSettingsOpen = false;
-  setStatus(`Collaboration server set to ${collabServerUrl}.`);
+/** The "it's running somewhere auto-detect can't reach" escape hatch — skips detection entirely and goes straight to using the typed address. */
+function actionUseManualCollabUrl() {
+  const url = collabManualUrlValue.trim();
+  if (!url) return;
+  collabNotFoundOpen = false;
+  void beginCollaboration(url);
 }
 
 function suggestedFileName(): string {
@@ -1047,9 +1052,75 @@ function scheduleReconnect(roomId: string) {
   }, 3000);
 }
 
-/** Uploads the current catalog as a brand-new shared session and connects to it. */
+// Bounded port range this tab can auto-detect a locally-running
+// @ecm/collab-server app on — must match PORT_SCAN_COUNT in
+// packages/collab-server/src/main.ts. A fully random ephemeral port (used
+// there only once this whole range is also busy, a rare case) can't be
+// scanned for from a web page; past this range, the "can't find a
+// collaboration server" dialog's manual-address field is the fallback.
+const COLLAB_AUTO_DETECT_BASE_PORT = 8787;
+const COLLAB_AUTO_DETECT_PORT_COUNT = 10;
+
+interface DetectedCollabServer {
+  /** What to actually use — the server's public tunnel address if it has one, otherwise its bare local address (still usable for this tab; see the mixed-content note on collabServerUrl above for why that's *only* useful for this tab, not a colleague's). */
+  url: string;
+  hasPublicUrl: boolean;
+}
+
+async function probeCollabServerPort(port: number): Promise<DetectedCollabServer | null> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/status.json`, { signal: AbortSignal.timeout(800) });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { publicUrl?: string | null; tunnelError?: string | null };
+    // Something answered, but not shaped like our own status.json — some
+    // unrelated local service happens to be on this port. Not our server.
+    if (!("publicUrl" in data) || !("tunnelError" in data)) return null;
+    return data.publicUrl ? { url: data.publicUrl, hasPublicUrl: true } : { url: `http://127.0.0.1:${port}`, hasPublicUrl: false };
+  } catch {
+    return null; // nothing listening there, or it didn't answer in time
+  }
+}
+
+/**
+ * Scans the bounded port range in parallel for a locally-running
+ * collab-server app. Prefers one that already has a public tunnel address
+ * (works for a colleague too); falls back to one that's up but not yet
+ * tunneled — still connecting, or its tunnel failed — since that's still
+ * usable for *this* tab even before (or without) a share link working.
+ */
+async function detectLocalCollabServer(): Promise<DetectedCollabServer | null> {
+  const ports = Array.from({ length: COLLAB_AUTO_DETECT_PORT_COUNT }, (_, i) => COLLAB_AUTO_DETECT_BASE_PORT + i);
+  const found = (await Promise.all(ports.map(probeCollabServerPort))).filter((r) => r !== null);
+  return found.find((r) => r.hasPublicUrl) ?? found[0] ?? null;
+}
+
+/** Kicks off a brand-new shared session — auto-detects a running collab-server app first (see detectLocalCollabServer) rather than relying on anyone having typed an address in anywhere. */
 async function actionStartCollaboration() {
   if (!db) return;
+  setStatus("Looking for your collaboration server…");
+  const detected = await detectLocalCollabServer();
+  if (!detected) {
+    collabManualUrlValue = collabServerUrl;
+    collabNotFoundOpen = true;
+    setStatus("Could not find a running collaboration server.");
+    return;
+  }
+  if (!detected.hasPublicUrl) {
+    pendingConfirmation = {
+      message:
+        "Found your collaboration server, but it doesn't have a public address yet (still connecting, or its tunnel isn't available). You can continue — this tab will work — but the link won't work for a colleague until that's ready. Continue anyway?",
+      onConfirm: () => void beginCollaboration(detected.url),
+    };
+    render();
+    return;
+  }
+  await beginCollaboration(detected.url);
+}
+
+/** Uploads the current catalog as a brand-new shared session against `serverUrl` and connects to it. */
+async function beginCollaboration(serverUrl: string) {
+  if (!db) return;
+  saveCollabServerUrl(serverUrl);
   setStatus("Starting a shared session…");
   try {
     const bytes = exportCatalog(db);
@@ -1094,16 +1165,16 @@ async function actionJoinCollaboration(roomId: string) {
 }
 
 /**
- * A failed create/join is very often just "nothing's listening at
- * collabServerUrl" (the collaboration-server app isn't running, or Server
- * settings still points at the wrong address) rather than an actual server-
- * side rejection — the raw fetch error alone ("Failed to fetch") doesn't
- * tell a non-technical person that. Points them at Server settings instead
- * of just surfacing whatever the underlying error happened to say.
+ * A failed join (or, more rarely, a create that got past auto-detect but
+ * still failed) is very often just "nothing's listening at collabServerUrl
+ * anymore" — e.g. a shared link's server has since been stopped — rather
+ * than an actual server-side rejection. The raw fetch error alone ("Failed
+ * to fetch") doesn't tell a non-technical person that; naming the address
+ * it tried does.
  */
 function collabErrorMessage(action: string, err: unknown): string {
   const detail = err instanceof Error ? err.message : String(err);
-  return `Could not ${action} — is the collaboration server running at ${collabServerUrl}? Check ⚙️ Server settings…. (${detail})`;
+  return `Could not ${action} — is the collaboration server at ${collabServerUrl} still running? (${detail})`;
 }
 
 /** Disconnects this tab only — the room itself and everyone else in it are unaffected (deleting a room outright is Phase 5). */
@@ -1652,7 +1723,6 @@ function render() {
       <button id="btn-export" ${db ? "" : "disabled"} title="Always downloads a new copy">Export .${CATALOG_FILE_EXTENSION}</button>
       <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
       <button id="btn-store-settings" ${db ? "" : "disabled"} title="Configure this catalog's store link and Buy-button behavior">⚙️ Store settings…</button>
-      <button id="btn-server-settings" ${collabRoomId ? "disabled" : ""} title="Which self-hosted collaboration server to use for Start/Join collaboration">🖥️ Server settings…</button>
       ${db && !collabRoomId ? `<button id="btn-start-collab" title="Start a live session others can join to edit this catalog with you">🤝 Start collaboration</button>` : ""}
       ${collabRoomId ? renderCollabStatus() : ""}
       <span class="spacer"></span>
@@ -1711,7 +1781,7 @@ function render() {
     ${renderNoticeOverlay()}
     ${renderRemoteDialog()}
     ${renderStoreSettingsDialog()}
-    ${renderServerSettingsDialog()}
+    ${renderCollabNotFoundDialog()}
   `;
 
   if (savedScroll) {
@@ -1949,21 +2019,25 @@ function renderStoreSettingsDialog(): string {
   `;
 }
 
-function renderServerSettingsDialog(): string {
-  if (!serverSettingsOpen) return "";
+function renderCollabNotFoundDialog(): string {
+  if (!collabNotFoundOpen) return "";
   return `
     <div class="confirm-overlay">
       <div class="confirm-box">
-        <h2>Server settings</h2>
-        <div class="field">
-          <label for="server-url-input">Collaboration server address</label>
-          <input type="text" id="server-url-input" value="${escapeHtml(serverSettingsUrlValue)}" placeholder="${DEFAULT_COLLAB_SERVER_URL}" />
-        </div>
-        <p class="hint">Run the <strong>ECM Collaboration Server</strong> app on your own computer, then paste the address it shows you here before starting or joining a shared session. A colleague opening your shared link picks this up automatically — they don't need to set anything themselves.</p>
+        <h2>Can't find a collaboration server</h2>
+        <p>Make sure the <strong>ECM Collaboration Server</strong> app is running on your computer, then try again.</p>
         <div class="confirm-actions">
-          <button id="server-settings-cancel">Cancel</button>
-          <button id="server-settings-submit">Save</button>
+          <button id="collab-not-found-cancel">Cancel</button>
+          <button id="collab-not-found-retry">Try again</button>
         </div>
+        <details style="margin-top: 0.75rem">
+          <summary>It's running on a different computer</summary>
+          <div class="field" style="margin-top: 0.5rem">
+            <label for="collab-manual-url-input">Its address</label>
+            <input type="text" id="collab-manual-url-input" value="${escapeHtml(collabManualUrlValue)}" placeholder="${DEFAULT_COLLAB_SERVER_URL}" />
+          </div>
+          <button id="collab-manual-url-submit">Use this address</button>
+        </details>
       </div>
     </div>
   `;
@@ -2239,21 +2313,17 @@ function wireEvents(links: CatalogLink[]) {
   }
 
   document.getElementById("btn-store-settings")?.addEventListener("click", actionOpenStoreSettings);
-  document.getElementById("btn-server-settings")?.addEventListener("click", actionOpenServerSettings);
-  document.getElementById("server-settings-cancel")?.addEventListener("click", actionCancelServerSettings);
-  document.getElementById("server-settings-submit")?.addEventListener("click", actionSubmitServerSettings);
-  const serverUrlInput = document.getElementById("server-url-input") as HTMLInputElement | null;
-  serverUrlInput?.addEventListener("input", () => {
-    serverSettingsUrlValue = serverUrlInput.value;
+  document.getElementById("collab-not-found-cancel")?.addEventListener("click", actionCancelCollabNotFound);
+  document.getElementById("collab-not-found-retry")?.addEventListener("click", () => void actionRetryCollabDetect());
+  document.getElementById("collab-manual-url-submit")?.addEventListener("click", actionUseManualCollabUrl);
+  const collabManualUrlInput = document.getElementById("collab-manual-url-input") as HTMLInputElement | null;
+  collabManualUrlInput?.addEventListener("input", () => {
+    collabManualUrlValue = collabManualUrlInput.value;
   });
-  serverUrlInput?.addEventListener("keydown", (evt) => {
-    if (evt.key === "Enter") actionSubmitServerSettings();
-    if (evt.key === "Escape") actionCancelServerSettings();
+  collabManualUrlInput?.addEventListener("keydown", (evt) => {
+    if (evt.key === "Enter" && collabManualUrlInput.value.trim()) actionUseManualCollabUrl();
+    if (evt.key === "Escape") actionCancelCollabNotFound();
   });
-  if (serverSettingsOpen) {
-    serverUrlInput?.focus();
-    serverUrlInput?.setSelectionRange(serverUrlInput.value.length, serverUrlInput.value.length);
-  }
   document.getElementById("btn-start-collab")?.addEventListener("click", () => void actionStartCollaboration());
   document.getElementById("btn-copy-collab-link")?.addEventListener("click", () => void actionCopyCollabLink());
   document.getElementById("btn-leave-collab")?.addEventListener("click", actionLeaveCollaboration);
