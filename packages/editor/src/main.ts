@@ -30,6 +30,7 @@ import {
   applyTheme,
   currentTheme,
   toggleTheme,
+  findRowByUrl,
   rowExistsForUrl,
   searchRows,
   setUpPwa,
@@ -48,6 +49,7 @@ import {
 } from "@ecm/shared";
 import { slugify } from "./slugify";
 import { CollabConnection, createRoom, downloadSnapshot, listOpsSince, type CollabStatus, type Op } from "./collab";
+import { clearOutbox, loadOutbox, saveOutbox, type QueuedOp } from "./collabStore";
 
 // Applied before the first render so there's no flash of the wrong theme.
 applyTheme(resolveInitialTheme());
@@ -104,6 +106,16 @@ let collabOwnerToken: string | null = null;
 // The highest op seq applied so far — lets a fresh join or reconnect ask
 // the room for only what it's missing (see connectAndSync).
 let lastAppliedSeq = 0;
+// ---------- reconnect / offline outbox (Phase 3) ----------
+// Edits made while collabStatus isn't "connected" — applied locally right
+// away like any edit (see applyAndBroadcast), but held here instead of
+// sent, until a (re)connection is caught up enough to check each one for a
+// real conflict before resending it (see drainOutbox). Persisted to
+// IndexedDB (collabStore.ts) so it survives a reload, not just a blip.
+let outbox: QueuedOp[] = [];
+// Set only on an *unexpected* drop (never on an explicit Leave — see
+// actionLeaveCollaboration), so a retry doesn't fight a deliberate exit.
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 // render() replaces #app's innerHTML wholesale, which recreates #stage-scroll
 // from scratch (a fresh element always starts scrolled to 0,0) — tracked so
 // render() can restore the pan position instead of losing it on every
@@ -637,14 +649,14 @@ const OP_HANDLERS: Record<string, (db: Database, ...args: never[]) => unknown> =
 };
 
 /**
- * Calls one of the functions above and, if this tab is in a shared
- * session, sends the same call over the wire so everyone else applies it
- * too. `db` is deliberately not part of what's sent — every tab (including
- * the one that receives this later) supplies its own local one.
+ * Calls one of the functions above and shares the same call with the room
+ * — sent immediately if connected, queued in the outbox otherwise (see
+ * shareOp). `db` is deliberately not part of what's shared — every tab
+ * (including the one that receives this later) supplies its own local one.
  */
 function applyAndBroadcast<Args extends unknown[], R>(fnName: string, fn: (db: Database, ...args: Args) => R, ...args: Args): R {
   const result = fn(db as Database, ...args);
-  collab?.sendOp(fnName, args);
+  shareOp(fnName, args);
   return result;
 }
 
@@ -655,31 +667,269 @@ function applyAndBroadcast<Args extends unknown[], R>(fnName: string, fn: (db: D
  * has to land it at the *same* id, not its own independently-assigned one.
  * The broadcast args carry the id explicitly; addImage/addLink/addRow all
  * accept it as `input.id` to insert at a specific id instead of a fresh one.
+ *
+ * While in a shared session, that id is a large random number, not this
+ * tab's own next autoincrement value — a real bug found by actually
+ * testing the offline case: two tabs both offline, each adding a record
+ * around the same time, independently compute the *same* next id from
+ * their own copy of the database (same starting point, same "next free
+ * id" arithmetic) — a real primary-key collision once they reconnect and
+ * try to apply each other's add. Outside a shared session this is unused
+ * and plain autoincrement applies, same as ever.
  */
 function applyAddAndBroadcast<Input extends { id?: number }>(
   fnName: string,
   fn: (db: Database, input: Input) => number,
   input: Input,
 ): number {
+  if (collabRoomId && input.id === undefined) {
+    input = { ...input, id: Math.floor(Math.random() * 0x7fffffff) + 1 };
+  }
   const id = fn(db as Database, input);
-  collab?.sendOp(fnName, [{ ...input, id }]);
+  shareOp(fnName, [{ ...input, id }]);
   return id;
 }
 
-/** Applies one op relayed from someone else (or replayed from the log) — never re-sent, that would echo it right back out. */
+/**
+ * Sends this tab's own edit to the room right away if connected; otherwise
+ * queues it in the outbox to resend (or flag as a conflict) once a
+ * connection is caught up enough to check it — see drainOutbox(). A no-op
+ * outside any shared session at all (collabRoomId null): plain local
+ * editing was never touched by any of this.
+ */
+function shareOp(fn: string, args: unknown[]) {
+  if (!collabRoomId) return;
+  if (collab?.status === "connected") {
+    collab.sendOp(fn, args);
+  } else {
+    outbox.push({ fn, args });
+    void saveOutbox(collabRoomId, outbox);
+    updateCollabStatusDisplay(); // reflects the new pending count without disturbing whatever else is on screen
+  }
+}
+
+/**
+ * The record one op targets, for drainOutbox()'s conflict check. Null for
+ * most adds — a brand-new record generally can't collide with one that
+ * already existed. addRow is the one exception: rows.url is unique, and
+ * two people offline at once, each filling in the *same* still-bare
+ * hotspot's data, both call addRow for that same url — a real conflict a
+ * blind resend doesn't survive (rows.url's uniqueness rejects the second
+ * insert). Keyed by url, not id, since that's the field the constraint —
+ * and the actual collision — is on.
+ */
+function opTarget(fn: string, args: unknown[]): string | null {
+  switch (fn) {
+    case "updateRow":
+    case "deleteRow":
+      return `rows:${args[0]}`;
+    case "updateLink":
+    case "deleteLink":
+    case "updateLinkPosition":
+      return `links:${args[0]}`;
+    case "updateImage":
+    case "deleteImage":
+      return `images:${args[0]}`;
+    case "updateStoreSettings":
+      return "storeSettings"; // catalog-wide, not keyed by id
+    case "addRow":
+      return `rows:url:${(args[0] as { url: string }).url}`;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Applies one op relayed from someone else (or replayed from the log) —
+ * never re-sent, that would echo it right back out.
+ *
+ * addRow gets special handling: rows.url is unique, and this tab may have
+ * *its own* not-yet-sent local row for the same url (both offline at once,
+ * both filling in the same still-bare hotspot — the mirror image of what
+ * applyQueuedOpAsOverwrite handles for the outbox side). Inserting theirs
+ * straight would crash on that uniqueness.
+ *
+ * A first version of this fix just updated the existing local row's
+ * *values* in place, keeping this tab's own id — which is exactly wrong:
+ * this tab's row and the other tab's row were independently created with
+ * *different* ids, and a later op (an edit, a delete) targets a row by id.
+ * Updating in place left every peer privately disagreeing about what id
+ * that row actually has — an op that resolved a conflict correctly on the
+ * sender's own copy then silently matched nothing on everyone else's,
+ * since their `rows` table has no row at that id at all. The fix is to
+ * drop this tab's own row and insert theirs — same id everywhere, not
+ * just same values — so a later reference to it by id resolves the same
+ * way on every connected tab, this tab's own included.
+ */
 function applyRemoteOp(op: Op) {
   if (op.seq <= lastAppliedSeq) return; // already applied — the join replay and the live buffer can overlap, see connectAndSync
+  if (!db) {
+    lastAppliedSeq = op.seq;
+    return;
+  }
+  try {
+    if (op.fn === "addRow") {
+      const input = op.args[0] as Parameters<typeof addRow>[1];
+      const existing = findRowByUrl(db, input.url);
+      if (existing && existing.id !== input.id) {
+        deleteRow(db, existing.id);
+        addRow(db, input);
+      } else if (!existing) {
+        addRow(db, input);
+      }
+      // existing && existing.id === input.id: already there under the same id — nothing to do.
+    } else {
+      const handler = OP_HANDLERS[op.fn];
+      if (!handler) {
+        lastAppliedSeq = op.seq; // unrecognized fn — nothing to apply, but still move past it
+        return;
+      }
+      handler(db, ...(op.args as never[]));
+    }
+  } catch (err) {
+    // A relayed op should never fail against a caught-up copy — surfacing
+    // it beats a silently half-applied change, without taking the whole
+    // tab down over one bad op. Still counted as "applied" (see below) so
+    // a permanently-failing op can't wedge every future op behind it.
+    setStatus(`Couldn't apply a change from the shared session: ${(err as Error).message}`);
+    lastAppliedSeq = op.seq;
+    return;
+  }
   lastAppliedSeq = op.seq;
-  if (!db) return;
-  const handler = OP_HANDLERS[op.fn];
-  if (!handler) return; // unrecognized fn — ignore rather than crash this tab over it
-  handler(db, ...(op.args as never[]));
   render();
 }
 
 /**
+ * Applies one conflicting outbox entry after the person chose "overwrite
+ * with mine". Ordinarily that just means reapplying the same op and
+ * resending it — but a conflicting addRow can't be reapplied as another
+ * addRow: rows.url is unique, and the row that already exists there (the
+ * one that "won" the conflict) is *their* row, not the local optimistic
+ * one this tab had before the replay overwrote it. So this rewrites it
+ * into an updateRow against their row's actual id instead of trying to
+ * insert a second row for the same url.
+ */
+function applyQueuedOpAsOverwrite(queued: QueuedOp) {
+  if (!db) return;
+  if (queued.fn === "addRow") {
+    const input = queued.args[0] as Parameters<typeof addRow>[1];
+    const existing = findRowByUrl(db, input.url);
+    if (existing) {
+      const update = { name: input.name ?? "", sku: input.sku ?? "", description: input.description ?? "", extra: input.extra ?? {} };
+      applyAndBroadcast("updateRow", updateRow, existing.id, update);
+      return;
+    }
+    // Their row isn't actually there after all (e.g. it was since deleted) — a normal add is safe again.
+  }
+  OP_HANDLERS[queued.fn]?.(db, ...(queued.args as never[]));
+  shareOp(queued.fn, queued.args); // not collab?.sendOp directly — see drainOutbox's note on why that's unsafe here
+}
+
+/**
+ * A short, human-readable summary of what one op actually sets — shown
+ * side by side ("yours" vs. "current") in the conflict dialog below, since
+ * a bare "something conflicts" with no values to compare left no way to
+ * tell what's actually different, or judge which one to keep.
+ */
+function describeOp(fn: string, args: unknown[]): string {
+  switch (fn) {
+    case "addRow":
+    case "updateRow": {
+      const input = (fn === "addRow" ? args[0] : args[1]) as { name?: string; sku?: string };
+      return `row — name "${input.name || "(empty)"}", SKU "${input.sku || "(empty)"}"`;
+    }
+    case "deleteRow":
+      return "row — deleted";
+    case "updateLink": {
+      const input = args[1] as { name: string; url: string };
+      return `hotspot — name "${input.name}", address "${input.url}"`;
+    }
+    case "deleteLink":
+      return "hotspot — deleted";
+    case "updateLinkPosition":
+      return `hotspot position — top ${args[1]}, left ${args[2]}`;
+    case "updateImage": {
+      const input = args[1] as { name: string; folder: string };
+      return `image — name "${input.name}"${input.folder ? `, folder "${input.folder}"` : ""}`;
+    }
+    case "deleteImage":
+      return "image — deleted";
+    case "updateStoreSettings": {
+      const input = args[0] as { storeUrl: string };
+      return `store settings — URL "${input.storeUrl}"`;
+    }
+    default:
+      return fn;
+  }
+}
+
+/**
+ * Resends (or flags as a conflict) everything queued while disconnected,
+ * now that `elseDidWhileAway` — every op this tab just learned about, from
+ * a connect/reconnect's replay — is known. An outbox entry conflicts when
+ * something in that list targets the exact same record (see opTarget()):
+ * since ops are whole-value sets, not merges, the replay above already
+ * landed *their* value in `db` by the time this runs — so the choice is
+ * really just "leave their version standing" (Cancel) vs. "put mine back
+ * and share it" (OK), not a blind resend that would silently clobber it.
+ *
+ * All conflicts are batched into one confirm dialog, not one per entry —
+ * pendingConfirmation is a single slot (see askConfirm), so firing several
+ * in a row would silently overwrite all but the last one shown. Each one
+ * lists both values (see describeOp) — a real gap the first version of
+ * this had: "something conflicts, overwrite it?" with no way to tell what
+ * actually differs isn't a real choice.
+ *
+ * Non-conflicting entries go back through shareOp(), *not* a direct
+ * collab.sendOp() — a real bug this surfaced: connectAndSync's REST catch-up
+ * call and the WebSocket's own handshake race each other with no ordering
+ * guarantee, so the socket can still be mid-handshake (not yet OPEN) right
+ * here even though a reconnect is clearly underway. sendOp() alone just
+ * drops a message it can't send; shareOp() falls back to re-queuing it
+ * instead, so a same-round-trip resend attempt can't silently vanish.
+ */
+function drainOutbox(elseDidWhileAway: Op[]) {
+  if (outbox.length === 0 || !collabRoomId) return;
+  const roomId = collabRoomId;
+  const toProcess = outbox;
+  outbox = []; // shareOp() below re-populates this with anything that couldn't actually be sent this round
+  const theirsByTarget = new Map<string, Op>();
+  for (const op of elseDidWhileAway) {
+    const target = opTarget(op.fn, op.args);
+    if (target !== null) theirsByTarget.set(target, op); // last one logged is what's actually showing after the replay above
+  }
+  const conflicting: { queued: QueuedOp; theirs: Op }[] = [];
+  for (const queued of toProcess) {
+    const target = opTarget(queued.fn, queued.args);
+    const theirs = target !== null ? theirsByTarget.get(target) : undefined;
+    if (theirs) {
+      conflicting.push({ queued, theirs });
+    } else {
+      shareOp(queued.fn, queued.args);
+    }
+  }
+  if (conflicting.length > 0) {
+    const n = conflicting.length;
+    const details = conflicting
+      .map(({ queued, theirs }) => `Yours: ${describeOp(queued.fn, queued.args)}\nCurrent: ${describeOp(theirs.fn, theirs.args)}`)
+      .join("\n\n");
+    askConfirm(
+      `While you were disconnected, someone else also changed ${n === 1 ? "something" : `${n} things`} you also edited:\n\n${details}\n\nOverwrite ${n === 1 ? "it" : "them"} with your offline change${n === 1 ? "" : "s"}?`,
+      () => {
+        for (const { queued } of conflicting) applyQueuedOpAsOverwrite(queued);
+        render();
+      },
+    );
+    // Cancel needs no handling — their versions already stand, nothing more to do.
+  }
+  void saveOutbox(roomId, outbox); // reflects whatever's actually left — empty in the common case
+  updateCollabStatusDisplay();
+}
+
+/**
  * Opens the live connection and brings this tab's copy fully up to date —
- * used both right after creating a room and right after joining one.
+ * used right after creating a room, right after joining one, and again on
+ * every reconnect after an unexpected drop.
  *
  * Ordering note: CollabConnection starts delivering messages the moment
  * it's constructed, so buffering from construction (not from some later
@@ -702,15 +952,46 @@ async function connectAndSync(roomId: string) {
     },
     (status) => {
       collabStatus = status;
-      render();
+      updateCollabStatusDisplay();
+      if (status === "disconnected") scheduleReconnect(roomId);
     },
   );
   collabRoomId = roomId;
+
+  // The socket's own handshake and this REST call have no ordering
+  // guarantee otherwise — waiting here is what makes drainOutbox() below
+  // safe to assume "connected really means connected", not just "the
+  // status flag says so a few milliseconds ahead of the socket itself".
+  await collab.waitUntilOpen();
 
   const missed = await listOpsSince(COLLAB_SERVER_URL, roomId, lastAppliedSeq);
   for (const op of missed) applyRemoteOp(op);
   syncing = false;
   for (const op of pending) applyRemoteOp(op);
+
+  drainOutbox([...missed, ...pending]);
+}
+
+/**
+ * Retries a dropped connection after a short flat delay — no backoff, kept
+ * simple for this phase. Only ever one retry pending at a time, and only
+ * while this tab is still supposed to be in `roomId` (actionLeaveCollaboration
+ * clears collabRoomId first specifically so this becomes a no-op instead of
+ * fighting a deliberate exit).
+ */
+function scheduleReconnect(roomId: string) {
+  if (reconnectTimer !== null) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    if (collabRoomId === roomId && collabStatus !== "connected") {
+      // A retry failing (the server's still down) is the routine, expected
+      // case here, not an exceptional one — connectAndSync's REST calls
+      // rejecting shouldn't become an unhandled rejection every ~3s while
+      // genuinely offline. The next retry is already scheduled by the
+      // status callback's own "disconnected" transition either way.
+      connectAndSync(roomId).catch(() => {});
+    }
+  }, 3000);
 }
 
 /** Uploads the current catalog as a brand-new shared session and connects to it. */
@@ -722,6 +1003,9 @@ async function actionStartCollaboration() {
     const room = await createRoom(COLLAB_SERVER_URL, bytes);
     collabOwnerToken = room.ownerToken;
     lastAppliedSeq = 0;
+    // So reloading *this* tab re-joins the same room via the same
+    // ?collab= boot path a shared link uses, instead of losing it.
+    history.replaceState(null, "", `?collab=${room.roomId}`);
     await connectAndSync(room.roomId);
     setStatus("Started a shared session — share the link shown below with a colleague.");
   } catch (err) {
@@ -729,7 +1013,7 @@ async function actionStartCollaboration() {
   }
 }
 
-/** Joins an existing shared session by id — downloads its original snapshot, then catches up to its current state via connectAndSync. */
+/** Joins an existing shared session by id — downloads its original snapshot, replays the full history, then catches up via connectAndSync. */
 async function actionJoinCollaboration(roomId: string) {
   setStatus("Joining the shared session…");
   try {
@@ -741,6 +1025,11 @@ async function actionJoinCollaboration(roomId: string) {
     collabOwnerToken = null; // only create() hands this out — a joiner never has it
     lastAppliedSeq = 0;
     resetTransientEditState();
+    // A previous visit to this same room may have left offline edits
+    // queued (e.g. the tab reloaded, or was closed, before reconnecting) —
+    // restore them so connectAndSync's drainOutbox() gets a chance to
+    // resend (or flag as a conflict) rather than silently losing them.
+    outbox = await loadOutbox(roomId);
     await connectAndSync(roomId);
     setStatus("Joined the shared session.");
   } catch (err) {
@@ -750,11 +1039,18 @@ async function actionJoinCollaboration(roomId: string) {
 
 /** Disconnects this tab only — the room itself and everyone else in it are unaffected (deleting a room outright is Phase 5). */
 function actionLeaveCollaboration() {
+  const roomId = collabRoomId;
+  collabRoomId = null; // first, so a reconnect already in flight becomes a no-op
+  if (reconnectTimer !== null) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   collab?.close();
   collab = null;
-  collabRoomId = null;
   collabOwnerToken = null;
   collabStatus = "disconnected";
+  outbox = [];
+  if (roomId) void clearOutbox(roomId);
   setStatus("Left the shared session — you're back to working locally.");
 }
 
@@ -1433,14 +1729,44 @@ function collabShareLink(): string {
   return `${location.origin}${location.pathname}?collab=${collabRoomId}`;
 }
 
-function renderCollabStatus(): string {
+function collabStatusText(): { icon: string; label: string; title: string } {
   const icon = collabStatus === "connected" ? "🟢" : collabStatus === "connecting" ? "🟡" : "🔴";
-  const label = collabStatus === "connected" ? "Live" : collabStatus === "connecting" ? "Connecting…" : "Disconnected";
+  let label = collabStatus === "connected" ? "Live" : collabStatus === "connecting" ? "Connecting…" : "Disconnected";
+  let title = `Share this link so a colleague can join: ${collabShareLink()}`;
+  if (outbox.length > 0) {
+    label += ` (${outbox.length} pending)`;
+    title = `${outbox.length} edit${outbox.length === 1 ? "" : "s"} not sent yet — still editing locally, will send once reconnected. ${title}`;
+  }
+  return { icon, label, title };
+}
+
+function renderCollabStatus(): string {
+  const { icon, label, title } = collabStatusText();
   return `
-    <span class="collab-status" title="Share this link so a colleague can join: ${escapeHtml(collabShareLink())}">${icon} ${label}</span>
+    <span class="collab-status" id="collab-status-text" title="${escapeHtml(title)}">${icon} ${label}</span>
     <button type="button" id="btn-copy-collab-link">Copy link to share</button>
     <button type="button" id="btn-leave-collab">Leave</button>
   `;
+}
+
+/**
+ * Patches just the status text in place instead of calling render() — the
+ * connection flickering between connecting/disconnected while genuinely
+ * offline (each retry — see scheduleReconnect) would otherwise wholesale-
+ * rebuild #app every few seconds and silently wipe whatever's mid-typing
+ * in an open form (a real bug this surfaced: editing a row's SKU while
+ * offline got reverted out from under the person a few seconds later).
+ * Only status/pending-count changes go through here; an actual data change
+ * (a local edit, an applied remote op) still goes through the normal
+ * render() — this is purely for the parts of a status flicker that don't
+ * change what's on the page besides this one label.
+ */
+function updateCollabStatusDisplay() {
+  const el = document.getElementById("collab-status-text");
+  if (!el) return; // no active session currently rendered — nothing to patch
+  const { icon, label, title } = collabStatusText();
+  el.textContent = `${icon} ${label}`;
+  el.title = title;
 }
 
 function renderConfirmOverlay(): string {

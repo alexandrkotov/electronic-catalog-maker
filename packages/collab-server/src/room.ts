@@ -156,11 +156,20 @@ export class RoomDurableObject extends DurableObject<Env> {
    */
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     if (typeof message !== "string") return; // ops are JSON text frames; ignore anything else
-    let parsed: { fn: string; args: unknown[] };
+    let parsed: { type?: string; fn: string; args: unknown[] };
     try {
       parsed = JSON.parse(message);
     } catch {
       return; // malformed frame — drop it rather than crash the room over one bad message
+    }
+    if (parsed.type === "ping") {
+      // Client-side heartbeat (see collab.ts) — a dead connection doesn't
+      // always fire the browser's own close/error events promptly (an
+      // abruptly-gone server can leave a WebSocket looking "open" for a
+      // while), so the client actively checks rather than just trusting
+      // readyState. Nothing to log here, this never touches ops_log.
+      ws.send(JSON.stringify({ type: "pong" }));
+      return;
     }
     if (typeof parsed.fn !== "string" || !Array.isArray(parsed.args)) return;
 

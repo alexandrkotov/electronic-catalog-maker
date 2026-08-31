@@ -74,8 +74,21 @@ export type CollabStatus = "connecting" | "connected" | "disconnected";
  * either already covered by that REST call or arrives here — there's no
  * gap between the two to fall into either way).
  */
+// A dead connection doesn't reliably fire the browser's own close/error
+// events promptly — an abruptly-gone server (a crash, not a clean
+// shutdown) can leave readyState reporting OPEN for a good while, which
+// matters here specifically: shareOp() (main.ts) trusts `status` to decide
+// whether to send an edit straight through or queue it in the outbox, and
+// a stale "connected" reading meant a real edit could get handed to
+// ws.send() on a socket that looked open but wasn't, and just vanish —
+// never queued, never delivered. Pinging actively catches that instead of
+// waiting on the browser to notice on its own.
+const HEARTBEAT_INTERVAL_MS = 5000;
+
 export class CollabConnection {
   private ws: WebSocket;
+  private heartbeat: ReturnType<typeof setInterval> | null = null;
+  private awaitingPong = false;
   status: CollabStatus = "connecting";
 
   constructor(
@@ -86,16 +99,51 @@ export class CollabConnection {
   ) {
     const wsUrl = `${baseUrl.replace(/^http/, "ws")}/rooms/${roomId}/live`;
     this.ws = new WebSocket(wsUrl);
-    this.ws.addEventListener("open", () => this.setStatus("connected"));
-    this.ws.addEventListener("close", () => this.setStatus("disconnected"));
+    this.ws.addEventListener("open", () => {
+      this.setStatus("connected");
+      this.startHeartbeat();
+    });
+    this.ws.addEventListener("close", () => {
+      this.stopHeartbeat();
+      this.setStatus("disconnected");
+    });
     this.ws.addEventListener("error", () => this.setStatus("disconnected"));
     this.ws.addEventListener("message", (evt) => {
+      let parsed: { type?: string };
       try {
-        this.onOp(JSON.parse(evt.data as string) as Op);
+        parsed = JSON.parse(evt.data as string);
       } catch {
-        // malformed frame — drop it rather than crash the tab over one bad message
+        return; // malformed frame — drop it rather than crash the tab over one bad message
       }
+      if (parsed.type === "pong") {
+        this.awaitingPong = false;
+        return;
+      }
+      this.onOp(parsed as Op);
     });
+  }
+
+  private startHeartbeat() {
+    this.heartbeat = setInterval(() => {
+      if (this.awaitingPong) {
+        // No pong since the last ping — treat it as dead now rather than
+        // wait on the browser's own detection, which is exactly what was
+        // silently losing edits before this existed.
+        this.ws.close();
+        return;
+      }
+      if (this.ws.readyState === WebSocket.OPEN) {
+        this.awaitingPong = true;
+        this.ws.send(JSON.stringify({ type: "ping" }));
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeat !== null) {
+      clearInterval(this.heartbeat);
+      this.heartbeat = null;
+    }
   }
 
   private setStatus(status: CollabStatus) {
@@ -110,7 +158,32 @@ export class CollabConnection {
     }
   }
 
+  /**
+   * Resolves once the socket is genuinely open (immediately, if it already
+   * is) — or once it's clear it never will be this attempt (closed/errored
+   * first), so a caller waiting on this never hangs forever. connectAndSync
+   * (main.ts) awaits this before its REST catch-up call and outbox drain:
+   * those and this socket's own handshake have no ordering guarantee
+   * between them otherwise, and running the drain first was a real bug —
+   * sendOp() on a not-yet-open socket just silently drops the message.
+   */
+  waitUntilOpen(): Promise<void> {
+    if (this.ws.readyState === WebSocket.OPEN) return Promise.resolve();
+    return new Promise((resolve) => {
+      const settle = () => {
+        this.ws.removeEventListener("open", settle);
+        this.ws.removeEventListener("close", settle);
+        this.ws.removeEventListener("error", settle);
+        resolve();
+      };
+      this.ws.addEventListener("open", settle);
+      this.ws.addEventListener("close", settle);
+      this.ws.addEventListener("error", settle);
+    });
+  }
+
   close() {
+    this.stopHeartbeat();
     this.ws.close();
   }
 }
