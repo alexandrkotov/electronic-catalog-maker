@@ -2231,7 +2231,7 @@ function renderCollabNameDialog(): string {
         <p>Pick a name so others in this session know who's who — no account needed.</p>
         <div class="field">
           <label for="collab-name-input">Your name</label>
-          <input type="text" id="collab-name-input" value="${escapeHtml(collabNameValue)}" placeholder="e.g. Alex" maxlength="60" />
+          <input type="text" id="collab-name-input" value="${escapeHtml(collabNameValue)}" placeholder="e.g. Alec" maxlength="60" />
         </div>
         <div class="confirm-actions">
           <button id="collab-name-cancel">Cancel</button>
