@@ -26,6 +26,24 @@ export interface Op {
   ts: string;
 }
 
+/**
+ * One connected person's presence, keyed by their client-chosen id (see
+ * server.ts's presence-hello handling). Deliberately not part of opsLog:
+ * this is ephemeral, per-connection UI state, not a catalog edit — it never
+ * needs to be replayed for a reconnecting client the way an Op does, only
+ * ever reflects "right now".
+ */
+export interface PresenceEntry {
+  name: string;
+  color: string;
+  /** Tab visible + recent mouse/keyboard activity, as judged by that
+   * person's own browser (see the editor's activity tracker) — not merely
+   * "the socket is open". Only active entries are ever handed back by
+   * listActivePresence(), so a forgotten-but-still-connected tab just drops
+   * off everyone else's roster instead of looking like it's being worked on. */
+  active: boolean;
+}
+
 interface RoomState {
   ownerToken: string;
   createdAt: string;
@@ -33,6 +51,7 @@ interface RoomState {
   chunkCount: number;
   chunks: Map<number, Uint8Array>;
   opsLog: Op[];
+  presence: Map<string, PresenceEntry>;
 }
 
 const rooms = new Map<string, RoomState>();
@@ -47,7 +66,7 @@ function getOrThrow(roomId: string): RoomState {
 export function createRoom(roomId: string, ownerToken: string): { createdAt: string } {
   if (rooms.has(roomId)) throw new Error("Room already exists.");
   const createdAt = new Date().toISOString();
-  rooms.set(roomId, { ownerToken, createdAt, uploadComplete: false, chunkCount: 0, chunks: new Map(), opsLog: [] });
+  rooms.set(roomId, { ownerToken, createdAt, uploadComplete: false, chunkCount: 0, chunks: new Map(), opsLog: [], presence: new Map() });
   return { createdAt };
 }
 
@@ -97,6 +116,32 @@ export function appendOp(roomId: string, fn: string, args: unknown[]): Op {
   const op: Op = { seq: room.opsLog.length + 1, fn, args, ts: new Date().toISOString() };
   room.opsLog.push(op);
   return op;
+}
+
+const MAX_PRESENCE_NAME_LENGTH = 60; // matches the editor's <input maxlength>; enforced here too since this is an unauthenticated peer sending it, not just UI hygiene
+
+/** Records (or replaces) one connection's presence — called on its "hello" and again on every reconnect, since a fresh WebSocket is a fresh connection object server-side even though the client kept the same clientId. Silently a no-op if the room's already gone (e.g. a stray late message after deleteRoom()) — nothing to attach it to. */
+export function setPresence(roomId: string, clientId: string, name: string, color: string, active: boolean): void {
+  const room = rooms.get(roomId);
+  if (!room) return;
+  room.presence.set(clientId, { name: name.slice(0, MAX_PRESENCE_NAME_LENGTH), color, active });
+}
+
+/** Toggles just the active flag — sent far more often than a fresh hello (every visibility/idle transition), so it's its own cheap call rather than resending name+color each time. No-op if this clientId never said hello (e.g. a stray message after close()). */
+export function setPresenceActive(roomId: string, clientId: string, active: boolean): void {
+  const entry = rooms.get(roomId)?.presence.get(clientId);
+  if (entry) entry.active = active;
+}
+
+export function removePresence(roomId: string, clientId: string): void {
+  rooms.get(roomId)?.presence.delete(clientId);
+}
+
+/** Everyone currently marked active, in join order — what actually goes in the toolbar roster. Someone connected but idle/hidden just isn't in this list; see PresenceEntry's active field for why. */
+export function listActivePresence(roomId: string): Array<{ clientId: string; name: string; color: string }> {
+  const room = rooms.get(roomId);
+  if (!room) return [];
+  return [...room.presence.entries()].filter(([, entry]) => entry.active).map(([clientId, entry]) => ({ clientId, name: entry.name, color: entry.color }));
 }
 
 /** Only the holder of the owner token (from createRoom()'s return, kept secret from collaborators) may do this. */

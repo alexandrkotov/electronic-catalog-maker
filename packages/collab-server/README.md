@@ -49,6 +49,23 @@ hosted server, stopping this app (or the host's laptop going to sleep) ends
 the session for everyone connected. That trade-off was made deliberately —
 see the design notes for the reasoning.
 
+## Who's here right now
+
+The first time a tab starts or joins a shared session, the editor asks for a
+display name (no account) and assigns it a color from a small fixed palette —
+both hold for the rest of that session, including across a brief reconnect.
+The toolbar then shows a small roster of initial avatars for everyone
+currently in the room.
+
+"Currently in the room" means more than just "has an open connection": a
+person only shows up once their tab is actually visible and they've moved
+the mouse or pressed a key recently (the same real-visitor-vs-abandoned-tab
+idea a lot of secured sites already use for their own session timeouts) — a
+forgotten background tab just quietly drops off the roster rather than
+looking like someone's still working in it. This server holds none of that
+itself; it only relays what each tab reports about its own visibility and
+activity.
+
 ## Running it
 
 ```bash
@@ -142,7 +159,7 @@ onto a plain self-hosted server; only the base URL it's pointed at changed.
 | `POST /rooms/:id/finalize` | Body `{ "chunkCount": N }` — declares the upload done, after every chunk has landed. |
 | `GET /rooms/:id` | The full reassembled snapshot, once finalized (409 before that). |
 | `GET /rooms/:id/info` | `{ exists, uploadComplete, chunkCount, totalBytes }`, without pulling the snapshot itself. |
-| `GET /rooms/:id/live` | Upgrades to the WebSocket used for live editing — relays an incoming op to every other connected client and logs it. |
+| `GET /rooms/:id/live` | Upgrades to the WebSocket used for live editing — relays an incoming op to every other connected client and logs it. Also carries presence (see below): `presence-hello`/`presence-active` frames in, a `presence-roster` frame back out to everyone (sender included) whenever who's active changes. |
 | `GET /rooms/:id/ops?since=N` | Every op logged after seq N — how a fresh joiner or reconnecting client catches up. |
 | `DELETE /rooms/:id` | Requires `X-Owner-Token: <ownerToken>`. Wrong or missing token → 401/403. |
 | `GET /status`, `GET /status.json` | The status page main.ts auto-opens (the app's actual UI) and the JSON it polls. `POST /shutdown` is the status page's Stop button. None of these three are part of the collaboration protocol itself. |

@@ -561,6 +561,37 @@ td {
   white-space: nowrap;
 }
 
+/* Presence roster (Phase 5) — a compact row of initial avatars, not names,
+   since toolbar space is already tight; the full name is a hover title
+   (see renderPresenceAvatar). Empty and collapses to nothing when nobody
+   else is currently active. */
+.collab-presence {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.presence-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1;
+  /* The ring is what makes overlap-free adjacent avatars read as distinct
+     circles against the toolbar background, in either theme. */
+  box-shadow: 0 0 0 2px var(--bg-panel);
+  user-select: none;
+}
+
+.presence-avatar-me {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
 .error {
   color: var(--danger);
   font-size: 0.8rem;

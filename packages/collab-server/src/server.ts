@@ -16,6 +16,14 @@ import { renderStatusPage } from "./statusPage";
  * New here: GET /status and /status.json, the page main.ts auto-opens in
  * the host's browser on startup so they never have to read raw terminal
  * output to find the link to share.
+ *
+ * Also new: presence (Phase 5) — "presence-hello" and "presence-active"
+ * text frames alongside the existing op frames, handled the same way pings
+ * are (checked by `type` before falling through to the op path). Broadcasts
+ * always go through `bunServer.publish`, not `ws.publish`, specifically
+ * because a roster update needs to reach the connection that triggered it
+ * too (e.g. seeing your own avatar disappear when you go idle) — unlike an
+ * op, which the sender already applied locally and shouldn't get echoed.
  */
 
 // The editor and this server are always different origins (a self-hosted
@@ -77,7 +85,11 @@ export function startServer(port: number): ServerHandle {
     stop: () => bunServer.stop(true),
   };
 
-  const bunServer = Bun.serve<{ roomId: string }>({
+  // clientId is unset until this connection's first presence-hello — a
+  // socket that only ever sends ops/pings (an old build, or a client that
+  // hasn't shipped presence yet) never gets a presence entry, which is fine:
+  // it just doesn't show up in the roster, same as anyone who's gone idle.
+  const bunServer = Bun.serve<{ roomId: string; clientId?: string }>({
     port,
     async fetch(request, server) {
       if (request.method === "OPTIONS") {
@@ -130,7 +142,7 @@ export function startServer(port: number): ServerHandle {
       },
       message(ws, message) {
         if (typeof message !== "string") return; // ops are JSON text frames; ignore anything else
-        let parsed: { type?: string; fn?: string; args?: unknown[] };
+        let parsed: { type?: string; fn?: string; args?: unknown[]; clientId?: string; name?: string; color?: string; active?: boolean };
         try {
           parsed = JSON.parse(message);
         } catch {
@@ -142,18 +154,53 @@ export function startServer(port: number): ServerHandle {
           ws.send(JSON.stringify({ type: "pong" }));
           return;
         }
+        if (parsed.type === "presence-hello") {
+          if (typeof parsed.clientId !== "string" || typeof parsed.name !== "string" || typeof parsed.color !== "string") return;
+          ws.data.clientId = parsed.clientId;
+          rooms.setPresence(ws.data.roomId, parsed.clientId, parsed.name, sanitizeColor(parsed.color), parsed.active !== false);
+          broadcastPresence(ws.data.roomId);
+          return;
+        }
+        if (parsed.type === "presence-active") {
+          if (!ws.data.clientId || typeof parsed.active !== "boolean") return;
+          rooms.setPresenceActive(ws.data.roomId, ws.data.clientId, parsed.active);
+          broadcastPresence(ws.data.roomId);
+          return;
+        }
         if (typeof parsed.fn !== "string" || !Array.isArray(parsed.args)) return;
         const op = rooms.appendOp(ws.data.roomId, parsed.fn, parsed.args);
         ws.publish(ws.data.roomId, JSON.stringify(op));
       },
       close(ws) {
         ws.unsubscribe(ws.data.roomId);
+        if (ws.data.clientId) {
+          rooms.removePresence(ws.data.roomId, ws.data.clientId);
+          broadcastPresence(ws.data.roomId);
+        }
       },
     },
   });
 
+  /**
+   * Sends the room's current active-presence roster to everyone in it,
+   * including whoever just triggered the change — `bunServer.publish`
+   * (unlike `ws.publish`) has no notion of "sender" to exclude, which is
+   * exactly what's wanted here (see this file's class doc). A no-op if the
+   * room's gone (deleteRoom() raced a stray presence message).
+   */
+  function broadcastPresence(roomId: string) {
+    if (!rooms.roomInfo(roomId).exists) return;
+    bunServer.publish(roomId, JSON.stringify({ type: "presence-roster", users: rooms.listActivePresence(roomId) }));
+  }
+
   handle.port = bunServer.port ?? port;
   return handle;
+}
+
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+/** A presence color rides across the wire as plain text and ends up straight in another browser's CSS (see the editor's presence-avatar rendering) — restricted to a strict `#rrggbb` shape rather than merely escaped, so there's no CSS-injection surface even from an unauthenticated peer. Anything else falls back to a neutral grey. */
+function sanitizeColor(color: string): string {
+  return HEX_COLOR.test(color) ? color : "#6c757d";
 }
 
 async function route(request: Request, url: URL, parts: string[]): Promise<Response> {

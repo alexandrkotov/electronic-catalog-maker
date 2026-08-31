@@ -48,7 +48,7 @@ import {
   type SqlJsStatic,
 } from "@ecm/shared";
 import { slugify } from "./slugify";
-import { CollabConnection, createRoom, downloadSnapshot, listOpsSince, type CollabStatus, type Op } from "./collab";
+import { CollabConnection, createRoom, downloadSnapshot, listOpsSince, type CollabStatus, type Op, type PresenceUser } from "./collab";
 import { clearOutbox, loadOutbox, saveOutbox, type QueuedOp } from "./collabStore";
 
 // Applied before the first render so there's no flash of the wrong theme.
@@ -123,7 +123,7 @@ let collabRoomId: string | null = null;
 let collabStatus: CollabStatus = "disconnected";
 // Only meaningful right after actionStartCollaboration() — shown once so
 // it can be copied, not persisted or shown again after a reload (deleting
-// a room isn't built yet — that's Phase 5 — so there's nowhere to use it
+// a room isn't built yet — that's Phase 6 — so there's nowhere to use it
 // again this early anyway).
 let collabOwnerToken: string | null = null;
 // The highest op seq applied so far — lets a fresh join or reconnect ask
@@ -191,6 +191,102 @@ let storeSettingsCartCheckoutBaseUrl = DEFAULT_CART_CHECKOUT_BASE_URL;
 // somewhere auto-detect can't reach (a different computer, a custom port).
 let collabNotFoundOpen = false;
 let collabManualUrlValue = "";
+
+// ---------- presence (Phase 5) ----------
+// A small fixed palette rather than an arbitrary generated color — every
+// entry is dark/saturated enough to stay readable with white avatar text
+// (see renderPresenceAvatar), and every entry is a plain `#rrggbb`, which
+// is also the exact shape collab-server/src/server.ts's sanitizeColor()
+// (and this file's own sanitizePresenceColor(), for a color that arrived
+// over the wire from a peer instead of from here) requires.
+const PRESENCE_COLORS = [
+  "#e63946",
+  "#f77f00",
+  "#2a9d8f",
+  "#264653",
+  "#3a86ff",
+  "#8338ec",
+  "#d90429",
+  "#588157",
+  "#ae2012",
+  "#6a4c93",
+];
+
+// Set once per joined session (see initPresenceIdentity, called when the
+// "join as…" name dialog is confirmed) — null whenever this tab isn't
+// currently part of a shared session. Regenerated fresh on every new
+// start/join, including a rejoin after Leave, matching the plan's "a
+// persistent color for the whole session" (not across separate sessions).
+let collabClientId: string | null = null;
+let collabDisplayName = "";
+let collabColor = "";
+// The room's currently-active participants, as last reported by the server
+// (see connectAndSync's onPresence callback) — kept around across a brief
+// reconnect blip rather than cleared, so the roster doesn't flicker empty
+// for every dropped connection, only genuinely updates when the server next
+// says otherwise.
+let collabPresence: PresenceUser[] = [];
+
+// "Join as…" name dialog — shown once, right before a brand-new
+// start/join actually happens (see promptForCollabNameThen), not on every
+// reconnect: the identity it establishes is reused for the rest of that
+// session's connectAndSync calls.
+let collabNameDialogOpen = false;
+let collabNameValue = "";
+let collabNameDialogOnConfirm: (() => void) | null = null;
+
+function loadCollabDisplayName(): string {
+  try {
+    return localStorage.getItem("ecm-editor-collab-display-name") ?? "";
+  } catch {
+    return ""; // localStorage unavailable (privacy mode, etc.)
+  }
+}
+
+function saveCollabDisplayName(name: string) {
+  try {
+    localStorage.setItem("ecm-editor-collab-display-name", name);
+  } catch {
+    // Still applies for this session, just won't be pre-filled next time.
+  }
+}
+
+function initPresenceIdentity(name: string) {
+  collabClientId = crypto.randomUUID();
+  collabDisplayName = name;
+  collabColor = PRESENCE_COLORS[Math.floor(Math.random() * PRESENCE_COLORS.length)]!;
+  saveCollabDisplayName(name);
+}
+
+/**
+ * Tab visible + recent mouse/keyboard activity — the same "real visitor vs
+ * abandoned tab" idea a lot of secured sites already use for their own
+ * session timeouts (see the plan doc for Phase 5), not merely "the socket
+ * is open". Module-level and wired once (see the bottom of this file),
+ * regardless of whether a shared session is currently open — cheap either
+ * way, and it means the very first presence-hello (right after connecting)
+ * already reflects a real, current reading instead of a hardcoded "true".
+ */
+const PRESENCE_IDLE_TIMEOUT_MS = 60_000;
+let lastActivityAt = Date.now();
+let presenceActive = true;
+
+function isPresenceActive(): boolean {
+  return document.visibilityState === "visible" && Date.now() - lastActivityAt < PRESENCE_IDLE_TIMEOUT_MS;
+}
+
+function notePresenceActivity() {
+  lastActivityAt = Date.now();
+  reconcilePresenceActive();
+}
+
+/** Only actually sends anything when the active/idle reading has flipped — called far more often than that (every mouse move), so this is what keeps that cheap. */
+function reconcilePresenceActive() {
+  const next = isPresenceActive();
+  if (next === presenceActive) return;
+  presenceActive = next;
+  if (collab && collabRoomId) collab.sendPresenceActive(presenceActive);
+}
 
 // Which single panel is shown below the mobile breakpoint (see .mobile-tabs
 // / #app[data-mobile-tab] in style.css) — irrelevant above it, where all
@@ -361,7 +457,7 @@ async function boot() {
   SQL = await initSqlite(wasmUrl);
   if (initialCollabParam) {
     if (initialCollabServerParam) saveCollabServerUrl(initialCollabServerParam);
-    await actionJoinCollaboration(initialCollabParam);
+    promptForCollabNameThen(() => void actionJoinCollaboration(initialCollabParam));
   } else if (initialSrcParam) {
     await loadInitialFromUrl(initialSrcParam);
   } else {
@@ -1008,6 +1104,10 @@ async function connectAndSync(roomId: string) {
       if (syncing) pending.push(op);
       else applyRemoteOp(op);
     },
+    (users) => {
+      collabPresence = users;
+      updatePresenceRosterDisplay();
+    },
     (status) => {
       collabStatus = status;
       updateCollabStatusDisplay();
@@ -1021,6 +1121,13 @@ async function connectAndSync(roomId: string) {
   // safe to assume "connected really means connected", not just "the
   // status flag says so a few milliseconds ahead of the socket itself".
   await collab.waitUntilOpen();
+
+  // Re-announced on every reconnect too, not just the first connect — a
+  // fresh WebSocket is a fresh connection server-side even with the same
+  // clientId, so without this a reconnect would silently stay off
+  // everyone else's roster. collabClientId is only ever unset if this got
+  // called outside the normal start/join path, which shouldn't happen.
+  if (collabClientId) collab.sendPresenceHello(collabClientId, collabDisplayName, collabColor, presenceActive);
 
   const missed = await listOpsSince(collabServerUrl, roomId, lastAppliedSeq);
   for (const op of missed) applyRemoteOp(op);
@@ -1116,12 +1223,43 @@ async function actionStartCollaboration() {
     pendingConfirmation = {
       message:
         "Found your collaboration server, but it doesn't have a public address yet (still connecting, or its tunnel isn't available). You can continue — this tab will work — but the link won't work for a colleague until that's ready. Continue anyway?",
-      onConfirm: () => void beginCollaboration(detected.url),
+      onConfirm: () => promptForCollabNameThen(() => void beginCollaboration(detected.url)),
     };
     render();
     return;
   }
-  await beginCollaboration(detected.url);
+  promptForCollabNameThen(() => void beginCollaboration(detected.url));
+}
+
+/**
+ * Shows the "join as…" name dialog, then runs `action` once a name's been
+ * confirmed (see initPresenceIdentity) — used right before both ways a
+ * brand-new shared session actually begins (starting one, joining one via
+ * a link), never on a plain reconnect: connectAndSync reuses whatever
+ * identity this already established for the rest of that session.
+ */
+function promptForCollabNameThen(action: () => void) {
+  collabNameValue = loadCollabDisplayName();
+  collabNameDialogOnConfirm = action;
+  collabNameDialogOpen = true;
+  render();
+}
+
+function actionCancelCollabNameDialog() {
+  collabNameDialogOpen = false;
+  collabNameDialogOnConfirm = null;
+  render();
+}
+
+function actionSubmitCollabNameDialog() {
+  const name = collabNameValue.trim();
+  if (!name) return; // the submit button is disabled for this too — see wireEvents
+  collabNameDialogOpen = false;
+  const action = collabNameDialogOnConfirm;
+  collabNameDialogOnConfirm = null;
+  initPresenceIdentity(name);
+  render();
+  action?.();
 }
 
 /** Uploads the current catalog as a brand-new shared session against `serverUrl` and connects to it. */
@@ -1184,7 +1322,7 @@ function collabErrorMessage(action: string, err: unknown): string {
   return `Could not ${action} — is the collaboration server at ${collabServerUrl} still running? (${detail})`;
 }
 
-/** Disconnects this tab only — the room itself and everyone else in it are unaffected (deleting a room outright is Phase 5). */
+/** Disconnects this tab only — the room itself and everyone else in it are unaffected (deleting a room outright is Phase 6). */
 function actionLeaveCollaboration() {
   const roomId = collabRoomId;
   collabRoomId = null; // first, so a reconnect already in flight becomes a no-op
@@ -1196,6 +1334,12 @@ function actionLeaveCollaboration() {
   collab = null;
   collabOwnerToken = null;
   collabStatus = "disconnected";
+  // The server already drops this tab's presence entry on the socket
+  // closing — this just clears the local echo of it (and this tab's own
+  // identity, so a later restart gets a fresh name prompt and color, per
+  // "persistent for the whole session" rather than forever).
+  collabPresence = [];
+  collabClientId = null;
   outbox = [];
   if (roomId) void clearOutbox(roomId);
   setStatus("Left the shared session — you're back to working locally.");
@@ -1789,6 +1933,7 @@ function render() {
     ${renderRemoteDialog()}
     ${renderStoreSettingsDialog()}
     ${renderCollabNotFoundDialog()}
+    ${renderCollabNameDialog()}
   `;
 
   if (savedScroll) {
@@ -1894,7 +2039,33 @@ function renderCollabStatus(): string {
     <span class="collab-status" id="collab-status-text" title="${escapeHtml(title)}">${icon} ${label}</span>
     <button type="button" id="btn-copy-collab-link">Copy link to share</button>
     <button type="button" id="btn-leave-collab">Leave</button>
+    ${renderPresenceRoster()}
   `;
+}
+
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+/** Defense-in-depth alongside collab-server's own sanitizeColor() — this roster's `color` came in over the wire from another peer, not this tab, and ends up straight in a `style` attribute below. */
+function sanitizePresenceColor(color: string): string {
+  return HEX_COLOR.test(color) ? color : "#6c757d";
+}
+
+/** A row of small initial avatars — who's currently active in this session (see PresenceUser; someone connected but idle/hidden just isn't in the list, not shown greyed-out). */
+function renderPresenceRoster(): string {
+  return `<div class="collab-presence" id="collab-presence-list" title="Who's here right now">${collabPresence.map(renderPresenceAvatar).join("")}</div>`;
+}
+
+function renderPresenceAvatar(user: PresenceUser): string {
+  const initial = (user.name.trim()[0] ?? "?").toUpperCase();
+  const isMe = user.clientId === collabClientId;
+  const label = isMe ? `${user.name} (you)` : user.name;
+  return `<span class="presence-avatar${isMe ? " presence-avatar-me" : ""}" style="background:${sanitizePresenceColor(user.color)}" title="${escapeHtml(label)}">${escapeHtml(initial)}</span>`;
+}
+
+/** Same reasoning as updateCollabStatusDisplay() below — a roster change (someone else joining, going idle, leaving) can land at any moment, including mid-typing in an open form, so this patches the roster's own small DOM subtree instead of calling render(). */
+function updatePresenceRosterDisplay() {
+  const el = document.getElementById("collab-presence-list");
+  if (!el) return; // no active session currently rendered — the next real render() will pick this roster up
+  el.innerHTML = collabPresence.map(renderPresenceAvatar).join("");
 }
 
 /**
@@ -2046,6 +2217,26 @@ function renderCollabNotFoundDialog(): string {
           </div>
           <button id="collab-manual-url-submit">Use this address</button>
         </details>
+      </div>
+    </div>
+  `;
+}
+
+function renderCollabNameDialog(): string {
+  if (!collabNameDialogOpen) return "";
+  return `
+    <div class="confirm-overlay">
+      <div class="confirm-box">
+        <h2>Join as…</h2>
+        <p>Pick a name so others in this session know who's who — no account needed.</p>
+        <div class="field">
+          <label for="collab-name-input">Your name</label>
+          <input type="text" id="collab-name-input" value="${escapeHtml(collabNameValue)}" placeholder="e.g. Alex" maxlength="60" />
+        </div>
+        <div class="confirm-actions">
+          <button id="collab-name-cancel">Cancel</button>
+          <button id="collab-name-submit" ${collabNameValue.trim() ? "" : "disabled"}>Join</button>
+        </div>
       </div>
     </div>
   `;
@@ -2335,6 +2526,22 @@ function wireEvents(links: CatalogLink[]) {
   document.getElementById("btn-start-collab")?.addEventListener("click", () => void actionStartCollaboration());
   document.getElementById("btn-copy-collab-link")?.addEventListener("click", () => void actionCopyCollabLink());
   document.getElementById("btn-leave-collab")?.addEventListener("click", actionLeaveCollaboration);
+  document.getElementById("collab-name-cancel")?.addEventListener("click", actionCancelCollabNameDialog);
+  document.getElementById("collab-name-submit")?.addEventListener("click", actionSubmitCollabNameDialog);
+  const collabNameInput = document.getElementById("collab-name-input") as HTMLInputElement | null;
+  const collabNameSubmitBtn = document.getElementById("collab-name-submit") as HTMLButtonElement | null;
+  collabNameInput?.addEventListener("input", () => {
+    collabNameValue = collabNameInput.value;
+    if (collabNameSubmitBtn) collabNameSubmitBtn.disabled = !collabNameInput.value.trim();
+  });
+  collabNameInput?.addEventListener("keydown", (evt) => {
+    if (evt.key === "Enter" && collabNameInput.value.trim()) actionSubmitCollabNameDialog();
+    if (evt.key === "Escape") actionCancelCollabNameDialog();
+  });
+  if (collabNameDialogOpen) {
+    collabNameInput?.focus();
+    collabNameInput?.setSelectionRange(collabNameInput.value.length, collabNameInput.value.length);
+  }
   document.getElementById("store-settings-cancel")?.addEventListener("click", actionCancelStoreSettings);
   document.getElementById("store-settings-submit")?.addEventListener("click", actionSubmitStoreSettings);
   const storeUrlInput = document.getElementById("store-url-input") as HTMLInputElement | null;
@@ -2516,5 +2723,20 @@ function wireEvents(links: CatalogLink[]) {
   document.getElementById("btn-cancel-edit-row")?.addEventListener("click", actionCancelEditRow);
   document.getElementById("btn-delete-row")?.addEventListener("click", actionDeleteRow);
 }
+
+// ---------- presence activity tracking (Phase 5) ----------
+// Wired once at module load, not inside wireEvents() (which reruns on every
+// render) — these listen on `document` regardless of what's currently
+// rendered, and adding a fresh copy on every render would pile up
+// duplicates. See isPresenceActive()'s doc for what these feed into.
+document.addEventListener("mousemove", notePresenceActivity, { passive: true });
+document.addEventListener("mousedown", notePresenceActivity);
+document.addEventListener("keydown", notePresenceActivity);
+document.addEventListener("touchstart", notePresenceActivity, { passive: true });
+document.addEventListener("visibilitychange", reconcilePresenceActive);
+// Catches the idle timeout expiring on its own — a still-visible tab with
+// zero further input wouldn't otherwise fire any of the listeners above
+// again to notice.
+setInterval(reconcilePresenceActive, 15_000);
 
 void boot();

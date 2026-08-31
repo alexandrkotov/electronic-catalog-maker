@@ -182,6 +182,84 @@ describe("collab-server rooms", () => {
     expect(data.tunnelError).toBe("Could not start the tunnel — is 'cloudflared' installed and on PATH?");
   });
 
+  it("broadcasts the active-presence roster on hello, active toggling, and disconnect — including back to whoever triggered it", async () => {
+    const createRes = await fetch(`${base}/rooms`, { method: "POST" });
+    const { roomId } = (await createRes.json()) as { roomId: string };
+    const wsBase = base.replace(/^http/, "ws");
+    type Roster = { type: string; users: Array<{ clientId: string; name: string; color: string }> };
+
+    function connect(): Promise<WebSocket> {
+      return new Promise((resolve, reject) => {
+        const ws = new WebSocket(`${wsBase}/rooms/${roomId}/live`);
+        ws.addEventListener("open", () => resolve(ws), { once: true });
+        ws.addEventListener("error", reject, { once: true });
+      });
+    }
+    function nextRoster(ws: WebSocket): Promise<Roster> {
+      return new Promise((resolve) => {
+        ws.addEventListener("message", (evt) => resolve(JSON.parse(evt.data as string) as Roster), { once: true });
+      });
+    }
+
+    const wsA = await connect();
+    const wsB = await connect();
+
+    // A says hello — the roster (with A in it) reaches A itself too, not just B.
+    // Every broadcast below is awaited on *every* currently-connected socket
+    // before moving on — a copy nobody's listening for when it lands isn't
+    // buffered for a later listener to pick up, it's just gone, so leaving
+    // any subscriber's copy undrained would make a later, unrelated await
+    // resolve with this stale message instead of the one it's actually
+    // waiting for (caught exactly that way while first writing this test).
+    let [aRoster, bRoster] = await Promise.all([
+      nextRoster(wsA),
+      nextRoster(wsB),
+      Promise.resolve(wsA.send(JSON.stringify({ type: "presence-hello", clientId: "alice", name: "Alice", color: "#ff0000", active: true }))),
+    ]);
+    expect(aRoster).toEqual({ type: "presence-roster", users: [{ clientId: "alice", name: "Alice", color: "#ff0000" }] });
+    expect(bRoster).toEqual(aRoster);
+
+    // B says hello too — an invalid color falls back to the neutral default rather than riding through as arbitrary CSS.
+    [aRoster, bRoster] = await Promise.all([
+      nextRoster(wsA),
+      nextRoster(wsB),
+      Promise.resolve(wsB.send(JSON.stringify({ type: "presence-hello", clientId: "bob", name: "Bob", color: "not-a-color; }</style>", active: true }))),
+    ]);
+    expect(aRoster.users.map((u) => u.clientId).sort()).toEqual(["alice", "bob"]);
+    expect(aRoster.users.find((u) => u.clientId === "bob")?.color).toBe("#6c757d");
+    expect(bRoster).toEqual(aRoster);
+
+    // A goes idle — drops out of the roster everyone sees, self included.
+    [aRoster, bRoster] = await Promise.all([
+      nextRoster(wsA),
+      nextRoster(wsB),
+      Promise.resolve(wsA.send(JSON.stringify({ type: "presence-active", active: false }))),
+    ]);
+    expect(aRoster.users.map((u) => u.clientId)).toEqual(["bob"]);
+    expect(bRoster).toEqual(aRoster);
+
+    // C joins and says hello — reaches everyone, A (idle) included.
+    const wsC = await connect();
+    let cRoster: Roster;
+    [aRoster, bRoster, cRoster] = await Promise.all([
+      nextRoster(wsA),
+      nextRoster(wsB),
+      nextRoster(wsC),
+      Promise.resolve(wsC.send(JSON.stringify({ type: "presence-hello", clientId: "carol", name: "Carol", color: "#00ff00", active: true }))),
+    ]);
+    expect(aRoster.users.map((u) => u.clientId).sort()).toEqual(["bob", "carol"]);
+    expect(bRoster).toEqual(aRoster);
+    expect(cRoster).toEqual(aRoster);
+
+    // B disconnects entirely — the roster empties out to just C for whoever's left.
+    [aRoster, cRoster] = await Promise.all([nextRoster(wsA), nextRoster(wsC), Promise.resolve(wsB.close())]);
+    expect(aRoster.users.map((u) => u.clientId)).toEqual(["carol"]);
+    expect(cRoster).toEqual(aRoster);
+
+    wsA.close();
+    wsC.close();
+  });
+
   it("stops the server when the status page's Stop button posts to /shutdown", async () => {
     let shutdownCalled = false;
     server.onShutdownRequested = () => {

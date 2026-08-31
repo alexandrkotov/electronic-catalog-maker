@@ -19,6 +19,13 @@ export interface RoomCreated {
   createdAt: string;
 }
 
+/** One currently-active participant, as the server's roster broadcast reports them (see collab-server/src/rooms.ts's PresenceEntry — this is its public shape, minus the `active` flag itself, since only active entries are ever included). */
+export interface PresenceUser {
+  clientId: string;
+  name: string;
+  color: string;
+}
+
 // Comfortably under Workers' request body limits regardless of exactly
 // where those sit — a real catalog's images are usually smaller than this
 // per-chunk anyway, so most uploads end up as one chunk per image.
@@ -95,6 +102,7 @@ export class CollabConnection {
     baseUrl: string,
     readonly roomId: string,
     private readonly onOp: (op: Op) => void,
+    private readonly onPresence: (users: PresenceUser[]) => void,
     private readonly onStatusChange: (status: CollabStatus) => void,
   ) {
     const wsUrl = `${baseUrl.replace(/^http/, "ws")}/rooms/${roomId}/live`;
@@ -109,7 +117,7 @@ export class CollabConnection {
     });
     this.ws.addEventListener("error", () => this.setStatus("disconnected"));
     this.ws.addEventListener("message", (evt) => {
-      let parsed: { type?: string };
+      let parsed: { type?: string; users?: PresenceUser[] };
       try {
         parsed = JSON.parse(evt.data as string);
       } catch {
@@ -117,6 +125,10 @@ export class CollabConnection {
       }
       if (parsed.type === "pong") {
         this.awaitingPong = false;
+        return;
+      }
+      if (parsed.type === "presence-roster") {
+        this.onPresence(parsed.users ?? []);
         return;
       }
       this.onOp(parsed as Op);
@@ -155,6 +167,20 @@ export class CollabConnection {
   sendOp(fn: string, args: unknown[]) {
     if (this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ fn, args }));
+    }
+  }
+
+  /** Announces (or re-announces, after a reconnect) this tab's identity to the room — see main.ts's connectAndSync for when this is called. */
+  sendPresenceHello(clientId: string, name: string, color: string, active: boolean) {
+    if (this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "presence-hello", clientId, name, color, active }));
+    }
+  }
+
+  /** Reports a visibility/idle transition — see main.ts's activity tracker. Silently dropped if not open, same as sendOp; the next reconnect's hello re-establishes the current state anyway. */
+  sendPresenceActive(active: boolean) {
+    if (this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "presence-active", active }));
     }
   }
 
