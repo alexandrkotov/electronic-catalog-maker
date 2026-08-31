@@ -1,22 +1,32 @@
 /**
- * Manages the `cloudflared` subprocess that makes this locally-running
- * server reachable from the outside world — see the project's
- * collaboration-hosting design notes for why a tunnel (not raw dynamic DNS)
- * is the right primitive: it terminates real HTTPS/WSS with no port-
- * forwarding or certificate to manage, both of which a browser-served
- * editor page (always https://) would otherwise require.
+ * Manages the subprocess that makes this locally-running server reachable
+ * from the outside world — see the project's collaboration-hosting design
+ * notes for why a tunnel (not raw dynamic DNS) is the right primitive: it
+ * terminates real HTTPS/WSS with no port-forwarding or certificate to
+ * manage, both of which a browser-served editor page (always https://)
+ * would otherwise require.
  *
- * `cloudflared tunnel --url http://localhost:<port>` needs no Cloudflare
- * account for this "quick tunnel" mode — it prints a one-off
- * `https://*.trycloudflare.com` address to its own stdout/stderr once
- * connected, which is all this module is watching for.
+ * Defaults to `cloudflared tunnel --url http://localhost:<port>` —
+ * Cloudflare's free "quick tunnel" mode, no account needed, printing a
+ * one-off `https://*.trycloudflare.com` address to its own stdout/stderr
+ * once connected, which is all this module watches for by default.
+ *
+ * **Not hard-wired to Cloudflare specifically, on purpose**: it's a free
+ * third-party service with no uptime guarantee for this anonymous mode
+ * (Cloudflare's own docs say so) — a real, if unlikely, dependency risk for
+ * a feature this project doesn't want to be permanently coupled to one
+ * vendor's free tier. `main.ts` builds the actual command and URL pattern
+ * this module is given; both are overridable via `TUNNEL_COMMAND` /
+ * `TUNNEL_URL_PATTERN` env vars there, so swapping in ngrok, a named
+ * Cloudflare Tunnel, or anything else that prints a public URL somewhere in
+ * its output is a config change, not a code change.
  */
 
-const TUNNEL_URL_PATTERN = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/;
+const DEFAULT_TUNNEL_URL_PATTERN = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/;
 
 /** Pulled out as its own function so the parsing logic is unit-testable against real captured cloudflared output, without spawning the actual binary. */
-export function extractTunnelUrl(line: string): string | null {
-  return line.match(TUNNEL_URL_PATTERN)?.[0] ?? null;
+export function extractTunnelUrl(line: string, pattern: RegExp = DEFAULT_TUNNEL_URL_PATTERN): string | null {
+  return line.match(pattern)?.[0] ?? null;
 }
 
 export interface Tunnel {
@@ -24,9 +34,10 @@ export interface Tunnel {
 }
 
 export interface StartTunnelOptions {
-  port: number;
-  /** Path to the cloudflared binary — a bundled/embedded one in a packaged build, or just "cloudflared" to resolve it off PATH in dev. */
-  cloudflaredPath: string;
+  /** Full argv to spawn, e.g. `[cloudflaredPath, "tunnel", "--url", "http://localhost:8787"]` — built by the caller, since only it knows what port/path/provider apply. */
+  command: string[];
+  /** How to recognize the public URL in the subprocess's output — defaults to cloudflared's own `*.trycloudflare.com` pattern. Override when `command` points at a different tunnel provider. */
+  urlPattern?: RegExp;
   onUrl: (url: string) => void;
   /** Every line of the subprocess's combined output, mainly for a verbose/debug mode — most callers don't need this. */
   onLog?: (line: string) => void;
@@ -34,7 +45,8 @@ export interface StartTunnelOptions {
 }
 
 export function startTunnel(opts: StartTunnelOptions): Tunnel {
-  const proc = Bun.spawn([opts.cloudflaredPath, "tunnel", "--url", `http://localhost:${opts.port}`], {
+  const pattern = opts.urlPattern ?? DEFAULT_TUNNEL_URL_PATTERN;
+  const proc = Bun.spawn(opts.command, {
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -55,7 +67,7 @@ export function startTunnel(opts: StartTunnelOptions): Tunnel {
         buffer = buffer.slice(newlineIdx + 1);
         opts.onLog?.(line);
         if (!found) {
-          const url = extractTunnelUrl(line);
+          const url = extractTunnelUrl(line, pattern);
           if (url) {
             found = true;
             opts.onUrl(url);

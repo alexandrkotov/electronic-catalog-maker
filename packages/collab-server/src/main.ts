@@ -17,6 +17,29 @@ import { startTunnel } from "./tunnel";
 const PORT = Number(process.env.PORT ?? 8787); // matches the editor's own default Server settings value, so a fresh install of both just works together
 const CLOUDFLARED_PATH = process.env.CLOUDFLARED_PATH ?? "cloudflared"; // resolved off PATH unless a packaged build injects a bundled one
 
+/**
+ * Which tunnel provider to run — defaults to Cloudflare's free quick-tunnel
+ * mode via `cloudflared`, but not hard-wired to it: `TUNNEL_COMMAND` lets
+ * anyone swap in a different provider (e.g. `TUNNEL_COMMAND="ngrok http
+ * {port}"`) without touching code, and `TUNNEL_URL_PATTERN` (a regex
+ * source string) tells this app how to recognize *that* provider's public
+ * URL in its output instead of cloudflared's `*.trycloudflare.com` one.
+ * Exists specifically so this app isn't permanently coupled to one
+ * third-party free tier — see the project's collaboration-hosting design
+ * notes for the "what if this specific free service goes away" reasoning.
+ */
+function resolveTunnelCommand(port: number): string[] {
+  const override = process.env.TUNNEL_COMMAND;
+  if (!override) return [CLOUDFLARED_PATH, "tunnel", "--url", `http://localhost:${port}`];
+  // A simple whitespace split plus a {port} substitution is enough for
+  // swapping in another single tunnel CLI — anything needing real
+  // quoting/escaping should wrap itself in a small script and point
+  // TUNNEL_COMMAND at that script instead of trying to express it here.
+  return override.split(/\s+/).map((part) => part.replaceAll("{port}", String(port)));
+}
+
+const tunnelUrlPattern = process.env.TUNNEL_URL_PATTERN ? new RegExp(process.env.TUNNEL_URL_PATTERN) : undefined;
+
 /** True for the specific "something's already listening on this port" failure Bun.serve() throws — confirmed by hand (`code: "EADDRINUSE"`), not guessed at. */
 function isPortInUse(err: unknown): boolean {
   return err instanceof Error && "code" in err && err.code === "EADDRINUSE";
@@ -81,14 +104,19 @@ async function main() {
   // A missing `cloudflared` binary (not installed, or a packaged build that
   // failed to bundle one) throws synchronously right out of Bun.spawn — the
   // exact kind of raw stack trace this app exists to spare a non-technical
-  // host from. Caught here so the local server stays usable (e.g. for
-  // same-network collaborators, or a manually-run tunnel pointed at this
-  // port) instead of the whole app just crashing.
+  // host from. Caught here so the local server stays usable instead of the
+  // whole app just crashing — useful on its own for the host's own tab
+  // (http://127.0.0.1:<port> is exempt from the browser's mixed-content
+  // block even though the editor itself is https://; a *different* machine
+  // on the same LAN is not exempt and would still need either a real
+  // tunnel, or the editor served over plain http:// on that same LAN too —
+  // see the README), and as a fallback local address for a manually-run
+  // tunnel pointed at this port.
   let tunnel: ReturnType<typeof startTunnel> | null = null;
   try {
     tunnel = startTunnel({
-      port: server.port,
-      cloudflaredPath: CLOUDFLARED_PATH,
+      command: resolveTunnelCommand(server.port),
+      urlPattern: tunnelUrlPattern,
       onUrl: (url) => {
         server.publicUrl = url;
         console.log(`   Public address: ${url}`);
@@ -106,7 +134,9 @@ async function main() {
       },
     });
   } catch {
-    const message = "Could not start the tunnel — is 'cloudflared' installed and on PATH? See this package's README.";
+    const message = process.env.TUNNEL_COMMAND
+      ? `Could not start the tunnel — is the TUNNEL_COMMAND override ("${process.env.TUNNEL_COMMAND}") actually runnable?`
+      : "Could not start the tunnel — is 'cloudflared' installed and on PATH? See this package's README.";
     server.tunnelError = message;
     console.error(`   ⚠️  ${message}`);
     console.error("      The server itself is still running (useful on a shared local network),");

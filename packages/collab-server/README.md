@@ -52,9 +52,30 @@ bun run src/main.ts
 In dev mode, this resolves `cloudflared` off your PATH (or `CLOUDFLARED_PATH`
 if set) — a **compiled** binary instead has a real `cloudflared` embedded
 directly inside it, nothing to install separately (see below). Either way,
-if no tunnel is available the local server still starts (useful for
-same-network collaborators who can already reach this machine directly) —
-there's just no public address to hand out until one is.
+if no tunnel is available the local server still starts and stays usable —
+but only for the host's *own* browser tab pointed at `http://127.0.0.1:
+<port>`. That specific address is exempt from browsers' mixed-content
+block even though the public editor is `https://` (a long-standing
+exception for local development); a *colleague's own machine* on the same
+network is not exempt, and pointing their Server settings at your LAN IP
+(e.g. `http://192.168.1.50:8787`) will get silently blocked by their
+browser. To collaborate over a LAN with no tunnel/public address at all,
+everyone — including the host — needs to load the editor itself from a
+plain `http://` copy served on that same LAN too (not the public `https://`
+site), since `ws://` from an `http://` page is never mixed content.
+
+## Fully offline / LAN-only collaboration (no tunnel, no public address)
+
+Possible, but it means self-hosting the *editor* on the LAN as well, not
+just this server — the public `https://` editor can never reach a LAN-only
+address due to the mixed-content rule above, no matter what this server
+does. In short: serve `packages/editor/dist` (a `pnpm --filter @ecm/editor
+build` output) over plain `http://` from anywhere reachable on that LAN
+(a simple static file server is enough), and have everyone — including the
+host — open the editor from that address rather than the public site.
+Genuinely appealing for anyone who doesn't want *any* traffic leaving their
+own network (a real motivation for self-hosting in the first place — see
+the design notes), but a full walkthrough for this isn't written yet.
 
 Override the local port with `PORT` (default `8787`, matching the editor's
 own default in Server settings). If that port's already taken: by another
@@ -66,6 +87,24 @@ copies pointed at the same port (second one opened the first's page,
 didn't start a second server) and started this app against a port held by
 an unrelated process (it silently picked a different one and worked
 normally).
+
+**Not permanently coupled to Cloudflare's free tunnel, either.** It's a
+real (if unlikely) dependency risk — Cloudflare's own docs say this
+anonymous "quick tunnel" mode carries no uptime guarantee — so the tunnel
+command and how this app recognizes a provider's public URL are both
+overridable:
+
+- `TUNNEL_COMMAND` — a full command to run instead of the default
+  `cloudflared tunnel --url http://localhost:<port>`; write `{port}` where
+  the local port belongs, e.g. `TUNNEL_COMMAND="ngrok http {port}"`.
+- `TUNNEL_URL_PATTERN` — a regex (as a plain string) matching that
+  provider's public URL shape, since the default only recognizes
+  `*.trycloudflare.com`.
+
+Confirmed working for real, not just plausible in theory: ran this app
+with `TUNNEL_COMMAND` pointed at a `cloudflared` binary outside its normal
+`CLOUDFLARED_PATH`/embedded lookup entirely, and it picked up and used that
+exact override to get a real public tunnel.
 
 ## HTTP + WebSocket surface
 

@@ -16,7 +16,9 @@ const REAL_CLOUDFLARED_OUTPUT = `
 
 describe("extractTunnelUrl", () => {
   it("finds the trycloudflare.com URL in a real cloudflared banner", () => {
-    const found = REAL_CLOUDFLARED_OUTPUT.split("\n").map(extractTunnelUrl).find((url) => url !== null);
+    const found = REAL_CLOUDFLARED_OUTPUT.split("\n")
+      .map((line) => extractTunnelUrl(line))
+      .find((url) => url !== null);
     expect(found).toBe("https://random-words-here-1234.trycloudflare.com");
   });
 
@@ -27,5 +29,14 @@ describe("extractTunnelUrl", () => {
 
   it("ignores an unrelated https URL", () => {
     expect(extractTunnelUrl("Visit https://cloudflare.com for more info")).toBeNull();
+  });
+
+  it("recognizes a different provider's URL when given a custom pattern (the TUNNEL_URL_PATTERN override)", () => {
+    const ngrokPattern = /https:\/\/[a-z0-9-]+\.ngrok-free\.app/;
+    expect(extractTunnelUrl("t=2026 lvl=info msg=\"started tunnel\" url=https://abcd-1-2-3-4.ngrok-free.app", ngrokPattern)).toBe(
+      "https://abcd-1-2-3-4.ngrok-free.app",
+    );
+    // The default pattern shouldn't match a different provider's URL shape.
+    expect(extractTunnelUrl("url=https://abcd-1-2-3-4.ngrok-free.app")).toBeNull();
   });
 });
