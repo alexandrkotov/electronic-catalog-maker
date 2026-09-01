@@ -285,11 +285,15 @@ going to sleep — ends the session for everyone. Nothing is ever lost when
 it does: everyone keeps their own current copy locally the whole time, the
 same familiar `.ecatm` file, downloadable at any point.
 
-See [`packages/collab-server`](packages/collab-server) for how to run that
-app, how the whole live-editing mechanism works (large catalogs are never
-resent whole — only the specific field or photo that changed), and its
-current known limitations (its binaries aren't code-signed yet, so
-Windows/macOS will warn on first run).
+Prebuilt binaries for **Windows and Linux** are on the
+[latest release](https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest)
+(also linked from the [landing page](https://alexandrkotov.github.io/electronic-catalog-maker/)) —
+download, run, and the editor finds it automatically. See
+[`packages/collab-server`](packages/collab-server) for how the whole
+live-editing mechanism works (large catalogs are never resent whole — only
+the specific field or photo that changed) and its current known
+limitations (its binaries aren't code-signed yet, so Windows will warn on
+first run; there's no macOS build yet).
 
 ### Editing locally, without a shared session
 
@@ -383,7 +387,7 @@ pnpm install
 pnpm dev:editor         # http://localhost:5173
 pnpm dev:viewer         # http://localhost:5174 (or next free port)
 pnpm dev:embed          # http://localhost:5175 (or next free port) — <ecm-viewer> dev preview
-pnpm dev:collab-server  # http://127.0.0.1:8787 — see packages/collab-server for the rest
+pnpm dev:collab-server  # http://localhost:8787 — see packages/collab-server for the rest
 pnpm -r build           # production build of editor/viewer/viewer-embed -> packages/*/dist
 ```
 
