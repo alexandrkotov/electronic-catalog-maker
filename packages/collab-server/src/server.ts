@@ -1,5 +1,6 @@
 import * as rooms from "./rooms";
 import { renderStatusPage } from "./statusPage";
+import { renderBridgePage } from "./bridgePage";
 
 /**
  * The self-hosted collaboration server: a plain Bun HTTP+WebSocket server
@@ -43,10 +44,22 @@ import { renderStatusPage } from "./statusPage";
 // is required, not optional. `*` is fine: nothing here is cookie/credential-
 // authenticated, the room id and owner token in the URL/body/header *are*
 // the credentials, same reasoning as the Cloudflare version had.
+//
+// This is also, in the far more common case, a *public* https:// page (the
+// deployed editor) reaching into a *private* address (this server, almost
+// always 127.0.0.1 or a LAN IP) — exactly what Chrome's Private Network
+// Access check exists to gate. PNA forces a preflight for this even on an
+// otherwise-"simple" GET with no custom headers, and without this response
+// header on that preflight, Chrome silently fails the real request — no
+// console network error a user would think to report, just the editor's
+// auto-detect coming up empty. Confirmed live: the editor's own
+// "can't find a collaboration server" dialog is what surfaces this, not a
+// server-side symptom.
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, X-Owner-Token, X-Closed-By",
+  "Access-Control-Allow-Private-Network": "true",
 };
 
 function withCors(response: Response): Response {
@@ -151,6 +164,13 @@ export function startServer(port: number): ServerHandle {
       }
       if (url.pathname === "/status.json") {
         return withCors(json({ publicUrl: handle.publicUrl, tunnelError: handle.tunnelError, port: handle.port }));
+      }
+      // GET /bridge — a plain top-level navigation (a popup, from the
+      // editor's auto-detect), not a fetch/XHR — see bridgePage.ts for why
+      // that distinction is exactly what gets this around Chrome's Local
+      // Network Access blocking the editor's normal fetch()-based probe.
+      if (url.pathname === "/bridge") {
+        return new Response(renderBridgePage(), { headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
       // POST /shutdown — the status page's Stop button. Lets a host end the
       // session from the UI they're actually looking at, instead of the

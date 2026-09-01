@@ -181,6 +181,58 @@ with `TUNNEL_COMMAND` pointed at a `cloudflared` binary outside its normal
 `CLOUDFLARED_PATH`/embedded lookup entirely, and it picked up and used that
 exact override to get a real public tunnel.
 
+## Local Network Access
+
+Found live (2026-09-01), not in a changelog first: on a browser enforcing
+Chrome 142+'s **Local Network Access (LNA)**, the editor's own auto-detect
+— a plain `fetch()` from the deployed `https://` editor to
+`http://127.0.0.1:<port>` — is blocked outright, every time, even when this
+server is genuinely running on the expected port. The failure is a real
+permission gate, not a missing-CORS-header problem: `Access-Control-Allow-
+Private-Network: true` (this server sends it on every response, including
+preflights — see `CORS_HEADERS` in `server.ts`) is necessary but not
+sufficient. Confirmed directly in a real Chromium via Playwright, isolating
+the actual cause from a stale-binary red herring first:
+
+| Condition | Result |
+|---|---|
+| `Access-Control-Allow-Private-Network: true` alone | ❌ still blocked |
+| + `fetch(..., { targetAddressSpace: "loopback" })` on the client | ❌ still blocked |
+| + the browser's `local-network-access` permission actually granted for that origin | ✅ works |
+
+The real browser error is explicit once you know to look:
+`Access to fetch at 'http://127.0.0.1:8787/status.json' from origin
+'https://...' has been blocked by CORS policy: Permission was denied for
+this request to access the \`loopback\` address space.` This isn't
+Windows/macOS/Linux-specific — it's purely a function of the browser's
+version, so a build on any platform hits it identically on a new-enough
+Chrome.
+
+**The workaround** (`GET /bridge` above; `detectLocalCollabServerViaBridge`
+in `packages/editor/src/main.ts`) routes around LNA rather than asking the
+user to grant it a permission: LNA gates `fetch`/`XHR`/`WebSocket`/
+`WebTransport`, not top-level navigation or `postMessage`. The editor opens
+`/bridge` in a small popup (a navigation); that page fetches its own
+`/status.json` from the *server's own* side of the loopback boundary (same
+address space as itself — not gated at all), hands the answer back to its
+`opener` via `postMessage` (also not gated), then closes itself. Confirmed
+working end-to-end against a real public origin
+(`https://alexandrkotov.github.io`) with a real Chromium enforcing LNA and
+no permission pre-granted; confirmed the "nothing listening on that port"
+case also resolves cleanly (a closed connection-refused tab, not a hang)
+within its ~1.5s timeout. Only tried against the default port, not the
+full auto-detect range — see the fallback's own doc comment for why; the
+manual-address dialog is still the net under that.
+
+A related, real bug this surfaced rather than caused: `actionUseManualCollabUrl()`
+(the manual-address escape hatch that dialog offers) used to skip the
+"pick a display name" prompt entirely, unlike both other ways a session
+starts — so using that escape hatch as a workaround for the LNA block
+above meant the session's own initiator never appeared in their own
+presence roster, while a colleague joining via the share link (a different
+code path, which did prompt) showed up fine. Fixed alongside this — all
+three ways a shared session can begin now go through the same name prompt.
+
 ## HTTP + WebSocket surface
 
 Identical to what earlier phases built against a Cloudflare Durable Object
@@ -199,6 +251,7 @@ onto a plain self-hosted server; only the base URL it's pointed at changed.
 | `GET /rooms/:id/ops?since=N` | Every op logged after seq N — how a fresh joiner or reconnecting client catches up. |
 | `DELETE /rooms/:id` | Requires `X-Owner-Token: <ownerToken>`. Wrong or missing token → 401/403. Ends the session for everyone, not just the caller — broadcasts a `room-closed` frame (see below) to every still-connected client first. An optional `X-Closed-By: <name>` names who, for that frame's `by` field. |
 | `GET /status`, `GET /status.json` | The status page main.ts auto-opens (the app's actual UI) and the JSON it polls. `POST /shutdown` is the status page's Stop button. None of these three are part of the collaboration protocol itself. |
+| `GET /bridge?returnOrigin=<origin>` | A blank page the editor opens in a popup, only when its normal `fetch()`-based auto-detect comes up empty — see "Local Network Access" below. Fetches its own `/status.json`, `postMessage`s the result back to `returnOrigin`, and closes itself. Not part of the collaboration protocol either — purely a workaround for a browser restriction on the detection step. |
 
 ## Running the tests
 
@@ -252,6 +305,15 @@ a real `trycloudflare.com` address, a real two-tab collaboration session
 including the Stop button, confirmed working end to end. The macOS build
 uses the identical mechanism but hasn't been run on a real Mac yet — worth
 a real smoke test there before distributing.
+
+`ecm-collab-server-linux-x64` is now on GitHub Releases (`collab-server-latest`)
+next to the Windows exe, landing-page-downloadable like it. Before that
+upload it got the same real-not-simulated test again, one level deeper than
+the original check above: create room → upload a chunk → finalize →
+download the snapshot back → delete the room, all as real HTTP calls
+against the live `https://*.trycloudflare.com` address (not loopback), then
+a clean stop through the status page's own `/shutdown` endpoint — full
+protocol round-trip, not just "a tunnel connected."
 
 `--windows-hide-console` (see the compile script) runs the Windows build
 with no console window at all — confirmed by inspecting the compiled
