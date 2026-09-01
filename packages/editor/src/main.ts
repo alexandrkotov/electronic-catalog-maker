@@ -86,7 +86,13 @@ const CATALOG_PICKER_TYPE: FilePickerAcceptType = {
 // this value mainly matters as what a fresh join or reconnect uses (set
 // from a shared link's `server=` param — see below — or the manual address
 // from the "can't find a collaboration server" dialog's escape hatch).
-const DEFAULT_COLLAB_SERVER_URL = "http://127.0.0.1:8787";
+// "localhost", not "127.0.0.1" — both are equally exempt from the mixed-
+// content block, but a real live test (2026-09-01) found a Windows browser
+// talking to this app running under WSL2 can flat-out refuse a literal
+// 127.0.0.1 connection while the same port under "localhost" works fine —
+// WSL2's own port forwarding, not this app. See detectLocalCollabServerViaBridge
+// and probeCollabServerPort below, which match this choice.
+const DEFAULT_COLLAB_SERVER_URL = "http://localhost:8787";
 let collabServerUrl = loadCollabServerUrl();
 
 function loadCollabServerUrl(): string {
@@ -1198,13 +1204,13 @@ interface DetectedCollabServer {
 
 async function probeCollabServerPort(port: number): Promise<DetectedCollabServer | null> {
   try {
-    const res = await fetch(`http://127.0.0.1:${port}/status.json`, { signal: AbortSignal.timeout(800) });
+    const res = await fetch(`http://localhost:${port}/status.json`, { signal: AbortSignal.timeout(800) });
     if (!res.ok) return null;
     const data = (await res.json()) as { publicUrl?: string | null; tunnelError?: string | null };
     // Something answered, but not shaped like our own status.json — some
     // unrelated local service happens to be on this port. Not our server.
     if (!("publicUrl" in data) || !("tunnelError" in data)) return null;
-    return data.publicUrl ? { url: data.publicUrl, hasPublicUrl: true } : { url: `http://127.0.0.1:${port}`, hasPublicUrl: false };
+    return data.publicUrl ? { url: data.publicUrl, hasPublicUrl: true } : { url: `http://localhost:${port}`, hasPublicUrl: false };
   } catch {
     return null; // nothing listening there, or it didn't answer in time
   }
@@ -1256,7 +1262,7 @@ async function detectLocalCollabServer(): Promise<DetectedCollabServer | null> {
  */
 async function detectLocalCollabServerViaBridge(port: number): Promise<DetectedCollabServer | null> {
   const returnOrigin = window.location.origin;
-  const targetOrigin = `http://127.0.0.1:${port}`;
+  const targetOrigin = `http://localhost:${port}`;
   let popup: Window | null;
   try {
     popup = window.open(`${targetOrigin}/bridge?returnOrigin=${encodeURIComponent(returnOrigin)}`, "_blank", "width=100,height=100,left=-1000,top=-1000");

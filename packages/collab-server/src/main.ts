@@ -66,7 +66,7 @@ function isPortInUse(err: unknown): boolean {
  */
 async function isOwnServerAlreadyThere(port: number): Promise<boolean> {
   try {
-    const res = await fetch(`http://127.0.0.1:${port}/status.json`, { signal: AbortSignal.timeout(1000) });
+    const res = await fetch(`http://localhost:${port}/status.json`, { signal: AbortSignal.timeout(1000) });
     if (!res.ok) return false;
     const data = (await res.json()) as Record<string, unknown>;
     return "publicUrl" in data && "tunnelError" in data && "port" in data;
@@ -103,7 +103,7 @@ async function main() {
 
     if (await isOwnServerAlreadyThere(PORT)) {
       console.log(`   Already running on this computer — opening its status page instead of starting a second copy.`);
-      openInBrowser(`http://127.0.0.1:${PORT}/status`);
+      openInBrowser(`http://localhost:${PORT}/status`);
       return;
     }
 
@@ -113,10 +113,10 @@ async function main() {
     console.log(`   Port ${PORT} is already in use by something else — picking a different one.`);
     server = startServerNearby(PORT);
   }
-  console.log(`   Local: http://127.0.0.1:${server.port}`);
+  console.log(`   Local: http://localhost:${server.port}`);
   console.log("   Connecting a public tunnel…");
 
-  const statusUrl = `http://127.0.0.1:${server.port}/status`;
+  const statusUrl = `http://localhost:${server.port}/status`;
   openInBrowser(statusUrl);
   console.log(`   A page has opened in your browser (${statusUrl}) with the link to share.`);
   // The Windows build compiles with --windows-hide-console (see package.json)
@@ -132,12 +132,20 @@ async function main() {
   // exact kind of raw stack trace this app exists to spare a non-technical
   // host from. Caught here so the local server stays usable instead of the
   // whole app just crashing — useful on its own for the host's own tab
-  // (http://127.0.0.1:<port> is exempt from the browser's mixed-content
+  // (http://localhost:<port> is exempt from the browser's mixed-content
   // block even though the editor itself is https://; a *different* machine
   // on the same LAN is not exempt and would still need either a real
   // tunnel, or the editor served over plain http:// on that same LAN too —
   // see the README), and as a fallback local address for a manually-run
   // tunnel pointed at this port.
+  //
+  // "localhost", not the equally-exempt "127.0.0.1" literal: found live
+  // (2026-09-01) that a real Windows browser talking to this server running
+  // under WSL2 can flat-out refuse a literal 127.0.0.1 connection while the
+  // exact same port under "localhost" works — WSL2's own localhost port-
+  // forwarding, not anything in this app. "localhost" is the one that's
+  // confirmed to actually work end-to-end there; see the editor's matching
+  // choice in detectLocalCollabServerViaBridge/probeCollabServerPort.
   let tunnel: ReturnType<typeof startTunnel> | null = null;
   try {
     tunnel = startTunnel({
