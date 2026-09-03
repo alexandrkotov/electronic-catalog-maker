@@ -81,6 +81,10 @@ same offline-first, browser-only logic, just launched from your desktop
 instead of a bookmark. Uninstalling is the same as any other app installed
 this way (right-click its icon, or the browser's own app-management page).
 
+The editor is also on the
+**[Microsoft Store](https://apps.microsoft.com/detail/9p4zk48txrln?hl=en-US&gl=US)**
+for Windows, if you'd rather install it from there (viewer coming soon).
+
 ## Using the editor
 
 1. Click **New catalog** and give it a name.
