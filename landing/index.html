@@ -170,7 +170,14 @@
     // rendering it as normal text instead — count_unique (people, not raw
     // hits), summed across landing+editor+viewer ("TOTAL") since visiting
     // the landing page alone doesn't mean someone actually used the tool.
-    fetch("https://ecatm.goatcounter.com/counter/TOTAL.json")
+    //
+    // `?start=year` is required, not cosmetic: GoatCounter's TOTAL.json
+    // with *no* date-range params hits a server-side cache entry that gets
+    // stuck forever (verified directly — it sat frozen at the same count
+    // for days while `?start=year` returned live, growing numbers for the
+    // exact same site). "year" is effectively "all time" for now since the
+    // site is under a year old; revisit if that ever stops being true.
+    fetch("https://ecatm.goatcounter.com/counter/TOTAL.json?start=year")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data) return;
