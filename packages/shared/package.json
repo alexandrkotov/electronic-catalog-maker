@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "qrcode-generator": "^1.4.4",
     "sql.js": "^1.11.0"
   },
   "devDependencies": {
