@@ -731,7 +731,7 @@ td {
    this just centers it and gives it breathing room against the card
    background, which is dark in dark theme. */
 .collab-share-box {
-  max-width: min(20rem, calc(100vw - 2rem));
+  max-width: min(22rem, calc(100vw - 2rem));
 }
 
 .collab-share-qr {
@@ -747,8 +747,18 @@ td {
   border-radius: 4px;
 }
 
-.collab-share-box .field input {
+/* The link is a <textarea>, not an <input> — a real shared link (especially
+   one carrying a `server=` param with a percent-encoded tunnel URL) easily
+   runs past 100 characters, and a single-line input just silently hides
+   everything past its visible width instead of wrapping. Someone glancing
+   at this dialog to sanity-check the link before sharing it needs to see
+   all of it at once, not just the first ~40 characters (a real bug caught
+   live: the truncated look made a correct link *look* broken). */
+.collab-share-box .field textarea {
   font-size: 0.8rem;
+  font-family: monospace;
+  overflow-wrap: anywhere;
+  resize: none;
 }
 
 /* Reserved space (rather than just fading in on copy) so the "Copy link"
