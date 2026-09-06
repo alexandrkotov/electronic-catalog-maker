@@ -95,16 +95,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @ecm/editor build
-      - run: pnpm --filter @ecm/viewer build
       - name: Assemble the Pages site (landing page + both apps as subpaths)
-        run: |
-          mkdir -p site
-          cp landing/index.html site/index.html
-          cp landing/privacy.html site/privacy.html
-          cp -r packages/editor/dist site/editor
-          cp -r packages/viewer/dist site/viewer
-          cp -r demo site/demo
+        run: bash scripts/build-site.sh
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -1,0 +1,37 @@
+name: Mirror to GitLab
+
+# Disaster-recovery insurance: keeps a full copy of this repository
+# (every branch and tag) outside GitHub, so a lost GitHub account/repo
+# isn't a single point of failure for the source the landing page/editor/
+# viewer are built from. This is a plain mirror, not a backup of
+# GitHub-specific state (Issues, Actions run history, PR discussions,
+# Pages settings).
+#
+# One-time setup (not done by this workflow): create the target project on
+# GitLab, then add repo secret GITLAB_MIRROR_URL as a full authenticated
+# push URL, e.g.
+#   https://oauth2:<personal-access-token>@gitlab.com/<you>/<project>.git
+# using a GitLab PAT scoped to just `write_repository`.
+
+on:
+  push:
+    branches: [main, develop]
+
+jobs:
+  mirror:
+    name: Push mirror to GitLab
+    runs-on: ubuntu-latest
+    if: github.repository == 'alexandrkotov/electronic-catalog-maker'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, all refs — --mirror needs it, not just the ref that triggered this run
+      - name: git push --mirror
+        env:
+          GITLAB_MIRROR_URL: ${{ secrets.GITLAB_MIRROR_URL }}
+        run: |
+          if [ -z "$GITLAB_MIRROR_URL" ]; then
+            echo "::warning::GITLAB_MIRROR_URL secret is not set — skipping mirror push. See the setup notes in this workflow's header comment."
+            exit 0
+          fi
+          git push --mirror "$GITLAB_MIRROR_URL"
