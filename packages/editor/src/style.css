@@ -721,8 +721,41 @@ td {
 
 .confirm-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+/* "Share this session" dialog (item 6 of the backlog) — the QR's own SVG
+   already paints its white background/quiet zone (see renderQrCodeSvg),
+   this just centers it and gives it breathing room against the card
+   background, which is dark in dark theme. */
+.collab-share-box {
+  max-width: min(20rem, calc(100vw - 2rem));
+}
+
+.collab-share-qr {
+  width: 12rem;
+  max-width: 100%;
+  margin: 0 auto 1rem;
+}
+
+.collab-share-qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.collab-share-box .field input {
+  font-size: 0.8rem;
+}
+
+/* Reserved space (rather than just fading in on copy) so the "Copy link"
+   button doesn't visibly shift position the moment feedback appears. */
+.collab-share-copy-feedback {
+  margin-right: auto;
+  min-height: 1em;
 }
 
 /* Mobile layout — below this width the desktop three-column grid (fixed-px

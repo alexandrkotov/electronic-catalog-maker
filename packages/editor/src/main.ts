@@ -26,6 +26,7 @@ import {
   listRowsForImage,
   openCatalog,
   readMeta,
+  renderQrCodeSvg,
   resolveInitialTheme,
   applyTheme,
   currentTheme,
@@ -208,6 +209,15 @@ let storeSettingsCartCheckoutBaseUrl = DEFAULT_CART_CHECKOUT_BASE_URL;
 // somewhere auto-detect can't reach (a different computer, a custom port).
 let collabNotFoundOpen = false;
 let collabManualUrlValue = "";
+
+// "Share this session" dialog — the link+QR popup opened by the "Share
+// link…" button in the collab status bar (see item 6 of the OneDrive
+// backlog: a colleague on a phone can scan it instead of retyping a URL).
+// collabShareCopyFeedback briefly flips true right after a successful
+// in-dialog copy so the person gets confirmation without needing to see
+// the toolbar's status line, which this overlay covers.
+let collabShareDialogOpen = false;
+let collabShareCopyFeedback = false;
 
 // ---------- presence (Phase 5) ----------
 // A small fixed palette rather than an arbitrary generated color — every
@@ -1523,11 +1533,30 @@ function handleCollabClosed(reason: CollabClosedReason) {
   render();
 }
 
+function actionOpenCollabShareDialog() {
+  collabShareCopyFeedback = false;
+  collabShareDialogOpen = true;
+  render();
+}
+
+function actionCloseCollabShareDialog() {
+  collabShareDialogOpen = false;
+  render();
+}
+
 async function actionCopyCollabLink() {
   if (!collabRoomId) return;
   try {
     await navigator.clipboard.writeText(collabShareLink());
     setStatus("Copied the link — share it with whoever you want editing alongside you.");
+    // The dialog's overlay sits on top of the toolbar status line above, so
+    // it gets its own transient "Copied!" next to the button instead.
+    collabShareCopyFeedback = true;
+    render();
+    setTimeout(() => {
+      collabShareCopyFeedback = false;
+      render();
+    }, 1500);
   } catch {
     setStatus(`Couldn't copy automatically — here's the link: ${collabShareLink()}`);
   }
@@ -2112,6 +2141,7 @@ function render() {
     ${renderStoreSettingsDialog()}
     ${renderCollabNotFoundDialog()}
     ${renderCollabNameDialog()}
+    ${renderCollabShareDialog()}
   `;
 
   if (savedScroll) {
@@ -2215,7 +2245,7 @@ function renderCollabStatus(): string {
   const { icon, label, title } = collabStatusText();
   return `
     <span class="collab-status" id="collab-status-text" title="${escapeHtml(title)}">${icon} ${label}</span>
-    <button type="button" id="btn-copy-collab-link">Copy link to share</button>
+    <button type="button" id="btn-copy-collab-link">Share link…</button>
     <button type="button" id="btn-leave-collab">Leave</button>
     ${
       collabOwnerToken
@@ -2419,6 +2449,30 @@ function renderCollabNameDialog(): string {
         <div class="confirm-actions">
           <button id="collab-name-cancel">Cancel</button>
           <button id="collab-name-submit" ${collabNameValue.trim() ? "" : "disabled"}>Join</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/** Link+QR popup for a running session — see collabShareDialogOpen's own doc. Not renderable without a room (collabRoomId null), same guard as the status bar's own "Share link…" button. */
+function renderCollabShareDialog(): string {
+  if (!collabShareDialogOpen || !collabRoomId) return "";
+  const link = collabShareLink();
+  return `
+    <div class="confirm-overlay">
+      <div class="confirm-box collab-share-box">
+        <h2>Share this session</h2>
+        <p>Anyone with this link — or who scans this code — can join and edit alongside you. It stays live for as long as this session runs.</p>
+        <div class="collab-share-qr">${renderQrCodeSvg(link)}</div>
+        <div class="field">
+          <label for="collab-share-link-input">Link</label>
+          <input type="text" id="collab-share-link-input" readonly value="${escapeHtml(link)}" />
+        </div>
+        <div class="confirm-actions">
+          <span class="hint collab-share-copy-feedback">${collabShareCopyFeedback ? "Copied!" : ""}</span>
+          <button type="button" id="collab-share-copy">Copy link</button>
+          <button type="button" id="collab-share-close">Close</button>
         </div>
       </div>
     </div>
@@ -2707,7 +2761,18 @@ function wireEvents(links: CatalogLink[]) {
     if (evt.key === "Escape") actionCancelCollabNotFound();
   });
   document.getElementById("btn-start-collab")?.addEventListener("click", () => void actionStartCollaboration());
-  document.getElementById("btn-copy-collab-link")?.addEventListener("click", () => void actionCopyCollabLink());
+  document.getElementById("btn-copy-collab-link")?.addEventListener("click", actionOpenCollabShareDialog);
+  document.getElementById("collab-share-copy")?.addEventListener("click", () => void actionCopyCollabLink());
+  document.getElementById("collab-share-close")?.addEventListener("click", actionCloseCollabShareDialog);
+  const collabShareLinkInput = document.getElementById("collab-share-link-input") as HTMLInputElement | null;
+  collabShareLinkInput?.addEventListener("click", () => collabShareLinkInput.select());
+  collabShareLinkInput?.addEventListener("keydown", (evt) => {
+    if (evt.key === "Escape") actionCloseCollabShareDialog();
+  });
+  if (collabShareDialogOpen) {
+    collabShareLinkInput?.focus();
+    collabShareLinkInput?.select();
+  }
   document.getElementById("btn-leave-collab")?.addEventListener("click", actionLeaveCollaboration);
   document.getElementById("btn-end-collab-session")?.addEventListener("click", actionConfirmEndSessionForEveryone);
   document.getElementById("collab-name-cancel")?.addEventListener("click", actionCancelCollabNameDialog);
