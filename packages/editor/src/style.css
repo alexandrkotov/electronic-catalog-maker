@@ -82,6 +82,10 @@ body {
 .panel-divider {
   position: relative;
   cursor: col-resize;
+  /* Without this, a touchscreen treats a finger-drag on the divider as a
+     page/panel scroll gesture before startPanelResize's pointerdown/move
+     handlers (main.ts) ever see it. */
+  touch-action: none;
 }
 #divider-images {
   grid-area: divider-l;
@@ -306,6 +310,10 @@ body {
      in for the system cursor while placing a hotspot; grabbing still shows
      during an actual pan (the !important rule below overrides this). */
   cursor: none;
+  /* startStageInteraction (main.ts) implements panning and hotspot
+     placement itself via Pointer Events — without this, a touchscreen's
+     native scroll/pinch would race it for the same drag gesture. */
+  touch-action: none;
 }
 
 .stage-scroll.panning,
@@ -364,6 +372,10 @@ body {
   padding: 1px 5px;
   cursor: move;
   white-space: nowrap;
+  /* startDragHotspot (main.ts) drags this via Pointer Events — needed on
+     a touchscreen the same way as .stage-inner img above, or the finger
+     just scrolls the stage instead of moving the hotspot. */
+  touch-action: none;
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
   user-select: none;
 }
@@ -544,6 +556,9 @@ td {
   height: 100%;
   cursor: col-resize;
   z-index: 1;
+  /* startColumnResize (main.ts) drags this via Pointer Events — same
+     touchscreen reasoning as .panel-divider above. */
+  touch-action: none;
 }
 .col-resize-handle:hover,
 .col-resize-handle.dragging {
