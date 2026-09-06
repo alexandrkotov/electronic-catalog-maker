@@ -394,15 +394,27 @@ function colTableTotalWidth(key: ColTableKey): number {
  * Follows the same "poke style properties directly on mousemove, skip
  * render()" pattern as hotspot dragging and the placement crosshair — a
  * full re-render on every mousemove would be wasteful and can lose focus.
+ *
+ * Pointer Events, not Mouse Events — the mouse-only version never fired
+ * on a touchscreen at all (Safari/iPadOS only synthesizes mouse events for
+ * a simple tap, never for a sustained drag), and `touch-action: none` on
+ * `.panel-divider` (style.css) is what actually stops the browser from
+ * treating the drag as a page scroll before this code ever sees it.
+ * `setPointerCapture` keeps events coming even if the finger/cursor slides
+ * off the thin divider mid-drag; the pointerId check guards against a
+ * stray second touch confusing an in-progress drag.
  */
-function startPanelResize(evt: MouseEvent, side: "images" | "inspector") {
+function startPanelResize(evt: PointerEvent, side: "images" | "inspector") {
   evt.preventDefault();
   const divider = evt.currentTarget as HTMLElement;
+  const pointerId = evt.pointerId;
+  divider.setPointerCapture(pointerId);
   const startX = evt.clientX;
   const startWidth = side === "images" ? imagesPanelWidth : inspectorPanelWidth;
   divider.classList.add("dragging");
 
-  function onMove(moveEvt: MouseEvent) {
+  function onMove(moveEvt: PointerEvent) {
+    if (moveEvt.pointerId !== pointerId) return;
     const dx = moveEvt.clientX - startX;
     // The inspector sits on the right, so dragging its divider left (dx < 0) should grow it.
     const raw = side === "images" ? startWidth + dx : startWidth - dx;
@@ -411,9 +423,11 @@ function startPanelResize(evt: MouseEvent, side: "images" | "inspector") {
     else inspectorPanelWidth = width;
     applyPanelWidths();
   }
-  function onUp() {
-    window.removeEventListener("mousemove", onMove);
-    window.removeEventListener("mouseup", onUp);
+  function onUp(upEvt: PointerEvent) {
+    if (upEvt.pointerId !== pointerId) return;
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
     divider.classList.remove("dragging");
     try {
       localStorage.setItem(side === "images" ? "ecm-editor-images-width" : "ecm-editor-inspector-width", String(side === "images" ? imagesPanelWidth : inspectorPanelWidth));
@@ -421,20 +435,24 @@ function startPanelResize(evt: MouseEvent, side: "images" | "inspector") {
       // Width still applies for this session, just won't persist.
     }
   }
-  window.addEventListener("mousemove", onMove);
-  window.addEventListener("mouseup", onUp);
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
 }
 
-/** Drags a column-resize handle in the "Links on this image" or "Table (N rows)" list. */
-function startColumnResize(evt: MouseEvent, tableKey: ColTableKey, colIndex: number) {
+/** Drags a column-resize handle in the "Links on this image" or "Table (N rows)" list. Pointer Events — see startPanelResize's doc for why. */
+function startColumnResize(evt: PointerEvent, tableKey: ColTableKey, colIndex: number) {
   evt.preventDefault();
   evt.stopPropagation();
   const handle = evt.currentTarget as HTMLElement;
+  const pointerId = evt.pointerId;
+  handle.setPointerCapture(pointerId);
   const startX = evt.clientX;
   const startWidth = colWidths[tableKey][colIndex] ?? COL_WIDTH_LIMITS.min;
   handle.classList.add("dragging");
 
-  function onMove(moveEvt: MouseEvent) {
+  function onMove(moveEvt: PointerEvent) {
+    if (moveEvt.pointerId !== pointerId) return;
     const width = Math.min(COL_WIDTH_LIMITS.max, Math.max(COL_WIDTH_LIMITS.min, startWidth + (moveEvt.clientX - startX)));
     colWidths[tableKey][colIndex] = width;
     const table = document.querySelector<HTMLTableElement>(`table[data-col-key="${tableKey}"]`);
@@ -442,14 +460,17 @@ function startColumnResize(evt: MouseEvent, tableKey: ColTableKey, colIndex: num
     if (col) col.style.width = `${width}px`;
     if (table) table.style.width = `${colTableTotalWidth(tableKey)}px`;
   }
-  function onUp() {
-    window.removeEventListener("mousemove", onMove);
-    window.removeEventListener("mouseup", onUp);
+  function onUp(upEvt: PointerEvent) {
+    if (upEvt.pointerId !== pointerId) return;
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
     handle.classList.remove("dragging");
     saveColWidths(tableKey);
   }
-  window.addEventListener("mousemove", onMove);
-  window.addEventListener("mouseup", onUp);
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
 }
 
 function askConfirm(message: string, onConfirm: () => void) {
@@ -1648,9 +1669,20 @@ function actionSetMobileTab(tab: "images" | "stage" | "inspector") {
  * One gesture, two outcomes: click the bare image (no real movement) to
  * place a new hotspot there, or press-and-drag to pan the image around
  * instead (cursor turns into a grabbing hand).
+ *
+ * Pointer Events, not Mouse Events — see startPanelResize's doc for why a
+ * touchscreen (tested live on an iPad) needs this and `touch-action: none`
+ * on `.stage-inner img` (style.css) rather than the old mouse-only
+ * handlers: a tap still synthesizes mouse events on iOS/Safari, which is
+ * why placing a hotspot by tapping looked like it *should* work, but a
+ * sustained drag (panning, or dragging an existing hotspot below) never
+ * did, since no synthetic `mousemove` stream ever follows a real touch-
+ * drag — only `pointermove` does, uniformly for mouse/touch/pen.
  */
-function startStageInteraction(evt: MouseEvent, img: HTMLImageElement, scrollEl: HTMLElement) {
+function startStageInteraction(evt: PointerEvent, img: HTMLImageElement, scrollEl: HTMLElement) {
   evt.preventDefault();
+  const pointerId = evt.pointerId;
+  img.setPointerCapture(pointerId);
   const rect = img.getBoundingClientRect();
   const startX = evt.clientX;
   const startY = evt.clientY;
@@ -1658,7 +1690,8 @@ function startStageInteraction(evt: MouseEvent, img: HTMLImageElement, scrollEl:
   const startScrollTop = scrollEl.scrollTop;
   let moved = false;
 
-  function onMove(moveEvt: MouseEvent) {
+  function onMove(moveEvt: PointerEvent) {
+    if (moveEvt.pointerId !== pointerId) return;
     const dx = moveEvt.clientX - startX;
     const dy = moveEvt.clientY - startY;
     if (!moved && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
@@ -1671,9 +1704,11 @@ function startStageInteraction(evt: MouseEvent, img: HTMLImageElement, scrollEl:
     }
   }
 
-  function onUp(upEvt: MouseEvent) {
-    window.removeEventListener("mousemove", onMove);
-    window.removeEventListener("mouseup", onUp);
+  function onUp(upEvt: PointerEvent) {
+    if (upEvt.pointerId !== pointerId) return;
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
     scrollEl.classList.remove("panning");
     if (!moved) {
       const left = Math.round((upEvt.clientX - rect.left) / zoom);
@@ -1688,8 +1723,9 @@ function startStageInteraction(evt: MouseEvent, img: HTMLImageElement, scrollEl:
     }
   }
 
-  window.addEventListener("mousemove", onMove);
-  window.addEventListener("mouseup", onUp);
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
 }
 
 /**
@@ -1749,11 +1785,19 @@ function hideCrosshair() {
 /**
  * One gesture, two outcomes: drag an existing hotspot to reposition it, or
  * click it (no real movement) to open it for editing.
+ *
+ * Pointer Events, not Mouse Events — see startStageInteraction's doc for
+ * why (this is the other half of the same iPad-drag bug: a tap-to-edit
+ * already worked via synthesized mouse events, but dragging a hotspot to
+ * reposition it never did). `touch-action: none` lives on `.hotspot`
+ * (style.css).
  */
-function startDragHotspot(evt: MouseEvent, link: CatalogLink, el: HTMLElement, img: HTMLImageElement) {
+function startDragHotspot(evt: PointerEvent, link: CatalogLink, el: HTMLElement, img: HTMLImageElement) {
   evt.preventDefault();
   evt.stopPropagation();
   hideCrosshair(); // dragging an existing hotspot, not placing a new one
+  const pointerId = evt.pointerId;
+  el.setPointerCapture(pointerId);
   const rect = img.getBoundingClientRect();
   const startX = evt.clientX;
   const startY = evt.clientY;
@@ -1762,7 +1806,8 @@ function startDragHotspot(evt: MouseEvent, link: CatalogLink, el: HTMLElement, i
   let moved = false;
   el.classList.add("dragging");
 
-  function onMove(moveEvt: MouseEvent) {
+  function onMove(moveEvt: PointerEvent) {
+    if (moveEvt.pointerId !== pointerId) return;
     if (Math.abs(moveEvt.clientX - startX) > 3 || Math.abs(moveEvt.clientY - startY) > 3) moved = true;
     top = Math.round((moveEvt.clientY - rect.top) / zoom);
     left = Math.round((moveEvt.clientX - rect.left) / zoom);
@@ -1770,9 +1815,11 @@ function startDragHotspot(evt: MouseEvent, link: CatalogLink, el: HTMLElement, i
     el.style.left = `${left}px`;
   }
 
-  function onUp() {
-    window.removeEventListener("mousemove", onMove);
-    window.removeEventListener("mouseup", onUp);
+  function onUp(upEvt: PointerEvent) {
+    if (upEvt.pointerId !== pointerId) return;
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
     if (moved) {
       if (db) applyAndBroadcast("updateLinkPosition", updateLinkPosition, link.id, top, left);
       render();
@@ -1789,8 +1836,9 @@ function startDragHotspot(evt: MouseEvent, link: CatalogLink, el: HTMLElement, i
     }
   }
 
-  window.addEventListener("mousemove", onMove);
-  window.addEventListener("mouseup", onUp);
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
 }
 
 /**
@@ -2706,14 +2754,14 @@ function wireEvents(links: CatalogLink[]) {
     render();
   });
 
-  document.getElementById("divider-images")?.addEventListener("mousedown", (evt) => startPanelResize(evt as MouseEvent, "images"));
-  document.getElementById("divider-inspector")?.addEventListener("mousedown", (evt) => startPanelResize(evt as MouseEvent, "inspector"));
+  document.getElementById("divider-images")?.addEventListener("pointerdown", (evt) => startPanelResize(evt as PointerEvent, "images"));
+  document.getElementById("divider-inspector")?.addEventListener("pointerdown", (evt) => startPanelResize(evt as PointerEvent, "inspector"));
 
   document.querySelectorAll<HTMLElement>(".col-resize-handle").forEach((handle) => {
-    handle.addEventListener("mousedown", (evt) => {
+    handle.addEventListener("pointerdown", (evt) => {
       const tableKey = handle.dataset.table as ColTableKey;
       const colIndex = Number(handle.dataset.col);
-      startColumnResize(evt as MouseEvent, tableKey, colIndex);
+      startColumnResize(evt as PointerEvent, tableKey, colIndex);
     });
   });
 
@@ -2879,7 +2927,7 @@ function wireEvents(links: CatalogLink[]) {
   const stageScroll = document.getElementById("stage-scroll") as HTMLElement | null;
   const stageInner = document.getElementById("stage-inner") as HTMLElement | null;
   if (stageImg && stageScroll) {
-    stageImg.addEventListener("mousedown", (evt) => startStageInteraction(evt, stageImg, stageScroll));
+    stageImg.addEventListener("pointerdown", (evt) => startStageInteraction(evt, stageImg, stageScroll));
   }
 
   if (stageImg && stageInner) {
@@ -2899,7 +2947,7 @@ function wireEvents(links: CatalogLink[]) {
   if (stageImg) {
     document.querySelectorAll<HTMLDivElement>(".hotspot[data-id]").forEach((el) => {
       const link = links.find((l) => l.id === Number(el.dataset.id));
-      if (link) el.addEventListener("mousedown", (evt) => startDragHotspot(evt, link, el, stageImg));
+      if (link) el.addEventListener("pointerdown", (evt) => startDragHotspot(evt, link, el, stageImg));
     });
   }
 
