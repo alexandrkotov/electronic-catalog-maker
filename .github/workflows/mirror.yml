@@ -23,12 +23,19 @@ jobs:
     runs-on: ubuntu-latest
     if: github.repository == 'alexandrkotov/electronic-catalog-maker'
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # full history, all refs — --mirror needs it, not just the ref that triggered this run
-      - name: git push --mirror
+      # Deliberately not actions/checkout — a normal checkout only creates
+      # a local ref for the branch it checks out, plus the *other*
+      # branches as refs/remotes/origin/* remote-tracking refs. `git push
+      # --mirror` from there tries to push those refs/remotes/* refs too,
+      # which GitLab/GitHub both reject ("deny updating a hidden ref"). A
+      # real --mirror clone stores every branch/tag as an actual
+      # refs/heads//refs/tags ref, so mirroring it back out is a clean 1:1.
+      - name: Mirror-clone this repo
+        run: git clone --mirror "https://github.com/${{ github.repository }}.git" repo-mirror
+      - name: git push --mirror to GitLab
         env:
           GITLAB_MIRROR_URL: ${{ secrets.GITLAB_MIRROR_URL }}
+        working-directory: repo-mirror
         run: |
           if [ -z "$GITLAB_MIRROR_URL" ]; then
             echo "::warning::GITLAB_MIRROR_URL secret is not set — skipping mirror push. See the setup notes in this workflow's header comment."
