@@ -2467,7 +2467,7 @@ function renderCollabShareDialog(): string {
         <div class="collab-share-qr">${renderQrCodeSvg(link)}</div>
         <div class="field">
           <label for="collab-share-link-input">Link</label>
-          <input type="text" id="collab-share-link-input" readonly value="${escapeHtml(link)}" />
+          <textarea id="collab-share-link-input" readonly rows="5">${escapeHtml(link)}</textarea>
         </div>
         <div class="confirm-actions">
           <span class="hint collab-share-copy-feedback">${collabShareCopyFeedback ? "Copied!" : ""}</span>
@@ -2764,7 +2764,7 @@ function wireEvents(links: CatalogLink[]) {
   document.getElementById("btn-copy-collab-link")?.addEventListener("click", actionOpenCollabShareDialog);
   document.getElementById("collab-share-copy")?.addEventListener("click", () => void actionCopyCollabLink());
   document.getElementById("collab-share-close")?.addEventListener("click", actionCloseCollabShareDialog);
-  const collabShareLinkInput = document.getElementById("collab-share-link-input") as HTMLInputElement | null;
+  const collabShareLinkInput = document.getElementById("collab-share-link-input") as HTMLTextAreaElement | null;
   collabShareLinkInput?.addEventListener("click", () => collabShareLinkInput.select());
   collabShareLinkInput?.addEventListener("keydown", (evt) => {
     if (evt.key === "Escape") actionCloseCollabShareDialog();
