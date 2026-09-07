@@ -437,6 +437,32 @@ body {
   color: #1a1a1a;
 }
 
+/* Who's touching what, live — see main.ts's renderEditingBalloons (2026-09-07
+   backlog item 8). Positioned in the same unscaled #stage-inner space as the
+   hotspots, just shifted up so it reads as pointing at one rather than
+   covering it. `background` is set inline per balloon, from that person's
+   own fixed presence color (see PRESENCE_COLORS) — already dark/saturated
+   enough for white text in either theme, same reasoning as .presence-avatar,
+   so nothing here needs a dark-theme override. `opacity` (not an alpha
+   color) is what makes it read as "translucent", same trick .hotspot.dragging
+   already uses. */
+.editing-balloon {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  padding: 2px 6px;
+  border-radius: 3px;
+  opacity: 0.85;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+  pointer-events: none;
+  user-select: none;
+  z-index: 6; /* above the hotspots and the crosshair-box (z-index: 5) */
+}
+
 tr.clickable-row {
   cursor: pointer;
 }

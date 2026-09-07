@@ -37,6 +37,20 @@ import { renderBridgePage } from "./bridgePage";
  * identically whether the host used the status page's Stop button, Ctrl+C,
  * or the process got a SIGTERM — every one of those already funnels into
  * stop() (see main.ts's shutdown()).
+ *
+ * Also new: live editing indicators (2026-09-07 backlog item 8) —
+ * "editing-start"/"editing-move"/"editing-end" text frames layered on top of
+ * presence rather than duplicating it (see rooms.ts's EditingEntry: no
+ * name/color here, a receiver already has those from the presence roster by
+ * clientId). "editing-start"/"editing-end" go through `bunServer.publish`
+ * like presence, for the same reason (a viewer needs to see their own
+ * editing-roster entry disappear too, e.g. after Save). "editing-move" is
+ * different on purpose: it's forwarded live via `ws.publish` (sender
+ * excluded, same as an op) without ever touching rooms.ts's editing map —
+ * far too frequent and far too transient (bounded by one drag gesture) to be
+ * worth persisting for a client that joins mid-drag; that client just sees
+ * the drag's start position (from the roster entry) until the next move
+ * frame arrives, milliseconds later.
  */
 
 // The editor and this server are always different origins (a self-hosted
@@ -211,7 +225,21 @@ export function startServer(port: number): ServerHandle {
       },
       message(ws, message) {
         if (typeof message !== "string") return; // ops are JSON text frames; ignore anything else
-        let parsed: { type?: string; fn?: string; args?: unknown[]; clientId?: string; name?: string; color?: string; active?: boolean };
+        let parsed: {
+          type?: string;
+          fn?: string;
+          args?: unknown[];
+          clientId?: string;
+          name?: string;
+          color?: string;
+          active?: boolean;
+          mode?: string;
+          imageId?: number;
+          linkId?: number;
+          url?: string;
+          top?: number;
+          left?: number;
+        };
         try {
           parsed = JSON.parse(message);
         } catch {
@@ -228,12 +256,43 @@ export function startServer(port: number): ServerHandle {
           ws.data.clientId = parsed.clientId;
           rooms.setPresence(ws.data.roomId, parsed.clientId, parsed.name, sanitizeColor(parsed.color), parsed.active !== false);
           broadcastPresence(ws.data.roomId);
+          // A (re)connecting client otherwise has no way to learn about
+          // editing already in progress: unlike presence, joining doesn't
+          // itself change anyone's editing state, so nothing would ever
+          // reach this one client on its own — send it directly, just this
+          // once, rather than broadcasting to a room nothing actually
+          // changed in. Skipped entirely when there's nothing to report —
+          // by far the common case (most connects happen with nobody
+          // mid-edit) — so a plain hello/reconnect doesn't grow an extra
+          // frame it has no use for.
+          const editing = rooms.listEditing(ws.data.roomId);
+          if (editing.length > 0) ws.send(JSON.stringify({ type: "editing-roster", editors: editing }));
           return;
         }
         if (parsed.type === "presence-active") {
           if (!ws.data.clientId || typeof parsed.active !== "boolean") return;
           rooms.setPresenceActive(ws.data.roomId, ws.data.clientId, parsed.active);
           broadcastPresence(ws.data.roomId);
+          return;
+        }
+        if (parsed.type === "editing-start") {
+          if (!ws.data.clientId) return; // hasn't said presence-hello yet — nothing to key this by
+          if (parsed.mode !== "drag" && parsed.mode !== "form" && parsed.mode !== "row") return;
+          if (typeof parsed.imageId !== "number") return;
+          rooms.setEditing(ws.data.roomId, { clientId: ws.data.clientId, mode: parsed.mode, imageId: parsed.imageId, linkId: parsed.linkId, url: parsed.url });
+          broadcastEditing(ws.data.roomId);
+          return;
+        }
+        if (parsed.type === "editing-move") {
+          // Forwarded live, not persisted — see this file's class doc.
+          if (!ws.data.clientId) return;
+          if (typeof parsed.linkId !== "number" || typeof parsed.top !== "number" || typeof parsed.left !== "number") return;
+          ws.publish(ws.data.roomId, JSON.stringify({ type: "editing-move", clientId: ws.data.clientId, linkId: parsed.linkId, top: parsed.top, left: parsed.left }));
+          return;
+        }
+        if (parsed.type === "editing-end") {
+          if (!ws.data.clientId) return;
+          if (rooms.clearEditing(ws.data.roomId, ws.data.clientId)) broadcastEditing(ws.data.roomId);
           return;
         }
         if (typeof parsed.fn !== "string" || !Array.isArray(parsed.args)) return;
@@ -253,6 +312,10 @@ export function startServer(port: number): ServerHandle {
         if (ws.data.clientId) {
           rooms.removePresence(ws.data.roomId, ws.data.clientId);
           broadcastPresence(ws.data.roomId);
+          // Covers a disconnect mid-drag or with a form left open — nobody
+          // sent an explicit editing-end, so this is the only place that
+          // will otherwise ever clear it.
+          if (rooms.clearEditing(ws.data.roomId, ws.data.clientId)) broadcastEditing(ws.data.roomId);
         }
       },
     },
@@ -268,6 +331,12 @@ export function startServer(port: number): ServerHandle {
   function broadcastPresence(roomId: string) {
     if (!rooms.roomInfo(roomId).exists) return;
     bunServer.publish(roomId, JSON.stringify({ type: "presence-roster", users: rooms.listActivePresence(roomId) }));
+  }
+
+  /** Same "everyone including whoever triggered it" reasoning as broadcastPresence — a tab that just closed its own "Edit link" form needs to see its own balloon disappear from the roster too, not just everyone else's. */
+  function broadcastEditing(roomId: string) {
+    if (!rooms.roomInfo(roomId).exists) return;
+    bunServer.publish(roomId, JSON.stringify({ type: "editing-roster", editors: rooms.listEditing(roomId) }));
   }
 
   /**

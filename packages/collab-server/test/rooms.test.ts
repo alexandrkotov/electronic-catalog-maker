@@ -260,6 +260,113 @@ describe("collab-server rooms", () => {
     wsC.close();
   });
 
+  it("broadcasts the editing roster on start/end, forwards live moves without persisting them, sends a snapshot to a new joiner, and clears on disconnect", async () => {
+    const createRes = await fetch(`${base}/rooms`, { method: "POST" });
+    const { roomId } = (await createRes.json()) as { roomId: string };
+    const wsBase = base.replace(/^http/, "ws");
+    type Msg = {
+      type: string;
+      editors?: Array<{ clientId: string; mode: string; imageId: number; linkId?: number; url?: string }>;
+      users?: Array<{ clientId: string; name: string; color: string }>;
+      clientId?: string;
+      linkId?: number;
+      top?: number;
+      left?: number;
+    };
+
+    // A FIFO queue per socket, not one-shot listeners — a single action here
+    // (e.g. one hello) can legitimately produce more than one message to the
+    // same socket (its own presence-roster broadcast, then a *separate*
+    // targeted editing-roster snapshot), and two once:true listeners
+    // registered up front for the same target+event both fire on the first
+    // message, not one each — this sidesteps that entirely by always having
+    // exactly one listener per socket, queuing whatever it doesn't have a
+    // waiting consumer for yet.
+    function connect(): Promise<{ ws: WebSocket; next: () => Promise<Msg> }> {
+      return new Promise((resolve, reject) => {
+        const ws = new WebSocket(`${wsBase}/rooms/${roomId}/live`);
+        const queue: Msg[] = [];
+        const waiters: Array<(msg: Msg) => void> = [];
+        ws.addEventListener("message", (evt) => {
+          const msg = JSON.parse(evt.data as string) as Msg;
+          const waiter = waiters.shift();
+          if (waiter) waiter(msg);
+          else queue.push(msg);
+        });
+        const next = () => (queue.length > 0 ? Promise.resolve(queue.shift()!) : new Promise<Msg>((r) => waiters.push(r)));
+        ws.addEventListener("open", () => resolve({ ws, next }), { once: true });
+        ws.addEventListener("error", reject, { once: true });
+      });
+    }
+
+    const a = await connect();
+    const b = await connect();
+
+    // Both say hello first — editing-start requires a clientId. Each hello's
+    // presence-roster broadcast (reaching both) is drained here, not
+    // asserted on; presence itself is exercised by the test above. No
+    // targeted editing-roster snapshot yet — nobody's editing anything, so
+    // the server skips sending one (see server.ts's presence-hello handling).
+    a.ws.send(JSON.stringify({ type: "presence-hello", clientId: "alice", name: "Alice", color: "#ff0000", active: true }));
+    await a.next(); // alice's own presence-roster
+    await b.next(); // presence-roster reaching bob too
+    b.ws.send(JSON.stringify({ type: "presence-hello", clientId: "bob", name: "Bob", color: "#00ff00", active: true }));
+    await a.next(); // presence-roster reaching alice
+    await b.next(); // bob's own presence-roster
+
+    // Alice starts dragging hotspot 7 on image 1 — reaches both, including herself.
+    a.ws.send(JSON.stringify({ type: "editing-start", mode: "drag", imageId: 1, linkId: 7 }));
+    const expectedDragRoster = { type: "editing-roster", editors: [{ clientId: "alice", mode: "drag", imageId: 1, linkId: 7 }] };
+    expect(await a.next()).toEqual(expectedDragRoster);
+    expect(await b.next()).toEqual(expectedDragRoster);
+
+    // A live move is forwarded to Bob only (never back to Alice, same as an
+    // op) and never shows up in a later roster snapshot — the server never
+    // persists it (see rooms.ts's EditingEntry / this file's class doc).
+    a.ws.send(JSON.stringify({ type: "editing-move", linkId: 7, top: 120, left: 340 }));
+    expect(await b.next()).toEqual({ type: "editing-move", clientId: "alice", linkId: 7, top: 120, left: 340 });
+
+    // Carol joins mid-drag — her own hello's targeted snapshot already shows
+    // Alice's still-active drag; nothing extra reaches Alice/Bob from this
+    // until Carol's presence-roster broadcast (unrelated to editing).
+    const c = await connect();
+    c.ws.send(JSON.stringify({ type: "presence-hello", clientId: "carol", name: "Carol", color: "#0000ff", active: true }));
+    expect(await c.next()).toEqual({ type: "presence-roster", users: expect.any(Array) });
+    expect(await c.next()).toEqual(expectedDragRoster);
+    await a.next(); // presence-roster reaching alice for carol joining
+    await b.next(); // presence-roster reaching bob for carol joining
+
+    // Alice ends the drag — clears for everyone, including herself.
+    a.ws.send(JSON.stringify({ type: "editing-end" }));
+    const expectedEmptyRoster = { type: "editing-roster", editors: [] };
+    expect(await a.next()).toEqual(expectedEmptyRoster);
+    expect(await b.next()).toEqual(expectedEmptyRoster);
+    expect(await c.next()).toEqual(expectedEmptyRoster);
+
+    // An editing-end with nothing to clear doesn't trigger a pointless broadcast — confirmed by a subsequent, unrelated action's roster arriving next with nothing extra ahead of it.
+    a.ws.send(JSON.stringify({ type: "editing-end" }));
+
+    // Bob opens the "Edit table row" form, then disconnects without an
+    // explicit editing-end — close() clears it, same as presence.
+    b.ws.send(JSON.stringify({ type: "editing-start", mode: "row", imageId: 1, url: "PART-9" }));
+    const expectedRowRoster = { type: "editing-roster", editors: [{ clientId: "bob", mode: "row", imageId: 1, url: "PART-9" }] };
+    expect(await a.next()).toEqual(expectedRowRoster); // confirms editing-end-with-nothing-to-clear above stayed silent
+    expect(await b.next()).toEqual(expectedRowRoster);
+    expect(await c.next()).toEqual(expectedRowRoster);
+
+    b.ws.close();
+    // close() sends the routine presence-roster (bob dropped) first, then a
+    // separate editing-roster clearing his still-open row form — same order
+    // as server.ts's close() handler.
+    expect((await a.next()).type).toBe("presence-roster");
+    expect((await c.next()).type).toBe("presence-roster");
+    expect(await a.next()).toEqual(expectedEmptyRoster);
+    expect(await c.next()).toEqual(expectedEmptyRoster);
+
+    a.ws.close();
+    c.ws.close();
+  });
+
   it("stops the server when the status page's Stop button posts to /shutdown", async () => {
     let shutdownCalled = false;
     server.onShutdownRequested = () => {
