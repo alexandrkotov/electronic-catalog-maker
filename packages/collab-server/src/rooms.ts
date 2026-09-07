@@ -44,6 +44,32 @@ export interface PresenceEntry {
   active: boolean;
 }
 
+export type EditingMode = "drag" | "form" | "row";
+
+/**
+ * One connected person's "what they're currently touching" — as ephemeral as
+ * PresenceEntry (not opsLog, never replayed for a reconnecting client, gone
+ * the moment the socket closes), layered on top of presence rather than
+ * replacing it: name/color for whoever this clientId is come from the
+ * presence roster the client already has, not duplicated here. Deliberately
+ * at most one entry per clientId — dragging a hotspot while a link-edit form
+ * for some *other* hotspot is still open locally is a real but rare edge
+ * case, and "the most recent action wins" here is the same simplification
+ * PresenceEntry's single `active` flag already makes.
+ */
+export interface EditingEntry {
+  clientId: string;
+  mode: EditingMode;
+  imageId: number;
+  /** Set for "drag"/"form" — a specific hotspot. Unset for "row": a table
+   * row's url isn't tied to one hotspot (the same part can be drawn at
+   * several positions), so a viewer matches `url` against every hotspot
+   * sharing it instead. */
+  linkId?: number;
+  /** Set for "row" only — see linkId's note above. */
+  url?: string;
+}
+
 interface RoomState {
   ownerToken: string;
   createdAt: string;
@@ -52,6 +78,7 @@ interface RoomState {
   chunks: Map<number, Uint8Array>;
   opsLog: Op[];
   presence: Map<string, PresenceEntry>;
+  editing: Map<string, EditingEntry>;
 }
 
 const rooms = new Map<string, RoomState>();
@@ -66,7 +93,7 @@ function getOrThrow(roomId: string): RoomState {
 export function createRoom(roomId: string, ownerToken: string): { createdAt: string } {
   if (rooms.has(roomId)) throw new Error("Room already exists.");
   const createdAt = new Date().toISOString();
-  rooms.set(roomId, { ownerToken, createdAt, uploadComplete: false, chunkCount: 0, chunks: new Map(), opsLog: [], presence: new Map() });
+  rooms.set(roomId, { ownerToken, createdAt, uploadComplete: false, chunkCount: 0, chunks: new Map(), opsLog: [], presence: new Map(), editing: new Map() });
   return { createdAt };
 }
 
@@ -142,6 +169,21 @@ export function listActivePresence(roomId: string): Array<{ clientId: string; na
   const room = rooms.get(roomId);
   if (!room) return [];
   return [...room.presence.entries()].filter(([, entry]) => entry.active).map(([clientId, entry]) => ({ clientId, name: entry.name, color: entry.color }));
+}
+
+/** Records (or replaces) this clientId's current editing target — see EditingEntry for why there's at most one. No-op if the room's already gone (a stray message racing deleteRoom()). */
+export function setEditing(roomId: string, entry: EditingEntry): void {
+  rooms.get(roomId)?.editing.set(entry.clientId, entry);
+}
+
+/** Clears this clientId's editing target (an explicit editing-end, or a disconnect — see server.ts's close()). Returns whether there was actually anything to clear, so a caller can skip a pointless roster broadcast when there wasn't. */
+export function clearEditing(roomId: string, clientId: string): boolean {
+  return rooms.get(roomId)?.editing.delete(clientId) ?? false;
+}
+
+/** Everyone currently touching something in this room, in no particular order — what goes out as `editing-roster`. Unlike listActivePresence, there's no idle filter here: editing state only ever exists for as long as the connection that set it does. */
+export function listEditing(roomId: string): EditingEntry[] {
+  return [...(rooms.get(roomId)?.editing.values() ?? [])];
 }
 
 /** Only the holder of the owner token (from createRoom()'s return, kept secret from collaborators) may do this. */

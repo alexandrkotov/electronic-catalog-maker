@@ -57,6 +57,8 @@ import {
   listOpsSince,
   type CollabClosedReason,
   type CollabStatus,
+  type EditingEntry,
+  type EditingMove,
   type Op,
   type PresenceUser,
 } from "./collab";
@@ -253,6 +255,54 @@ let collabColor = "";
 // for every dropped connection, only genuinely updates when the server next
 // says otherwise.
 let collabPresence: PresenceUser[] = [];
+
+// ---------- live editing indicators (2026-09-07 backlog item 8) ----------
+// "Who's touching what" balloons — see EditingEntry. Same "last reported by
+// the server, kept across a brief reconnect blip" reasoning as collabPresence
+// above.
+let collabEditing: EditingEntry[] = [];
+// The latest live position during someone *else's* drag, keyed by their
+// clientId — filled in by editing-move frames, read by renderEditingBalloons
+// as an override on top of the hotspot's own (stale, pre-drag) position from
+// collabEditing's matching entry. Pruned to just what collabEditing still
+// says is actually happening on every roster update, so a drag that ended
+// abruptly (a dropped connection, not a clean editing-end) can't leave a
+// stale ghost position behind for a *later* drag of the same hotspot to
+// wrongly inherit.
+const collabEditingMoves = new Map<string, EditingMove>();
+
+/**
+ * What this tab has told the room it's currently touching, whenever that's
+ * driven by editingLinkId/editingRowId (i.e. "form"/"row" mode — see
+ * syncCollabEditingState). Compared against on every render() rather than
+ * threaded through editingLinkId/editingRowId's own ~18 assignment sites:
+ * render() already runs synchronously right after every one of them, so
+ * this never misses a change, and there's exactly one place to keep correct
+ * instead of many. Drag ("mode: drag") is unrelated to this — it never
+ * touches editingLinkId, so it sends its own start/move/end directly from
+ * startDragHotspot instead.
+ */
+let lastSyncedEditingTarget: { linkId: number | null; rowId: number | null } = { linkId: null, rowId: null };
+
+/**
+ * Tells the room what this tab's "Edit link"/"Edit table row" form (if any)
+ * is currently open on — a no-op unless that actually changed since the last
+ * call. Deliberately doesn't cover "drag" (see lastSyncedEditingTarget's
+ * doc). Known gap, not worth guarding against: dragging a *different*
+ * hotspot while a form is still open elsewhere sends "drag"'s own
+ * editing-end at drop, silently clearing this tab's roster entry even though
+ * the form is still open — collab-server's EditingEntry only ever holds one
+ * entry per clientId (see its own doc), same simplification presence's
+ * single `active` flag already makes.
+ */
+function syncCollabEditingState(imageId: number | null, linkId: number | null, rowId: number | null, rowUrl: string | null) {
+  if (!collab) return;
+  if (linkId === lastSyncedEditingTarget.linkId && rowId === lastSyncedEditingTarget.rowId) return;
+  if (lastSyncedEditingTarget.linkId !== null || lastSyncedEditingTarget.rowId !== null) collab.sendEditingEnd();
+  if (linkId !== null && imageId !== null) collab.sendEditingStart("form", imageId, linkId);
+  else if (rowId !== null && imageId !== null && rowUrl !== null) collab.sendEditingStart("row", imageId, undefined, rowUrl);
+  lastSyncedEditingTarget = { linkId, rowId };
+}
 
 // "Join as…" name dialog — shown once, right before a brand-new
 // start/join actually happens (see promptForCollabNameThen), not on every
@@ -1166,6 +1216,21 @@ async function connectAndSync(roomId: string) {
       collabPresence = users;
       updatePresenceRosterDisplay();
     },
+    (editors) => {
+      collabEditing = editors;
+      // A drag that ended abruptly (a dropped connection, not a clean
+      // editing-end) leaves no editing-roster entry behind — drop its
+      // last-known live position too, so a *later* drag of the same
+      // hotspot by someone else can't wrongly inherit it for one frame.
+      for (const clientId of [...collabEditingMoves.keys()]) {
+        if (!editors.some((e) => e.clientId === clientId && e.mode === "drag")) collabEditingMoves.delete(clientId);
+      }
+      updateEditingBalloonsDisplay();
+    },
+    (move) => {
+      collabEditingMoves.set(move.clientId, move);
+      updateEditingBalloonsDisplay();
+    },
     (reason) => handleCollabClosed(reason),
     (status) => {
       collabStatus = status;
@@ -1479,6 +1544,13 @@ function exitCollaboration() {
   // "persistent for the whole session" rather than forever).
   collabPresence = [];
   collabClientId = null;
+  collabEditing = [];
+  collabEditingMoves.clear();
+  // A later start/join gets a brand-new connection — reset so its very
+  // first render() re-sends this tab's current form state (if any) to it,
+  // rather than staying silent because it looks unchanged from what the
+  // now-dead connection was last told.
+  lastSyncedEditingTarget = { linkId: null, rowId: null };
   outbox = [];
   if (roomId) void clearOutbox(roomId);
 }
@@ -1805,6 +1877,13 @@ function startDragHotspot(evt: PointerEvent, link: CatalogLink, el: HTMLElement,
   let left = link.left;
   let moved = false;
   el.classList.add("dragging");
+  // Announced lazily, on the first real movement (not on pointerdown) — a
+  // plain click-to-open-the-form gesture starts exactly the same way as a
+  // drag until it's clear which one this is, and a click shouldn't flash a
+  // "moving hotspot" balloon at everyone else for one frame.
+  let editingStartSent = false;
+  let lastMoveSentAt = 0;
+  const EDITING_MOVE_THROTTLE_MS = 80; // frequent enough to read as live movement, not so frequent it floods the room over a long drag
 
   function onMove(moveEvt: PointerEvent) {
     if (moveEvt.pointerId !== pointerId) return;
@@ -1813,6 +1892,16 @@ function startDragHotspot(evt: PointerEvent, link: CatalogLink, el: HTMLElement,
     left = Math.round((moveEvt.clientX - rect.left) / zoom);
     el.style.top = `${top}px`;
     el.style.left = `${left}px`;
+    if (moved && activeImageId !== null) {
+      if (!editingStartSent) {
+        editingStartSent = true;
+        collab?.sendEditingStart("drag", activeImageId, link.id);
+        lastMoveSentAt = performance.now();
+      } else if (performance.now() - lastMoveSentAt >= EDITING_MOVE_THROTTLE_MS) {
+        lastMoveSentAt = performance.now();
+        collab?.sendEditingMove(link.id, top, left);
+      }
+    }
   }
 
   function onUp(upEvt: PointerEvent) {
@@ -1820,6 +1909,7 @@ function startDragHotspot(evt: PointerEvent, link: CatalogLink, el: HTMLElement,
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("pointercancel", onUp);
+    if (editingStartSent) collab?.sendEditingEnd();
     if (moved) {
       if (db) applyAndBroadcast("updateLinkPosition", updateLinkPosition, link.id, top, left);
       render();
@@ -2117,6 +2207,8 @@ function render() {
   const instances = editingLink ? links.filter((l) => l.url === editingLink.url).sort((a, b) => a.id - b.id) : [];
   const instanceIndex = instances.findIndex((l) => l.id === editingLinkId);
 
+  syncCollabEditingState(activeImageId, editingLinkId, editingRowId, editingRow?.url ?? null);
+
   // Preserve the current pan position across a re-render of the *same*
   // image (rebuilding #app.innerHTML recreates #stage-scroll from scratch,
   // which would otherwise silently snap back to scrollLeft/Top = 0).
@@ -2187,6 +2279,7 @@ function render() {
                  <div class="crosshair-v" id="crosshair-v"></div>
                  ${links.map((l) => hotspotHtml(l, editingRow?.url ?? editingLink?.url ?? null)).join("")}
                  ${pendingHotspot ? `<div class="hotspot pending" style="top:${pendingHotspot.top}px;left:${pendingHotspot.left}px">new…</div>` : ""}
+                 <div id="editing-balloons">${renderEditingBalloons(links, activeImage.id)}</div>
                </div>`
             : `<p class="hint" style="padding:2rem">Select an image on the left, or add a new one.</p>`
         }
@@ -2355,6 +2448,62 @@ function renderPresenceAvatar(user: PresenceUser): string {
   const isMe = user.clientId === collabClientId;
   const label = isMe ? `${user.name} (you)` : user.name;
   return `<span class="presence-avatar${isMe ? " presence-avatar-me" : ""}" style="background:${sanitizePresenceColor(user.color)}" title="${escapeHtml(label)}">${escapeHtml(initial)}</span>`;
+}
+
+/**
+ * Translucent "‹Name› — ‹action›" balloons for what everyone *else* in the
+ * session currently has open on *this* image (see EditingEntry / the
+ * backlog's 2026-09-07 item 8 decision) — never this tab's own, and never
+ * anyone else's if they're on a different image. Anchored in the same
+ * unscaled #stage-inner coordinate space as the hotspots themselves, like
+ * the pending "new…" label above, so they zoom/pan identically with no
+ * extra math.
+ */
+function renderEditingBalloons(links: CatalogLink[], imageId: number): string {
+  const stackedAt = new Map<string, number>(); // how many balloons already placed at a given (rounded) spot — see stackOffset below
+  const balloons: string[] = [];
+  for (const entry of collabEditing) {
+    if (entry.imageId !== imageId || entry.clientId === collabClientId) continue;
+    const user = collabPresence.find((u) => u.clientId === entry.clientId);
+    const name = user?.name || "Someone";
+    const color = sanitizePresenceColor(user?.color ?? "");
+    if (entry.mode === "row") {
+      // A table row's url isn't tied to one hotspot — the same part can be
+      // drawn at several positions on this image (the app's own orange
+      // duplicate-highlight already tracks this same set — see
+      // hotspotHtml's row-match class).
+      for (const link of links.filter((l) => l.url === entry.url)) {
+        balloons.push(renderOneEditingBalloon(link.top, link.left, name, color, "Edit table row", stackedAt));
+      }
+      continue;
+    }
+    const link = links.find((l) => l.id === entry.linkId);
+    if (!link) continue; // stale — the hotspot got deleted out from under this entry, or it's on a different image after all
+    if (entry.mode === "drag") {
+      const move = collabEditingMoves.get(entry.clientId);
+      const pos = move && move.linkId === entry.linkId ? move : link;
+      balloons.push(renderOneEditingBalloon(pos.top, pos.left, name, color, "moving hotspot", stackedAt));
+    } else {
+      balloons.push(renderOneEditingBalloon(link.top, link.left, name, color, "Edit link", stackedAt));
+    }
+  }
+  return balloons.join("");
+}
+
+/** One balloon, offset upward a bit further for every earlier one already placed at (about) the same spot — otherwise two people on the same hotspot (e.g. both drawn to the same "row" match) would render exactly on top of each other. */
+function renderOneEditingBalloon(top: number, left: number, name: string, color: string, action: string, stackedAt: Map<string, number>): string {
+  const key = `${Math.round(top)},${Math.round(left)}`;
+  const stack = stackedAt.get(key) ?? 0;
+  stackedAt.set(key, stack + 1);
+  const yOffset = 14 + stack * 22; // px above the hotspot's own point, stacking further up per collision
+  return `<div class="editing-balloon" style="top:${top - yOffset}px;left:${left}px;background:${color}">${escapeHtml(name)} — ${action}</div>`;
+}
+
+/** Same reasoning as updateCollabStatusDisplay() below — a change here (a drag in progress, a form opening/closing) can land at any moment, including mid-typing in an open form elsewhere on the page, so this patches the balloons' own small DOM subtree instead of calling render(). Cheap even during a live drag's throttled stream of editing-move frames — a handful of small `<div>`s, not the whole #app. */
+function updateEditingBalloonsDisplay() {
+  const el = document.getElementById("editing-balloons");
+  if (!el || !db || activeImageId === null) return; // no active image currently rendered — the next real render() will pick this up
+  el.innerHTML = renderEditingBalloons(listLinksForImage(db, activeImageId), activeImageId);
 }
 
 /** Same reasoning as updateCollabStatusDisplay() below — a roster change (someone else joining, going idle, leaving) can land at any moment, including mid-typing in an open form, so this patches the roster's own small DOM subtree instead of calling render(). */

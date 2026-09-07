@@ -26,6 +26,25 @@ export interface PresenceUser {
   color: string;
 }
 
+export type EditingMode = "drag" | "form" | "row";
+
+/** One other participant's current "what they're touching" — mirrors collab-server/src/rooms.ts's EditingEntry exactly (unlike PresenceEntry, nothing there is server-only). Name/color aren't part of this — look those up in the presence roster by clientId, same as the server does. */
+export interface EditingEntry {
+  clientId: string;
+  mode: EditingMode;
+  imageId: number;
+  linkId?: number;
+  url?: string;
+}
+
+/** A live position update mid-drag — forwarded by the server, never persisted (see rooms.ts), so a late joiner never gets this replayed; the roster's own entry (no top/left) is what they see until the next one of these arrives. */
+export interface EditingMove {
+  clientId: string;
+  linkId: number;
+  top: number;
+  left: number;
+}
+
 /**
  * Why a session actually ended, as told to this tab explicitly (Phase 6) —
  * distinct from a plain "disconnected" status, which today is also what a
@@ -129,6 +148,8 @@ export class CollabConnection {
     readonly roomId: string,
     private readonly onOp: (op: Op) => void,
     private readonly onPresence: (users: PresenceUser[]) => void,
+    private readonly onEditingRoster: (editors: EditingEntry[]) => void,
+    private readonly onEditingMove: (move: EditingMove) => void,
     private readonly onClosed: (reason: CollabClosedReason) => void,
     private readonly onStatusChange: (status: CollabStatus) => void,
   ) {
@@ -144,7 +165,7 @@ export class CollabConnection {
     });
     this.ws.addEventListener("error", () => this.setStatus("disconnected"));
     this.ws.addEventListener("message", (evt) => {
-      let parsed: { type?: string; users?: PresenceUser[]; by?: string | null };
+      let parsed: { type?: string; users?: PresenceUser[]; editors?: EditingEntry[]; by?: string | null };
       try {
         parsed = JSON.parse(evt.data as string);
       } catch {
@@ -156,6 +177,14 @@ export class CollabConnection {
       }
       if (parsed.type === "presence-roster") {
         this.onPresence(parsed.users ?? []);
+        return;
+      }
+      if (parsed.type === "editing-roster") {
+        this.onEditingRoster(parsed.editors ?? []);
+        return;
+      }
+      if (parsed.type === "editing-move") {
+        this.onEditingMove(parsed as unknown as EditingMove);
         return;
       }
       if (parsed.type === "room-closed") {
@@ -216,6 +245,27 @@ export class CollabConnection {
   sendPresenceActive(active: boolean) {
     if (this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: "presence-active", active }));
+    }
+  }
+
+  /** Announces this tab has started touching one hotspot/row — see EditingEntry. main.ts calls this from exactly one place per mode: startDragHotspot (once real movement begins, "drag") and syncCollabEditingState (whenever editingLinkId/editingRowId change to a new non-null value, "form"/"row"). */
+  sendEditingStart(mode: EditingMode, imageId: number, linkId?: number, url?: string) {
+    if (this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "editing-start", mode, imageId, linkId, url }));
+    }
+  }
+
+  /** A live position update mid-drag — call this throttled, not on every pointermove (see startDragHotspot). Not meaningful outside "drag" mode; the server forwards it as-is without checking. */
+  sendEditingMove(linkId: number, top: number, left: number) {
+    if (this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "editing-move", linkId, top, left }));
+    }
+  }
+
+  /** The counterpart to sendEditingStart — a dropped connection doesn't need this too, the server's close() handler clears it the same way it does presence. */
+  sendEditingEnd() {
+    if (this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "editing-end" }));
     }
   }
 
