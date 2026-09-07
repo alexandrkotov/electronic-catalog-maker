@@ -1866,6 +1866,24 @@ function centerOnHotspot(linkId: number) {
 }
 
 /**
+ * Steps to the next/previous hotspot sharing the currently edited link's
+ * url, wrapping around — same behavior as the viewer's instance-nav
+ * (viewerEngine.ts's actionCycleInstance), for a part drawn in several
+ * spots on the same diagram.
+ */
+function actionCycleInstance(delta: number) {
+  if (!db || activeImageId === null || editingLinkId === null) return;
+  const links = listLinksForImage(db, activeImageId);
+  const current = links.find((l) => l.id === editingLinkId);
+  if (!current) return;
+  const siblings = links.filter((l) => l.url === current.url).sort((a, b) => a.id - b.id);
+  const index = siblings.findIndex((l) => l.id === editingLinkId);
+  if (index === -1) return;
+  const next = siblings[(index + delta + siblings.length) % siblings.length];
+  if (next) actionEditLink(next.id);
+}
+
+/**
  * Scrolls the inspector panel so the just-opened "Edit link" form is
  * visible. Runs on every path that opens it — clicking a hotspot directly
  * on the image (where the inspector's current scroll position has nothing
@@ -2093,6 +2111,11 @@ function render() {
   const availableLinks = links.filter((l) => !usedUrls.has(l.url));
   const editingLink = links.find((l) => l.id === editingLinkId) ?? null;
   const editingRow = rows.find((r) => r.id === editingRowId) ?? null;
+  // Other hotspots on this image sharing the edited link's url (same part
+  // drawn more than once) — feeds both the row-match highlight below and
+  // the instance-nav "N of M" control, mirroring the viewer.
+  const instances = editingLink ? links.filter((l) => l.url === editingLink.url).sort((a, b) => a.id - b.id) : [];
+  const instanceIndex = instances.findIndex((l) => l.id === editingLinkId);
 
   // Preserve the current pan position across a re-render of the *same*
   // image (rebuilding #app.innerHTML recreates #stage-scroll from scratch,
@@ -2162,13 +2185,14 @@ function render() {
                  <div class="crosshair-box" id="crosshair-box"></div>
                  <div class="crosshair-h" id="crosshair-h"></div>
                  <div class="crosshair-v" id="crosshair-v"></div>
-                 ${links.map((l) => hotspotHtml(l, editingRow?.url ?? null)).join("")}
+                 ${links.map((l) => hotspotHtml(l, editingRow?.url ?? editingLink?.url ?? null)).join("")}
                  ${pendingHotspot ? `<div class="hotspot pending" style="top:${pendingHotspot.top}px;left:${pendingHotspot.left}px">new…</div>` : ""}
                </div>`
             : `<p class="hint" style="padding:2rem">Select an image on the left, or add a new one.</p>`
         }
       </div>
       ${activeImage ? renderZoomControls() : ""}
+      ${instances.length > 1 ? renderInstanceNav(instanceIndex, instances.length) : ""}
     </div>
 
     <div class="panel-divider" id="divider-inspector" title="Drag to resize"></div>
@@ -2270,6 +2294,17 @@ function renderZoomControls(): string {
       <span class="zoom-pct">${Math.round(zoom * 100)}%</span>
       <button id="btn-zoom-in" title="Zoom in">+</button>
       <button id="btn-zoom-reset" title="Reset zoom">Reset</button>
+    </div>
+  `;
+}
+
+/** Mirrors the viewer's instance-nav (viewerEngine.ts) — same markup/ids, same left-of-zoom placement. */
+function renderInstanceNav(index: number, total: number): string {
+  return `
+    <div class="instance-nav">
+      <button id="btn-instance-prev" title="Previous occurrence of this part">‹</button>
+      <span>${index + 1} of ${total}</span>
+      <button id="btn-instance-next" title="Next occurrence of this part">›</button>
     </div>
   `;
 }
@@ -2583,10 +2618,10 @@ function wireSearchResultClicks() {
   });
 }
 
-function hotspotHtml(l: CatalogLink, editingRowUrl: string | null): string {
+function hotspotHtml(l: CatalogLink, highlightUrl: string | null): string {
   const classes = ["hotspot"];
   if (l.id === editingLinkId) classes.push("editing");
-  if (editingRowUrl !== null && l.url === editingRowUrl) classes.push("row-match");
+  if (highlightUrl !== null && l.url === highlightUrl) classes.push("row-match");
   return `<div class="${classes.join(" ")}" data-id="${l.id}" style="top:${l.top}px;left:${l.left}px" title="${escapeHtml(l.url)} — drag to reposition, click to edit">${escapeHtml(l.name)}</div>`;
 }
 
@@ -2912,6 +2947,9 @@ function wireEvents(links: CatalogLink[]) {
   document.getElementById("btn-zoom-in")?.addEventListener("click", () => actionSetZoom(zoom * 1.25));
   document.getElementById("btn-zoom-out")?.addEventListener("click", () => actionSetZoom(zoom / 1.25));
   document.getElementById("btn-zoom-reset")?.addEventListener("click", () => actionSetZoom(1));
+
+  document.getElementById("btn-instance-prev")?.addEventListener("click", () => actionCycleInstance(-1));
+  document.getElementById("btn-instance-next")?.addEventListener("click", () => actionCycleInstance(1));
 
   document.getElementById("stage-scroll")?.addEventListener(
     "wheel",
