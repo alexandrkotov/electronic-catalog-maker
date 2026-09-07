@@ -1143,6 +1143,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                    </div>`
                 : link
                   ? `<p>Anyone with this link — or who scans this code — sees exactly what's on screen right now, this image and this hotspot. It's a snapshot, not a live feed: it won't update as you keep browsing here.</p>
+                     ${
+                       shareRoomId
+                         ? `<p class="hint">This link only works while your computer and its sharing server stay on — use "Stop sharing" below when you're done, or it'll just stop working on its own once either does.</p>`
+                         : ""
+                     }
                      <div class="share-view-qr">${renderQrCodeSvg(link)}</div>
                      <div class="field">
                        <label for="share-view-link-input">Link</label>
