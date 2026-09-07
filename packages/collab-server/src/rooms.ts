@@ -49,18 +49,34 @@ export type EditingMode = "drag" | "form" | "row";
 /**
  * One connected person's "what they're currently touching" — as ephemeral as
  * PresenceEntry (not opsLog, never replayed for a reconnecting client, gone
- * the moment the socket closes), layered on top of presence rather than
- * replacing it: name/color for whoever this clientId is come from the
- * presence roster the client already has, not duplicated here. Deliberately
- * at most one entry per clientId — dragging a hotspot while a link-edit form
- * for some *other* hotspot is still open locally is a real but rare edge
- * case, and "the most recent action wins" here is the same simplification
- * PresenceEntry's single `active` flag already makes.
+ * the moment the socket closes). Deliberately at most one entry per
+ * clientId — dragging a hotspot while a link-edit form for some *other*
+ * hotspot is still open locally is a real but rare edge case, and "the most
+ * recent action wins" here is the same simplification PresenceEntry's single
+ * `active` flag already makes.
+ *
+ * `name`/`color` ride along here too, stamped on at editing-start time from
+ * the room's full presence map (see server.ts's handler) — not just looked
+ * up fresh from the *active*-filtered presence roster a client already has.
+ * That's deliberate, not incidental duplication: a real bug caught this the
+ * hard way (2026-09-07) — someone can leave their "Edit link" form open and
+ * switch away to another tab, which drops them out of
+ * listActivePresence()'s *active* roster (their avatar disappears from the
+ * toolbar, correctly) while their editing entry rightfully stays (the form
+ * really is still open) — a viewer whose only source for the name was a
+ * live lookup against that same active-only roster would render "Someone" in
+ * a fallback grey the moment that happened, or even fail to ever learn who a
+ * *newly joining* viewer's editing-roster snapshot refers to if that person
+ * had already gone idle before the join. Stamping it once, snapshotted, sidesteps
+ * all of that — and it can't go stale mid-edit either, since a display name
+ * is fixed for the whole session (see the editor's initPresenceIdentity).
  */
 export interface EditingEntry {
   clientId: string;
   mode: EditingMode;
   imageId: number;
+  name: string;
+  color: string;
   /** Set for "drag"/"form" — a specific hotspot. Unset for "row": a table
    * row's url isn't tied to one hotspot (the same part can be drawn at
    * several positions), so a viewer matches `url` against every hotspot
@@ -162,6 +178,11 @@ export function setPresenceActive(roomId: string, clientId: string, active: bool
 
 export function removePresence(roomId: string, clientId: string): void {
   rooms.get(roomId)?.presence.delete(clientId);
+}
+
+/** The *unfiltered* presence entry for one clientId — active or not. Exists specifically for server.ts's editing-start handler to stamp a name/color onto a fresh EditingEntry (see its doc for why that has to read this, not listActivePresence()'s active-only view). */
+export function getPresence(roomId: string, clientId: string): PresenceEntry | undefined {
+  return rooms.get(roomId)?.presence.get(clientId);
 }
 
 /** Everyone currently marked active, in join order — what actually goes in the toolbar roster. Someone connected but idle/hidden just isn't in this list; see PresenceEntry's active field for why. */

@@ -2464,9 +2464,12 @@ function renderEditingBalloons(links: CatalogLink[], imageId: number): string {
   const balloons: string[] = [];
   for (const entry of collabEditing) {
     if (entry.imageId !== imageId || entry.clientId === collabClientId) continue;
-    const user = collabPresence.find((u) => u.clientId === entry.clientId);
-    const name = user?.name || "Someone";
-    const color = sanitizePresenceColor(user?.color ?? "");
+    // entry.name/color, not a fresh lookup against collabPresence — that
+    // roster is active-only, and this entry can legitimately outlive
+    // someone going idle/backgrounded (see EditingEntry's doc for the real
+    // bug this replaced).
+    const name = entry.name;
+    const color = sanitizePresenceColor(entry.color);
     if (entry.mode === "row") {
       // A table row's url isn't tied to one hotspot — the same part can be
       // drawn at several positions on this image (the app's own orange

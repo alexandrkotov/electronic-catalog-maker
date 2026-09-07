@@ -40,11 +40,13 @@ import { renderBridgePage } from "./bridgePage";
  *
  * Also new: live editing indicators (2026-09-07 backlog item 8) —
  * "editing-start"/"editing-move"/"editing-end" text frames layered on top of
- * presence rather than duplicating it (see rooms.ts's EditingEntry: no
- * name/color here, a receiver already has those from the presence roster by
- * clientId). "editing-start"/"editing-end" go through `bunServer.publish`
- * like presence, for the same reason (a viewer needs to see their own
- * editing-roster entry disappear too, e.g. after Save). "editing-move" is
+ * presence. name/color get stamped onto the EditingEntry right here, from
+ * rooms.getPresence() (the *unfiltered* map, not listActivePresence()'s
+ * active-only view) — see EditingEntry's own doc for the real bug that
+ * caught doing this any other way. "editing-start"/"editing-end" go through
+ * `bunServer.publish` like presence, for the same reason (a viewer needs to
+ * see their own editing-roster entry disappear too, e.g. after Save).
+ * "editing-move" is
  * different on purpose: it's forwarded live via `ws.publish` (sender
  * excluded, same as an op) without ever touching rooms.ts's editing map —
  * far too frequent and far too transient (bounded by one drag gesture) to be
@@ -279,7 +281,24 @@ export function startServer(port: number): ServerHandle {
           if (!ws.data.clientId) return; // hasn't said presence-hello yet — nothing to key this by
           if (parsed.mode !== "drag" && parsed.mode !== "form" && parsed.mode !== "row") return;
           if (typeof parsed.imageId !== "number") return;
-          rooms.setEditing(ws.data.roomId, { clientId: ws.data.clientId, mode: parsed.mode, imageId: parsed.imageId, linkId: parsed.linkId, url: parsed.url });
+          // The *unfiltered* presence entry, not listActivePresence()'s
+          // active-only view — this tab is clearly active right now (it's
+          // sending a message), but stamping from the full map here is what
+          // keeps this correct later too, once it isn't (see EditingEntry's
+          // doc). Missing entirely would mean a presence-hello somehow never
+          // landed for this clientId — shouldn't happen given the check
+          // above, but nothing sane to stamp if it did.
+          const presence = rooms.getPresence(ws.data.roomId, ws.data.clientId);
+          if (!presence) return;
+          rooms.setEditing(ws.data.roomId, {
+            clientId: ws.data.clientId,
+            mode: parsed.mode,
+            imageId: parsed.imageId,
+            linkId: parsed.linkId,
+            url: parsed.url,
+            name: presence.name,
+            color: presence.color,
+          });
           broadcastEditing(ws.data.roomId);
           return;
         }
