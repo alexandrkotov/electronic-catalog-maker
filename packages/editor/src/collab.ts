@@ -28,11 +28,25 @@ export interface PresenceUser {
 
 export type EditingMode = "drag" | "form" | "row";
 
-/** One other participant's current "what they're touching" — mirrors collab-server/src/rooms.ts's EditingEntry exactly (unlike PresenceEntry, nothing there is server-only). Name/color aren't part of this — look those up in the presence roster by clientId, same as the server does. */
+/**
+ * One other participant's current "what they're touching" — mirrors
+ * collab-server/src/rooms.ts's EditingEntry exactly. `name`/`color` ride
+ * along here (stamped on by the server at editing-start time from its own
+ * presence map) rather than being looked up fresh against this tab's
+ * *active*-only presence roster — that lookup used to be how this worked,
+ * and it was a real bug: someone can leave an "Edit link" form open and
+ * switch tabs, which correctly drops them out of the active roster (their
+ * toolbar avatar disappears) while their editing entry rightfully stays —
+ * a live lookup against that same roster then renders a "Someone"/grey
+ * fallback for a balloon that's still legitimately theirs. See rooms.ts's
+ * EditingEntry for the full story.
+ */
 export interface EditingEntry {
   clientId: string;
   mode: EditingMode;
   imageId: number;
+  name: string;
+  color: string;
   linkId?: number;
   url?: string;
 }

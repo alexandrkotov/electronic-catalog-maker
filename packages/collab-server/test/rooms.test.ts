@@ -316,7 +316,7 @@ describe("collab-server rooms", () => {
 
     // Alice starts dragging hotspot 7 on image 1 — reaches both, including herself.
     a.ws.send(JSON.stringify({ type: "editing-start", mode: "drag", imageId: 1, linkId: 7 }));
-    const expectedDragRoster = { type: "editing-roster", editors: [{ clientId: "alice", mode: "drag", imageId: 1, linkId: 7 }] };
+    const expectedDragRoster = { type: "editing-roster", editors: [{ clientId: "alice", mode: "drag", imageId: 1, linkId: 7, name: "Alice", color: "#ff0000" }] };
     expect(await a.next()).toEqual(expectedDragRoster);
     expect(await b.next()).toEqual(expectedDragRoster);
 
@@ -349,7 +349,7 @@ describe("collab-server rooms", () => {
     // Bob opens the "Edit table row" form, then disconnects without an
     // explicit editing-end — close() clears it, same as presence.
     b.ws.send(JSON.stringify({ type: "editing-start", mode: "row", imageId: 1, url: "PART-9" }));
-    const expectedRowRoster = { type: "editing-roster", editors: [{ clientId: "bob", mode: "row", imageId: 1, url: "PART-9" }] };
+    const expectedRowRoster = { type: "editing-roster", editors: [{ clientId: "bob", mode: "row", imageId: 1, url: "PART-9", name: "Bob", color: "#00ff00" }] };
     expect(await a.next()).toEqual(expectedRowRoster); // confirms editing-end-with-nothing-to-clear above stayed silent
     expect(await b.next()).toEqual(expectedRowRoster);
     expect(await c.next()).toEqual(expectedRowRoster);
@@ -365,6 +365,74 @@ describe("collab-server rooms", () => {
 
     a.ws.close();
     c.ws.close();
+  });
+
+  it("keeps an editing entry's real name/color even after that person goes idle (a live bug: it used to fall back to a grey 'Someone')", async () => {
+    const createRes = await fetch(`${base}/rooms`, { method: "POST" });
+    const { roomId } = (await createRes.json()) as { roomId: string };
+    const wsBase = base.replace(/^http/, "ws");
+    type Msg = { type: string; editors?: Array<{ clientId: string; mode: string; imageId: number; linkId?: number; name?: string; color?: string }> };
+
+    function connect(): Promise<{ ws: WebSocket; next: () => Promise<Msg> }> {
+      return new Promise((resolve, reject) => {
+        const ws = new WebSocket(`${wsBase}/rooms/${roomId}/live`);
+        const queue: Msg[] = [];
+        const waiters: Array<(msg: Msg) => void> = [];
+        ws.addEventListener("message", (evt) => {
+          const msg = JSON.parse(evt.data as string) as Msg;
+          const waiter = waiters.shift();
+          if (waiter) waiter(msg);
+          else queue.push(msg);
+        });
+        const next = () => (queue.length > 0 ? Promise.resolve(queue.shift()!) : new Promise<Msg>((r) => waiters.push(r)));
+        ws.addEventListener("open", () => resolve({ ws, next }), { once: true });
+        ws.addEventListener("error", reject, { once: true });
+      });
+    }
+
+    const alice = await connect();
+    const bob = await connect();
+
+    alice.ws.send(JSON.stringify({ type: "presence-hello", clientId: "alice", name: "Alec - Windows 11", color: "#e63946", active: true }));
+    await alice.next(); // alice's own presence-roster
+    await bob.next(); // presence-roster reaching bob too
+    bob.ws.send(JSON.stringify({ type: "presence-hello", clientId: "bob", name: "Bob", color: "#3a86ff", active: true }));
+    await alice.next(); // presence-roster reaching alice
+    await bob.next(); // bob's own presence-roster
+
+    // Alice opens "Edit link".
+    alice.ws.send(JSON.stringify({ type: "editing-start", mode: "form", imageId: 1, linkId: 7 }));
+    await alice.next();
+    await bob.next();
+
+    // Alice switches to another browser tab — the same visibility
+    // transition the editor's own activity tracker reports as
+    // presence-active:false. This used to be exactly what broke it: it
+    // drops her out of listActivePresence()'s roster (correct — the toolbar
+    // avatar row really should lose her), which name/color used to be
+    // looked up *from*.
+    alice.ws.send(JSON.stringify({ type: "presence-active", active: false }));
+    await alice.next(); // alice's own presence-roster (now excluding herself)
+    await bob.next(); // presence-roster reaching bob, alice now excluded
+
+    // Bob drags that same hotspot — a fresh editing-roster goes out. Alice's
+    // still-open "Edit link" entry must still carry her real name/color, not
+    // a "Someone"/undefined fallback, even though she's no longer in the
+    // active presence roster at all.
+    bob.ws.send(JSON.stringify({ type: "editing-start", mode: "drag", imageId: 1, linkId: 9 }));
+    const [aliceMsg, bobMsg] = await Promise.all([alice.next(), bob.next()]);
+    const expected = {
+      type: "editing-roster",
+      editors: [
+        { clientId: "alice", mode: "form", imageId: 1, linkId: 7, name: "Alec - Windows 11", color: "#e63946" },
+        { clientId: "bob", mode: "drag", imageId: 1, linkId: 9, name: "Bob", color: "#3a86ff" },
+      ],
+    };
+    expect(aliceMsg).toEqual(expected);
+    expect(bobMsg).toEqual(expected);
+
+    alice.ws.close();
+    bob.ws.close();
   });
 
   it("stops the server when the status page's Stop button posts to /shutdown", async () => {
