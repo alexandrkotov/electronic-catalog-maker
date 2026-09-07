@@ -5,6 +5,7 @@ import {
   DEFAULT_CART_ITEM_PARAM,
 } from "./schema.js";
 import {
+  exportCatalog,
   findRowByUrl,
   initSqlite,
   listAllRows,
@@ -18,8 +19,26 @@ import { detectFileKind, importSchCatalog } from "./legacySch.js";
 import { groupImagesByFolder } from "./images.js";
 import { collectExtraKeys, searchRows, type SearchField } from "./search.js";
 import { applyTheme, currentTheme, resolveInitialTheme, toggleTheme } from "./theme.js";
+import {
+  COLLAB_AUTO_DETECT_BASE_PORT,
+  createRoom,
+  deleteRoom,
+  detectLocalCollabServer,
+  detectLocalCollabServerViaBridge,
+} from "./collabClient.js";
+import { renderQrCodeSvg } from "./qrcode.js";
 import type { CatalogImage, CatalogLink, CatalogRow } from "./types.js";
 import type { Database, SqlJsStatic } from "sql.js";
+
+/**
+ * Hostnames a QR/link can never actually reach from another device — see
+ * the OneDrive backlog's QR-viewer item, rule 3: a genuine LAN address
+ * (`192.168.x.x`, a warehouse PC's own HTTP server) is deliberately NOT
+ * included here and stays shareable; only true loopback is not.
+ */
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
 
 /**
  * Minimal slice of the File System Access API
@@ -132,11 +151,23 @@ export interface MountViewerOptions {
   /** A catalog URL to fetch and open automatically once mounted. */
   initialSrc?: string;
   /**
-   * Whether a successful load should sync `?src=` into the browser's
-   * address bar, so the resulting page is itself a shareable link (see
-   * README, "Sharing a catalog via link"). Right for the standalone app's
-   * own tab; must stay false for an embedded instance — it must never
-   * rewrite the *host* page's URL. Default false.
+   * Which image/hotspot to jump straight to once `initialSrc` has loaded —
+   * the other half of a deep link (see the OneDrive backlog's QR-viewer
+   * item: "share exactly what's on my screen", not just "open this catalog
+   * from the top"). Ignored without `initialSrc`, and silently dropped if
+   * the id doesn't exist in the loaded catalog (a stale/edited link).
+   */
+  initialImageId?: number;
+  initialLinkId?: number;
+  /**
+   * Whether a successful load — and every image/hotspot selection after it
+   * — should sync `?src=&image=&link=` into the browser's address bar, so
+   * the resulting page is itself a shareable deep link (see README,
+   * "Sharing a catalog via link", and the "Share view…" button below).
+   * Right for the standalone app's own tab; must stay false for an
+   * embedded instance — it must never rewrite the *host* page's URL.
+   * Default false. Also gates whether "Share view…" itself is offered at
+   * all — an embed has no address bar of its own to point a QR code at.
    */
   updateAddressBar?: boolean;
   /**
@@ -229,6 +260,24 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // clears the other.
   let openedFileHandle: EcmFileSystemFileHandle | null = null;
   let refreshing = false;
+  // "Share view…" — see the OneDrive backlog's QR-viewer item. Only offered
+  // when updateAddressBar is true (see its own doc) — this whole feature is
+  // about producing a link to *this page's* own current address, which an
+  // embedded instance doesn't have. shareRoom* is only set once this
+  // instance itself has uploaded the current local catalog into a
+  // collab-server "mode 2" room this session (see actionShareView) — a
+  // catalog that already had a real currentSrcUrl (opened via "Open remote
+  // catalog…"/an initial ?src=) never touches the server at all, so these
+  // stay null even while shareViewDialogOpen is true for it.
+  let shareViewDialogOpen = false;
+  let shareViewBusy = false;
+  let shareViewError: string | null = null;
+  let shareRoomServerUrl: string | null = null;
+  let shareRoomId: string | null = null;
+  let shareRoomOwnerToken: string | null = null;
+  // Briefly true right after a successful in-dialog copy — same pattern as
+  // the editor's collabShareCopyFeedback (packages/editor/src/main.ts).
+  let shareViewCopyFeedback = false;
   // Which single panel is shown below the mobile breakpoint (see .mobile-tabs
   // / .ecm-viewer-app[data-mobile-tab] in style.css) — irrelevant above it,
   // where all three panels sit side by side per the desktop grid regardless
@@ -371,13 +420,68 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
     if (options.initialSrc) {
       await loadFromUrl(options.initialSrc);
+      // The other half of a deep link (see MountViewerOptions' own doc) —
+      // applied after loadFromUrl's own openBytes() has already reset
+      // activeImageId/selectedLinkId to "first image, none selected", and
+      // only once each id is confirmed to still exist in what actually
+      // loaded (a stale link from an edited-since catalog silently falls
+      // back to that same default instead of throwing).
+      if (db) {
+        if (options.initialImageId !== undefined && listImages(db).some((i) => i.id === options.initialImageId)) {
+          activeImageId = options.initialImageId;
+        }
+        if (activeImageId !== null && options.initialLinkId !== undefined && listLinksForImage(db, activeImageId).some((l) => l.id === options.initialLinkId)) {
+          selectedLinkId = options.initialLinkId;
+        }
+        syncAddressBar();
+        render();
+        if (selectedLinkId !== null) centerSelection();
+      }
     } else {
       render();
     }
   }
 
+  /**
+   * Keeps `?src=&image=&link=` in the address bar matching whatever's
+   * actually on screen (a no-op unless updateAddressBar and currentSrcUrl
+   * are both set — see MountViewerOptions) — the mechanism behind both the
+   * page being a real deep link on reload/copy-paste and the "Share view…"
+   * QR code below actually pointing at the current image/hotspot, not just
+   * the catalog's cover. Called after every navigation, not just on load
+   * (see actionSelectImage/actionSelectHotspot/actionGoToSearchResult).
+   */
+  /**
+   * Forgets this instance's own "Share view…" room (if any) and closes its
+   * dialog — called whenever a genuinely different catalog gets opened (see
+   * loadFromUrl's isNewSource and openBytes' `handle` branch below), since
+   * an old room's snapshot is now of the wrong catalog. Does NOT delete the
+   * room server-side (that needs the explicit "Stop sharing" button,
+   * actionStopSharing) — it just stops being *this* tab's business once a
+   * different catalog is open here.
+   */
+  function resetShareViewState() {
+    shareRoomServerUrl = null;
+    shareRoomId = null;
+    shareRoomOwnerToken = null;
+    shareViewDialogOpen = false;
+    shareViewError = null;
+  }
+
+  function syncAddressBar() {
+    if (!updateAddressBar) return;
+    const params = currentDeepLinkParams();
+    if (!params) return;
+    history.replaceState(null, "", `?${params.toString()}`);
+  }
+
   /** Never throws — returns an error message on failure, or null on success. */
   async function loadFromUrl(url: string): Promise<string | null> {
+    // A plain re-fetch of the *same* address (actionRefresh, including a
+    // refresh of this instance's own "Share view…" room) must leave
+    // shareRoom* alone — only a genuinely different source below means the
+    // old share (if any) is now stale.
+    const isNewSource = url !== currentSrcUrl;
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -385,9 +489,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       await openBytes(bytes, baseName(new URL(url, location.href).pathname), null);
       currentSrcUrl = url;
       openedFileHandle = null;
-      if (updateAddressBar) {
-        history.replaceState(null, "", `?src=${encodeURIComponent(url)}`);
-      }
+      if (isNewSource) resetShareViewState();
+      syncAddressBar();
       return null;
     } catch (err) {
       const message = (err as Error).message;
@@ -512,7 +615,15 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     mobileTab = "images"; // fresh catalog — start from the image list, same as opening one the first time
     remoteDialogOpen = false;
     openedFileHandle = handle;
-    if (handle) currentSrcUrl = null;
+    if (handle) {
+      currentSrcUrl = null;
+      // A local file pick (or refresh of one) is always a deliberate fresh
+      // open — and, per actionShareView's own doc, can never coincide with
+      // an active share of *this* instance's making (sharing always clears
+      // openedFileHandle first) — so this is a no-op in that case, not a
+      // conflict.
+      resetShareViewState();
+    }
     render();
   }
 
@@ -570,6 +681,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     selectedLinkId = null;
     zoom = 1;
     mobileTab = "stage"; // no-op above the mobile breakpoint — see mobileTab's declaration
+    syncAddressBar();
     render();
   }
 
@@ -586,6 +698,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // No-op above the mobile breakpoint and when a hotspot on the stage
     // itself was the thing clicked — see mobileTab's declaration.
     mobileTab = "stage";
+    syncAddressBar();
     render();
     centerSelection();
   }
@@ -642,8 +755,141 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     mobileTab = "stage"; // no-op above the mobile breakpoint — see mobileTab's declaration
     const link = listLinksForImage(db, imageId).find((l) => l.url === url);
     selectedLinkId = link ? link.id : null;
+    syncAddressBar();
     render();
     if (link) centerSelection();
+  }
+
+  /** Tooltip for the toolbar's "Share view…" button — explains the one case it's disabled for, or what it does the rest of the time. */
+  function shareViewButtonTitle(): string {
+    if (isLoopbackHostname(location.hostname)) {
+      return "This page's own address is local-only (localhost) — a link here can't be reached from another device. Open it via a real network address, or a deployed copy, to share.";
+    }
+    return "Share exactly what's on screen right now — a QR code + link to this image/hotspot. It's a snapshot, not a live feed.";
+  }
+
+  /**
+   * The params a share link needs to reproduce exactly what's on screen —
+   * see the OneDrive backlog's QR-viewer item. Shared by syncAddressBar()
+   * (writes them into *this* tab's own address bar) and shareViewLink()
+   * (turns them into the actual link/QR someone else gets) so the two can
+   * never drift apart. Null without a real currentSrcUrl to point at (a
+   * local file that hasn't gone through actionShareView's upload yet).
+   */
+  function currentDeepLinkParams(): URLSearchParams | null {
+    if (!currentSrcUrl) return null;
+    const params = new URLSearchParams({ src: currentSrcUrl });
+    if (activeImageId !== null) params.set("image", String(activeImageId));
+    if (selectedLinkId !== null) params.set("link", String(selectedLinkId));
+    return params;
+  }
+
+  /** The full link (and, rendered as a QR, the code) that "Share view…" hands out — this page's own address plus currentDeepLinkParams(). */
+  function shareViewLink(): string | null {
+    const params = currentDeepLinkParams();
+    return params ? `${location.origin}${location.pathname}?${params.toString()}` : null;
+  }
+
+  /**
+   * "Share view…" click. A catalog that already has a real currentSrcUrl
+   * (opened via "Open remote catalog…", or an initial `?src=`) is already
+   * shareable as-is — this just opens the dialog on it, no server involved.
+   * A locally-opened file has no such address yet, so this uploads it into
+   * a fresh collab-server "mode 2" room first (see collabClient.ts and the
+   * OneDrive backlog's QR-viewer item for why that needs no new server-side
+   * API at all — createRoom()'s ordinary upload plus a plain `GET` back is
+   * everything a static snapshot needs) and then treats the resulting room
+   * URL exactly like any other currentSrcUrl from here on — including
+   * Refresh, which now simply re-`GET`s the same room rather than re-reading
+   * the local file (a deliberate side effect: once a colleague might be
+   * looking at this room, "Refresh" refreshing *that* is more useful than
+   * silently going back to re-reading disk).
+   */
+  async function actionShareView() {
+    if (!db) return;
+    shareViewDialogOpen = true;
+    shareViewError = null;
+    shareViewCopyFeedback = false;
+    render();
+    if (!currentSrcUrl) {
+      shareViewBusy = true;
+      render();
+      try {
+        const detected = (await detectLocalCollabServer()) ?? (await detectLocalCollabServerViaBridge(COLLAB_AUTO_DETECT_BASE_PORT));
+        if (!detected) {
+          shareViewError =
+            "Could not find a local sharing server running on this computer. Download and run ecm-collab-server (see the project's README), then try again.";
+          shareViewBusy = false;
+          render();
+          return;
+        }
+        const room = await createRoom(detected.url, exportCatalog(db));
+        shareRoomServerUrl = detected.url;
+        shareRoomId = room.roomId;
+        shareRoomOwnerToken = room.ownerToken;
+        currentSrcUrl = `${detected.url}/rooms/${room.roomId}`;
+        openedFileHandle = null;
+      } catch (err) {
+        shareViewError = (err as Error).message;
+        shareViewBusy = false;
+        render();
+        return;
+      }
+      shareViewBusy = false;
+    }
+    syncAddressBar();
+    render();
+  }
+
+  async function actionCopyShareViewLink() {
+    const link = shareViewLink();
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      shareViewCopyFeedback = true;
+      render();
+      setTimeout(() => {
+        shareViewCopyFeedback = false;
+        render();
+      }, 1500);
+    } catch {
+      // Clipboard permission denied/unavailable — the link is already
+      // visible (and click-to-select, see wireEvents) in the dialog's own
+      // textarea, nothing else useful to do here.
+    }
+  }
+
+  function actionCloseShareViewDialog() {
+    shareViewDialogOpen = false;
+    render();
+  }
+
+  /**
+   * Ends this instance's own upload-based share (see actionShareView) —
+   * only ever offered when shareRoomId is set, i.e. this tab is the one
+   * that actually created the room, never for a catalog that already had a
+   * real currentSrcUrl of its own. Best-effort: the DELETE either lands or
+   * it doesn't, but this tab forgets the room and clears the (now dead)
+   * address either way, since holding onto it wouldn't do anyone any good.
+   */
+  async function actionStopSharing() {
+    if (!shareRoomId || !shareRoomServerUrl || !shareRoomOwnerToken) return;
+    const serverUrl = shareRoomServerUrl;
+    const roomId = shareRoomId;
+    const ownerToken = shareRoomOwnerToken;
+    shareRoomServerUrl = null;
+    shareRoomId = null;
+    shareRoomOwnerToken = null;
+    currentSrcUrl = null;
+    shareViewDialogOpen = false;
+    if (updateAddressBar) history.replaceState(null, "", location.pathname);
+    render();
+    try {
+      await deleteRoom(serverUrl, roomId, ownerToken, "");
+    } catch {
+      // Best-effort — see deleteRoom's own doc; the room disappears on its
+      // own once the collab-server process itself stops, if this fails.
+    }
   }
 
   function actionToggleSearch() {
@@ -739,6 +985,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                  <button id="btn-open-remote" title="Open a catalog hosted at a URL">Open remote catalog…</button>
                  <button id="btn-refresh" ${currentSrcUrl || openedFileHandle ? "" : "disabled"} title="Re-read the catalog from its source (URL or local file) — see changes someone else just saved">${refreshing ? "Refreshing…" : "Refresh"}</button>
                  <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
+                 ${updateAddressBar ? `<button id="btn-share-view" ${db && !isLoopbackHostname(location.hostname) ? "" : "disabled"} title="${escapeHtml(shareViewButtonTitle())}">Share view…</button>` : ""}
                  ${cartMode === "accumulate" ? `<button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="Open one combined checkout for everything added to cart">🛒 Cart (${cartItems.size})</button>` : ""}
                  <span class="spacer"></span>
                  <button id="btn-theme" title="Toggle light/dark theme">${currentTheme(themeTarget) === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
@@ -825,6 +1072,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                </div>`
             : ""
         }
+
+        ${mode === "full" && updateAddressBar ? renderShareViewDialog() : ""}
     `;
 
     if (savedScroll) {
@@ -871,6 +1120,43 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         <button id="btn-instance-prev" title="Previous occurrence of this part">‹</button>
         <span>${index + 1} of ${total}</span>
         <button id="btn-instance-next" title="Next occurrence of this part">›</button>
+      </div>
+    `;
+  }
+
+  /** "Share view…" popup — link+QR once ready, a busy/error state while getting there. See actionShareView's own doc for the two paths into it. */
+  function renderShareViewDialog(): string {
+    if (!shareViewDialogOpen) return "";
+    const link = shareViewLink();
+    return `
+      <div class="open-overlay share-view-overlay">
+        <div class="open-box share-view-box">
+          <h2>Share view</h2>
+          ${
+            shareViewBusy
+              ? `<p class="hint">Looking for a local sharing server and uploading this catalog…</p>`
+              : shareViewError
+                ? `<p class="error">${escapeHtml(shareViewError)}</p>
+                   <div class="open-actions">
+                     <button type="button" id="share-view-retry">Try again</button>
+                     <button type="button" id="share-view-close">Close</button>
+                   </div>`
+                : link
+                  ? `<p>Anyone with this link — or who scans this code — sees exactly what's on screen right now, this image and this hotspot. It's a snapshot, not a live feed: it won't update as you keep browsing here.</p>
+                     <div class="share-view-qr">${renderQrCodeSvg(link)}</div>
+                     <div class="field">
+                       <label for="share-view-link-input">Link</label>
+                       <textarea id="share-view-link-input" readonly rows="4">${escapeHtml(link)}</textarea>
+                     </div>
+                     <div class="open-actions">
+                       <span class="hint share-view-copy-feedback">${shareViewCopyFeedback ? "Copied!" : ""}</span>
+                       <button type="button" id="share-view-copy">Copy link</button>
+                       ${shareRoomId ? `<button type="button" id="share-view-stop">Stop sharing</button>` : ""}
+                       <button type="button" id="share-view-close">Close</button>
+                     </div>`
+                  : ""
+          }
+        </div>
       </div>
     `;
   }
@@ -1011,6 +1297,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       openUrlInput?.focus();
       openUrlInput?.setSelectionRange(openUrlInput.value.length, openUrlInput.value.length);
     }
+
+    root.getElementById("btn-share-view")?.addEventListener("click", () => void actionShareView());
+    root.getElementById("share-view-retry")?.addEventListener("click", () => void actionShareView());
+    root.getElementById("share-view-close")?.addEventListener("click", actionCloseShareViewDialog);
+    root.getElementById("share-view-copy")?.addEventListener("click", () => void actionCopyShareViewLink());
+    root.getElementById("share-view-stop")?.addEventListener("click", () => void actionStopSharing());
+    const shareViewLinkInput = root.getElementById("share-view-link-input") as HTMLTextAreaElement | null;
+    shareViewLinkInput?.addEventListener("click", () => shareViewLinkInput.select());
 
     root.getElementById("btn-search")?.addEventListener("click", actionToggleSearch);
     const searchInput = root.getElementById("search-input") as HTMLInputElement | null;
