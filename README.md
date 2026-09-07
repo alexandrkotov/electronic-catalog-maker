@@ -272,6 +272,26 @@ same file on disk — so you can watch a catalog someone else is actively
 editing without reopening the page. It keeps your current image/hotspot/
 zoom selected across the refresh.
 
+Whichever image and hotspot you have selected rides along in the address
+bar too (`&image=<id>&link=<id>`), so the page's own URL is always a deep
+link to exactly what's on screen — copy it (or bookmark it) at any point
+and it reopens on the same spot, not just the catalog's cover.
+
+### Share view (QR code)
+
+Click **"Share view…"** in the viewer's toolbar to get a QR code and a link
+to exactly what's currently on screen — handy for handing a phone the same
+part you're looking at while standing at a shelf or under a hood. If the
+catalog is already open via a URL (the two ways above), this just packages
+the current address as a QR code — no server involved. If it's a local
+file, "Share view…" first gets it a real address by uploading it to a
+collaboration server (see below) running on your own computer — the same
+one-time app the editor uses, auto-detected the same way — so it becomes
+shareable too; a **"Stop sharing"** button in the same dialog takes it back
+down. Either way it's a snapshot, not a live feed: it won't update if you
+keep browsing afterwards. Only offered when the viewer's own address isn't
+`localhost` — a link there can't be reached from any other device anyway.
+
 ## Real-time collaboration
 
 Multiple people can edit the same catalog together and see each other's
@@ -415,8 +435,10 @@ characteristics as JSON — editing an already-saved row, not just adding a
 new one, highlights every hotspot that row's `url` is shared by), save/
 export, group images into folders, search the whole catalog at once, open
 a catalog by URL or re-fetch it later with the viewer's **Refresh** to
-watch for changes saved elsewhere, open a legacy `.sch` catalog (read-only
-in the viewer, as an editable copy in the editor), light/dark theme, and
+watch for changes saved elsewhere, share exactly what's on screen as a QR
+code/link ("Share view…" — see "Sharing a catalog via link"), open a
+legacy `.sch` catalog (read-only in the viewer, as an editable copy in the
+editor), light/dark theme, and
 a Buy button per row (from an `extra.buy_url`) that can accumulate into a
 combined multi-item checkout — configurable per catalog, and not tied to
 any one store (see "Selling from a catalog"). Both apps are also

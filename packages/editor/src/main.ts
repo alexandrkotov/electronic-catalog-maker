@@ -7,14 +7,20 @@ import {
   CATALOG_FILE_EXTENSION,
   collectExtraKeys,
   collectFolders,
+  COLLAB_AUTO_DETECT_BASE_PORT,
   createEmptyCatalog,
+  createRoom,
   DEFAULT_CART_CHECKOUT_BASE_URL,
   DEFAULT_CART_ID_PATTERN,
   DEFAULT_CART_ITEM_PARAM,
   deleteImage,
   deleteLink,
+  deleteRoom,
   deleteRow,
   detectFileKind,
+  detectLocalCollabServer,
+  detectLocalCollabServerViaBridge,
+  downloadSnapshot,
   exportCatalog,
   findLinkConflicts,
   groupImagesByFolder,
@@ -51,9 +57,6 @@ import {
 import { slugify } from "./slugify";
 import {
   CollabConnection,
-  createRoom,
-  deleteRoom,
-  downloadSnapshot,
   listOpsSince,
   type CollabClosedReason,
   type CollabStatus,
@@ -1283,121 +1286,11 @@ function scheduleReconnect(roomId: string) {
   }, 3000);
 }
 
-// Bounded port range this tab can auto-detect a locally-running
-// @ecm/collab-server app on — must match PORT_SCAN_COUNT in
-// packages/collab-server/src/main.ts. A fully random ephemeral port (used
-// there only once this whole range is also busy, a rare case) can't be
-// scanned for from a web page; past this range, the "can't find a
-// collaboration server" dialog's manual-address field is the fallback.
-const COLLAB_AUTO_DETECT_BASE_PORT = 8787;
-const COLLAB_AUTO_DETECT_PORT_COUNT = 10;
-
-interface DetectedCollabServer {
-  /** What to actually use — the server's public tunnel address if it has one, otherwise its bare local address (still usable for this tab; see the mixed-content note on collabServerUrl above for why that's *only* useful for this tab, not a colleague's). */
-  url: string;
-  hasPublicUrl: boolean;
-}
-
-async function probeCollabServerPort(port: number): Promise<DetectedCollabServer | null> {
-  try {
-    const res = await fetch(`http://localhost:${port}/status.json`, { signal: AbortSignal.timeout(800) });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { publicUrl?: string | null; tunnelError?: string | null };
-    // Something answered, but not shaped like our own status.json — some
-    // unrelated local service happens to be on this port. Not our server.
-    if (!("publicUrl" in data) || !("tunnelError" in data)) return null;
-    return data.publicUrl ? { url: data.publicUrl, hasPublicUrl: true } : { url: `http://localhost:${port}`, hasPublicUrl: false };
-  } catch {
-    return null; // nothing listening there, or it didn't answer in time
-  }
-}
-
-/**
- * Scans the bounded port range in parallel for a locally-running
- * collab-server app. Prefers one that already has a public tunnel address
- * (works for a colleague too); falls back to one that's up but not yet
- * tunneled — still connecting, or its tunnel failed — since that's still
- * usable for *this* tab even before (or without) a share link working.
- */
-async function detectLocalCollabServer(): Promise<DetectedCollabServer | null> {
-  const ports = Array.from({ length: COLLAB_AUTO_DETECT_PORT_COUNT }, (_, i) => COLLAB_AUTO_DETECT_BASE_PORT + i);
-  const found = (await Promise.all(ports.map(probeCollabServerPort))).filter((r) => r !== null);
-  return found.find((r) => r.hasPublicUrl) ?? found[0] ?? null;
-}
-
-/**
- * Fallback for detectLocalCollabServer() coming up completely empty — which
- * is the *expected* result on a browser enforcing Chrome 142+'s Local
- * Network Access (LNA), even when a collab-server really is running on the
- * default port: LNA blocks this page's plain fetch() to any loopback
- * address outright (confirmed live — "Permission was denied for this
- * request to access the `loopback` address space", not a timeout or a
- * missing-CORS error), and nothing in the probe above ever asks the user
- * for the permission that would allow it.
- *
- * Works around it rather than asking for that permission: opens the
- * server's own /bridge page in a popup (a top-level navigation, which LNA
- * doesn't restrict) instead of fetching it directly; that page fetches its
- * own /status.json on the server's side of the boundary (same address
- * space — also not restricted) and hands the answer back via postMessage
- * (not fetch/XHR/WebSocket — also not restricted), which is the one
- * three-hop route across this boundary LNA leaves open. See bridgePage.ts
- * for the other half.
- *
- * Only tried against the default port, not the whole COLLAB_AUTO_DETECT_
- * PORT_COUNT range: a sequence of popups (one per candidate port) risks
- * both a popup-blocker false-refusal (browsers are stingier about repeated
- * window.open() calls) and outrunning the click's own transient user
- * activation, which the very first popup already spends a little of the
- * *plain fetch scan's own runtime* against (this only runs after that scan
- * has already awaited every port once). The "server's on a non-default
- * port, or on another machine, or this popup got blocked too" case still
- * falls through to the existing manual-address dialog exactly as before —
- * this is a second automatic attempt layered on top of that safety net,
- * not a replacement for it.
- */
-async function detectLocalCollabServerViaBridge(port: number): Promise<DetectedCollabServer | null> {
-  const returnOrigin = window.location.origin;
-  const targetOrigin = `http://localhost:${port}`;
-  let popup: Window | null;
-  try {
-    popup = window.open(`${targetOrigin}/bridge?returnOrigin=${encodeURIComponent(returnOrigin)}`, "_blank", "width=100,height=100,left=-1000,top=-1000");
-  } catch {
-    popup = null;
-  }
-  if (!popup) return null; // blocked by a popup blocker (or the browser refused for some other reason) — no different from "not found" to the caller
-
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (result: DetectedCollabServer | null) => {
-      if (settled) return;
-      settled = true;
-      window.removeEventListener("message", onMessage);
-      clearTimeout(timer);
-      try {
-        popup?.close(); // harmless if the bridge page already closed itself, or the port had nothing on it and this is still sitting on a connection-refused error page
-      } catch {
-        // ignore
-      }
-      resolve(result);
-    };
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== targetOrigin || event.source !== popup) return; // some unrelated message, or the wrong popup — not ours
-      const data = event.data as { source?: string; publicUrl?: string | null } | null;
-      if (data?.source !== "ecm-collab-server-bridge") return;
-      finish(data.publicUrl ? { url: data.publicUrl, hasPublicUrl: true } : { url: targetOrigin, hasPublicUrl: false });
-    };
-    window.addEventListener("message", onMessage);
-    // Loopback round-trips are near-instant when something's actually
-    // there (see probeCollabServerPort's own much shorter 800ms budget) —
-    // this just needs to also cover a real page load (not just a fetch),
-    // hence the larger number. Nothing arriving by then means either the
-    // port had nothing listening (the popup's sitting on a connection-
-    // refused error page that was never going to message back) or this
-    // browser blocked the popup's navigation some other way.
-    const timer = setTimeout(() => finish(null), 1500);
-  });
-}
+// Bounded local-collab-server port range + auto-detect (plain scan, then
+// the Local Network Access bridge fallback) now live in
+// packages/shared/src/collabClient.ts, shared with the viewer's "Share
+// view…" (see COLLAB_AUTO_DETECT_BASE_PORT/_PORT_COUNT, detectLocalCollabServer,
+// detectLocalCollabServerViaBridge, imported from "@ecm/shared" above).
 
 /** Kicks off a brand-new shared session — auto-detects a running collab-server app first (see detectLocalCollabServer) rather than relying on anyone having typed an address in anywhere. */
 async function actionStartCollaboration() {

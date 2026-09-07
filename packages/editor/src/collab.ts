@@ -1,9 +1,14 @@
 /**
- * Talks to @ecm/collab-server's HTTP + WebSocket surface. Knows nothing
+ * Talks to @ecm/collab-server's WebSocket surface — the live-editing half
+ * of collaboration (ops, presence, editing indicators). Knows nothing
  * about what an operation actually *does* — that's main.ts's job (see
- * OP_HANDLERS there) — this module only moves {fn, args} across the wire
- * and the snapshot bytes in/out of a room. See collab-server/src/room.ts's
- * class doc for why the split is drawn this way.
+ * OP_HANDLERS there) — this module only moves {fn, args} across the wire.
+ * The REST half this sits on top of (create/upload/download/delete a room,
+ * plus local auto-detect) is shared with the viewer's lightweight "Share
+ * view…" — see packages/shared/src/collabClient.ts, re-exported from
+ * `@ecm/shared` and imported directly by main.ts rather than through here.
+ * See collab-server/src/room.ts's class doc for why the live/REST split is
+ * drawn this way.
  */
 
 export interface Op {
@@ -11,12 +16,6 @@ export interface Op {
   fn: string;
   args: unknown[];
   ts: string;
-}
-
-export interface RoomCreated {
-  roomId: string;
-  ownerToken: string;
-  createdAt: string;
 }
 
 /** One currently-active participant, as the server's roster broadcast reports them (see collab-server/src/rooms.ts's PresenceEntry — this is its public shape, minus the `active` flag itself, since only active entries are ever included). */
@@ -64,69 +63,17 @@ export interface EditingMove {
  * distinct from a plain "disconnected" status, which today is also what a
  * momentary network blip looks like and triggers main.ts's endless
  * scheduleReconnect. `room-closed` names whoever closed it, if their tab
- * sent one (see deleteRoom() below); `server-shutting-down` never does —
+ * sent one (see @ecm/shared's deleteRoom()); `server-shutting-down` never does —
  * the whole host process is going away, not necessarily because of
  * anything a currently-connected participant did.
  */
 export type CollabClosedReason = { kind: "room-closed"; by: string | null } | { kind: "server-shutting-down" };
-
-// Comfortably under Workers' request body limits regardless of exactly
-// where those sit — a real catalog's images are usually smaller than this
-// per-chunk anyway, so most uploads end up as one chunk per image.
-const CHUNK_SIZE = 4 * 1024 * 1024;
-
-/** Uploads `bytes` into a brand-new room, in pieces, and returns its id + the private owner token (never share that one). */
-export async function createRoom(baseUrl: string, bytes: Uint8Array): Promise<RoomCreated> {
-  const createRes = await fetch(`${baseUrl}/rooms`, { method: "POST" });
-  if (!createRes.ok) throw new Error(`Could not create a room (${createRes.status}).`);
-  const room = (await createRes.json()) as RoomCreated;
-
-  const chunkCount = Math.max(1, Math.ceil(bytes.byteLength / CHUNK_SIZE));
-  for (let i = 0; i < chunkCount; i++) {
-    const chunk = bytes.subarray(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-    const res = await fetch(`${baseUrl}/rooms/${room.roomId}/chunks/${i}`, {
-      method: "PUT",
-      body: chunk as BodyInit,
-    });
-    if (!res.ok) throw new Error(`Could not upload piece ${i + 1} of ${chunkCount} (${res.status}).`);
-  }
-
-  const finalizeRes = await fetch(`${baseUrl}/rooms/${room.roomId}/finalize`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chunkCount }),
-  });
-  if (!finalizeRes.ok) throw new Error(`Could not finish the upload (${finalizeRes.status}).`);
-  return room;
-}
-
-/** The room's original snapshot — not "current" once live edits have happened; see listOpsSince() for the rest. */
-export async function downloadSnapshot(baseUrl: string, roomId: string): Promise<Uint8Array> {
-  const res = await fetch(`${baseUrl}/rooms/${roomId}`);
-  if (!res.ok) throw new Error(`Could not download the catalog (${res.status}).`);
-  return new Uint8Array(await res.arrayBuffer());
-}
 
 /** Every op logged after `sinceSeq` (0 for the whole log) — replay these locally, in order, to catch a fresh join or a reconnect up to date. */
 export async function listOpsSince(baseUrl: string, roomId: string, sinceSeq: number): Promise<Op[]> {
   const res = await fetch(`${baseUrl}/rooms/${roomId}/ops?since=${sinceSeq}`);
   if (!res.ok) throw new Error(`Could not fetch missed changes (${res.status}).`);
   return (await res.json()) as Op[];
-}
-
-/**
- * Ends the session for everyone, not just this tab — only the holder of
- * `ownerToken` (from createRoom()'s return; a joiner never has it) can do
- * this. `closedByName` rides along as X-Closed-By so still-connected
- * participants' "room-closed" WS frame (see CollabClosedReason) can say who
- * closed it, not just that it happened.
- */
-export async function deleteRoom(baseUrl: string, roomId: string, ownerToken: string, closedByName: string): Promise<void> {
-  const res = await fetch(`${baseUrl}/rooms/${roomId}`, {
-    method: "DELETE",
-    headers: { "X-Owner-Token": ownerToken, "X-Closed-By": closedByName },
-  });
-  if (!res.ok) throw new Error(`Could not end the session (${res.status}).`);
 }
 
 export type CollabStatus = "connecting" | "connected" | "disconnected";

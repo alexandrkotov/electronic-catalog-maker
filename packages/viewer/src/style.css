@@ -616,6 +616,50 @@ button:disabled {
   font-size: 0.8rem;
 }
 
+/* "Share view…" dialog (OneDrive backlog's QR-viewer item) — same
+   .open-overlay/.open-box shell as "Open remote catalog…", plus the QR
+   itself and a wider link field (a room URL — server address + generated
+   id, plus &image=&link= — easily runs well past a typical .field input's
+   width). */
+.share-view-box {
+  width: 22rem;
+}
+
+/* The QR's own SVG already paints its white background/quiet zone (see
+   renderQrCodeSvg) — this just centers it and gives it breathing room
+   against the dialog's background, which is dark in dark theme. */
+.share-view-qr {
+  width: 12rem;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.share-view-qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.share-view-box .field textarea {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-family: monospace;
+  background: var(--bg-elevated);
+  color: var(--text);
+  overflow-wrap: anywhere;
+  resize: none;
+}
+
+/* Reserved space (rather than just fading in on copy) so "Copy link"
+   doesn't visibly shift position the moment feedback appears. */
+.share-view-copy-feedback {
+  margin-right: auto;
+  min-height: 1em;
+}
+
 /* Reverse search — a non-blocking dropdown anchored under the toolbar
    (unlike the confirm/open-remote dialogs, it has no backdrop, since the
    user is meant to browse/click results while keeping the rest visible). */

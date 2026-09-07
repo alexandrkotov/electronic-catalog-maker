@@ -6,6 +6,7 @@ export * from "./search.js";
 export * from "./images.js";
 export * from "./legacySch.js";
 export * from "./qrcode.js";
+export * from "./collabClient.js";
 export * from "./viewerEngine.js";
 export * from "./pwa.js";
 // Re-exported so consumers (editor/viewer) don't need their own @types/sql.js.
