@@ -183,6 +183,26 @@ All of this is saved into the catalog file itself (new `meta` keys — see
 `.ecatm` in a different browser, or hand it to someone else, and the Buy
 button behaves the same way for them too.
 
+## Exporting to PDF
+
+Both the viewer and the editor have an **Export PDF…** toolbar button that
+builds the whole open catalog into one printable A4 PDF — a real 8.5×11"-ish
+page per section, not a screenshot of the app. Any image with a single
+hotspot is treated as a flat product photo ("tile") and packed into a grid
+(with a shared data table right after); any image with two or more hotspots
+(an exploded-view diagram, or a photo with several labeled parts) gets a
+page to itself, image filling it, table right below. Folders (see
+"Grouping images into folders" below) each get their own heading and their
+own table — a run of tiles never shares its table across a folder boundary.
+
+Every row with a `buy_url` (see "Selling from a catalog" above) gets a
+small QR code — in a tile's own top-right corner, or right next to a
+diagram hotspot's label — always pointing straight at a one-item checkout
+for that row, regardless of the catalog's own cart behavior: a printed code
+has no cart to add to. Rows without a `buy_url` get no QR at all. The
+table's own Extra column never prints `buy_url` itself, since it's already
+the QR code.
+
 ## Embedding the viewer
 
 `<ecm-viewer>` is the viewer packaged as a Web Component — drop it into any
@@ -441,7 +461,9 @@ legacy `.sch` catalog (read-only in the viewer, as an editable copy in the
 editor), light/dark theme, and
 a Buy button per row (from an `extra.buy_url`) that can accumulate into a
 combined multi-item checkout — configurable per catalog, and not tied to
-any one store (see "Selling from a catalog"). Both apps are also
+any one store (see "Selling from a catalog"), and exporting the whole
+catalog as a printable A4 PDF with a QR code per item (see "Exporting to
+PDF"). Both apps are also
 installable as standalone desktop apps straight from the browser (see
 "Installing as an app") — purely optional, same behavior either way. The
 viewer is also embeddable elsewhere as `<ecm-viewer>` (see "Embedding the
