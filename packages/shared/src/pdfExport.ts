@@ -48,6 +48,23 @@
  * columns and same "key: value, …" Extra formatting the viewer's own table
  * uses (see viewerEngine.ts rowHtml) — but never the buy_url itself, since
  * that's now the QR code instead of printed text.
+ *
+ * Two export-time questions (see pdfExportOptions.ts) only affect diagram
+ * images — a tile's QR always stays on its own corner, at its own already-
+ * small size, regardless of either:
+ * - `qrPlacement`: a diagram's QR codes can render on the image (next to
+ *   each hotspot, as above), as an extra table column, or both. Default
+ *   "table" — live-testing found an on-image code, however small, still
+ *   visually competes with a crowded diagram's own artwork.
+ * - `diagramPageMode`: "fit" (default) shrinks the whole diagram to one A4
+ *   page, as above. "real-size" instead prints it at its real on-screen
+ *   size — the same pixel-to-point mapping as this app's own 100% zoom —
+ *   split across as many A4 sheets as that takes, for a diagram too
+ *   detailed to stay legible once shrunk to one page. See
+ *   renderDiagramRealSize's own doc for why it deliberately skips the
+ *   collision/leader-line machinery above: real-size mode's whole point is
+ *   more room per hotspot, so the crowding that machinery exists for is
+ *   expected to be rare there.
  */
 import { PDFDocument, PDFFont, PDFPage, rgb, type PDFImage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
@@ -56,6 +73,7 @@ import { listImages, listLinksForImage, listRowsForImage, readMeta } from "./db.
 import { groupImagesByFolder } from "./images.js";
 import { buildInstantBuyUrl } from "./cart.js";
 import { buildQrMatrix, type QrMatrix } from "./qrcode.js";
+import { DEFAULT_PDF_EXPORT_OPTIONS, type PdfExportOptions } from "./pdfExportOptions.js";
 import type { CatalogImage, CatalogLink, CatalogMeta, CatalogRow } from "./types.js";
 
 // A4 in PDF points (1pt = 1/72in): 210mm x 297mm.
@@ -109,26 +127,61 @@ const GRID_VISIBLE_FRACTION = 0.9;
  */
 const LEADER_MARGIN = 60;
 
+/**
+ * "Real size" for `diagramPageMode: "real-size"` (see pdfExportOptions.ts):
+ * 96 CSS px per inch, the same pixel-to-point mapping a catalog image gets
+ * on screen at 100% zoom (zoom = 1 in viewerEngine.ts/the editor's own
+ * stage) — an unambiguous definition of "actual size" for a raster image
+ * that carries no print-DPI metadata of its own.
+ */
+const REAL_SIZE_PT_PER_PX = 72 / 96;
+const CONTENT_HEIGHT = CONTENT_TOP - CONTENT_BOTTOM;
+// A safety cap, not a real limit anyone should hit: a genuinely huge source
+// image (or one with implausible pixel dimensions) shouldn't silently spin
+// the browser tab trying to lay out hundreds of A4 sheets one diagram asked
+// for by accident.
+const MAX_REAL_SIZE_SHEETS = 60;
+
 const TABLE_FONT_SIZE = 8.5;
 const TABLE_HEADER_FONT_SIZE = 9;
 const TABLE_LINE_HEIGHT = 11;
 const TABLE_CELL_PADDING = 4;
+// A table QR is deliberately smaller than a diagram's on-image one
+// (DIAGRAM_QR_SIZE) — it sits in its own dedicated, uncrowded column, with
+// nothing else competing for space around it.
+const TABLE_QR_SIZE = 28;
+const QR_COLUMN_WIDTH = TABLE_QR_SIZE + TABLE_CELL_PADDING * 2;
+
+type TableColumnKey = "no" | "name" | "sku" | "description" | "extra" | "qr";
+interface TableColumn {
+  key: TableColumnKey;
+  header: string;
+  width: number;
+}
 // "No." is link.name — not always a bare number (see hotspotHtml in
 // viewerEngine.ts: any text is a valid hotspot label, and real catalogs
 // use short words too, e.g. "Backrest"/"Seat"/"Leg") — wide enough for a
-// short word without wrapping every line, not just a single digit.
-const TABLE_COLUMNS: { key: "no" | "name" | "sku" | "description" | "extra"; header: string; width: number }[] = [
-  { key: "no", header: "No.", width: 50 },
-  { key: "name", header: "Name", width: 110 },
-  { key: "sku", header: "SKU", width: 60 },
-  { key: "description", header: "Description", width: 178 },
-  { key: "extra", header: "Extra", width: CONTENT_WIDTH - 50 - 110 - 60 - 178 },
-];
+// short word without wrapping every line, not just a single digit. A QR
+// column only exists when the diagram's own qrPlacement calls for one (see
+// PdfExportOptions) — Extra absorbs the width it would otherwise take.
+function tableColumns(withQrColumn: boolean): TableColumn[] {
+  const extraWidth = CONTENT_WIDTH - 50 - 110 - 60 - 178 - (withQrColumn ? QR_COLUMN_WIDTH : 0);
+  const columns: TableColumn[] = [
+    { key: "no", header: "No.", width: 50 },
+    { key: "name", header: "Name", width: 110 },
+    { key: "sku", header: "SKU", width: 60 },
+    { key: "description", header: "Description", width: 178 },
+    { key: "extra", header: "Extra", width: extraWidth },
+  ];
+  if (withQrColumn) columns.push({ key: "qr", header: "QR", width: QR_COLUMN_WIDTH });
+  return columns;
+}
 
-/** One row plus the hotspot number(s) — link.name, the same value on-image/on-tile — that point at it on this page/section. Several when one part is drawn at more than one shared position on the same diagram. */
+/** One row plus the hotspot number(s) — link.name, the same value on-image/on-tile — that point at it on this page/section. Several when one part is drawn at more than one shared position on the same diagram. `qrMatrix` is only set for a diagram whose qrPlacement includes the table; a tile's table entry never carries one (its QR is always on the tile itself). */
 interface TableEntry {
   row: CatalogRow;
   no: string;
+  qrMatrix?: QrMatrix | null;
 }
 
 /** Where the next thing gets drawn — one page plus a "next free y" cursor, shared by every render helper below so pagination logic lives in one place. */
@@ -320,41 +373,47 @@ function buyUrlOf(row: CatalogRow | undefined | null): string {
   return row && typeof row.extra.buy_url === "string" && row.extra.buy_url.trim() ? row.extra.buy_url.trim() : "";
 }
 
-function drawTableHeader(cursor: Cursor, font: PDFFont) {
+function drawTableHeader(cursor: Cursor, font: PDFFont, columns: TableColumn[]) {
   const headerHeight = TABLE_LINE_HEIGHT + TABLE_CELL_PADDING;
   ensureRoom(cursor, headerHeight);
   cursor.page.drawRectangle({ x: MARGIN, y: cursor.y - headerHeight, width: CONTENT_WIDTH, height: headerHeight, color: rgb(0.9, 0.9, 0.9) });
   let x = MARGIN;
-  for (const col of TABLE_COLUMNS) {
+  for (const col of columns) {
     cursor.page.drawText(col.header, { x: x + TABLE_CELL_PADDING, y: cursor.y - headerHeight + 3, size: TABLE_HEADER_FONT_SIZE, font });
     x += col.width;
   }
   cursor.y -= headerHeight;
 }
 
-/** Draws the shared row table for one page/section — always its own header, paginating (with the header repeated) whenever a row doesn't fit. */
-function drawTableRows(cursor: Cursor, font: PDFFont, entries: TableEntry[]) {
+/** Draws the shared row table for one page/section — always its own header, paginating (with the header repeated) whenever a row doesn't fit. `withQrColumn` adds the extra QR column (see tableColumns) — only ever true for a diagram whose qrPlacement calls for one; a tile grid never passes it. */
+function drawTableRows(cursor: Cursor, font: PDFFont, entries: TableEntry[], withQrColumn: boolean) {
   if (entries.length === 0) return;
-  drawTableHeader(cursor, font);
+  const columns = tableColumns(withQrColumn);
+  drawTableHeader(cursor, font, columns);
 
-  for (const { row, no } of entries) {
+  for (const { row, no, qrMatrix } of entries) {
     const cellValues = [no, row.name, row.sku, row.description, extraCellText(row)];
-    const wrapped = TABLE_COLUMNS.map((col, i) => wrapText(font, cellValues[i]!, TABLE_FONT_SIZE, col.width - TABLE_CELL_PADDING * 2));
-    const lineCount = Math.max(...wrapped.map((w) => w.length));
-    const rowHeight = lineCount * TABLE_LINE_HEIGHT + TABLE_CELL_PADDING;
+    const wrapped = columns.map((col, i) => (col.key === "qr" ? [] : wrapText(font, cellValues[i]!, TABLE_FONT_SIZE, col.width - TABLE_CELL_PADDING * 2)));
+    const textLineCount = Math.max(0, ...wrapped.map((w) => w.length));
+    let rowHeight = textLineCount * TABLE_LINE_HEIGHT + TABLE_CELL_PADDING;
+    if (withQrColumn && qrMatrix) rowHeight = Math.max(rowHeight, TABLE_QR_SIZE + TABLE_CELL_PADDING * 2);
 
     if (cursor.y - rowHeight < CONTENT_BOTTOM) {
       cursor.page = newPage(cursor.doc);
       cursor.y = CONTENT_TOP;
-      drawTableHeader(cursor, font);
+      drawTableHeader(cursor, font, columns);
     }
 
     let x = MARGIN;
-    for (let i = 0; i < TABLE_COLUMNS.length; i++) {
-      const col = TABLE_COLUMNS[i]!;
-      const lines = wrapped[i]!;
-      for (let li = 0; li < lines.length; li++) {
-        cursor.page.drawText(lines[li]!, { x: x + TABLE_CELL_PADDING, y: cursor.y - TABLE_LINE_HEIGHT * (li + 1) + 2, size: TABLE_FONT_SIZE, font });
+    for (let i = 0; i < columns.length; i++) {
+      const col = columns[i]!;
+      if (col.key === "qr") {
+        if (qrMatrix) drawQrCode(cursor.page, qrMatrix, x + TABLE_CELL_PADDING, cursor.y - TABLE_CELL_PADDING, TABLE_QR_SIZE);
+      } else {
+        const lines = wrapped[i]!;
+        for (let li = 0; li < lines.length; li++) {
+          cursor.page.drawText(lines[li]!, { x: x + TABLE_CELL_PADDING, y: cursor.y - TABLE_LINE_HEIGHT * (li + 1) + 2, size: TABLE_FONT_SIZE, font });
+        }
       }
       x += col.width;
     }
@@ -426,9 +485,22 @@ function findQrsToMove(units: DiagramUnit[]): Set<number> {
   return toMove;
 }
 
+/** A row's QR (if its buy_url is non-empty), keyed by url — built once per diagram and reused for both the on-image units and the table's own QR column, rather than re-encoding the same link once per hotspot instance that shares it. */
+function buildQrsByUrl(rows: CatalogRow[], meta: CatalogMeta): Map<string, QrMatrix> {
+  const byUrl = new Map<string, QrMatrix>();
+  for (const row of rows) {
+    const buyUrl = buyUrlOf(row);
+    if (buyUrl) byUrl.set(row.url, buildQrMatrix(buildInstantBuyUrl(buyUrl, meta), "L"));
+  }
+  return byUrl;
+}
+
 /**
- * One "diagram" image: fills a fresh page, a QR next to every hotspot
- * whose row has a buy_url, then its row table right below. Every
+ * One "diagram" image: fills a fresh page (or, in "real-size" mode, as many
+ * full pages as its actual pixel size takes — see renderDiagramRealSize),
+ * a QR next to every hotspot whose row has a buy_url (if `qrPlacement`
+ * calls for one on-image), then its row table right below (with its own QR
+ * column, if `qrPlacement` calls for one there instead/also). Every
  * hotspot's numbered badge always stays exactly where the hotspot is; if
  * its QR would collide with another hotspot's badge or QR at print scale,
  * that QR (and only that QR) moves out to the nearest edge of a reserved
@@ -444,6 +516,7 @@ async function renderDiagramPage(
   links: CatalogLink[],
   rows: CatalogRow[],
   meta: CatalogMeta,
+  options: PdfExportOptions,
 ) {
   // Uses cursor.page/cursor.y exactly as the caller left them — the caller
   // (exportCatalogPdf's own loop) decides when a fresh page is actually
@@ -452,7 +525,9 @@ async function renderDiagramPage(
   // this function would immediately abandon that page for a new one.
   const pdfImage = await embedCatalogImage(doc, image);
   const fullTop = cursor.y;
-  const rowsByUrl = new Map(rows.map((r) => [r.url, r]));
+  const showOnImage = options.qrPlacement === "image" || options.qrPlacement === "both";
+  const showInTable = options.qrPlacement === "table" || options.qrPlacement === "both";
+  const qrByUrl = buildQrsByUrl(rows, meta);
   // Several links can share one row's url (the same part drawn at more than
   // one position on this diagram) — collect every link name pointing at
   // each url so the table's own "No." column lists all of them, not just
@@ -469,6 +544,32 @@ async function renderDiagramPage(
   // by construction, so it's never subject to the crowding check below.
   const grid = detectGrid(links);
 
+  if (options.diagramPageMode === "real-size") {
+    await renderDiagramRealSize(cursor, doc, font, image, pdfImage, links, grid, qrByUrl, showOnImage);
+  } else {
+    renderDiagramFitToPage(cursor, font, image, pdfImage, links, fullTop, grid, qrByUrl, showOnImage);
+  }
+
+  drawTableRows(
+    cursor,
+    font,
+    rows.map((row) => ({ row, no: (namesByUrl.get(row.url) ?? []).join(", "), qrMatrix: showInTable ? (qrByUrl.get(row.url) ?? null) : null })),
+    showInTable,
+  );
+}
+
+/** The "fit" half of renderDiagramPage's own doc — shrinks the whole diagram to fit below `fullTop` on the current page, leaves `cursor` pointing right after the image for the table to follow directly. */
+function renderDiagramFitToPage(
+  cursor: Cursor,
+  font: PDFFont,
+  image: CatalogImage,
+  pdfImage: PDFImage,
+  links: CatalogLink[],
+  fullTop: number,
+  grid: ReturnType<typeof detectGrid>,
+  qrByUrl: Map<string, QrMatrix>,
+  showOnImage: boolean,
+) {
   function computeRect(margin: number) {
     const availW = CONTENT_WIDTH - margin * 2;
     const availH = fullTop - CONTENT_BOTTOM - margin * 2;
@@ -480,23 +581,23 @@ async function renderDiagramPage(
     return { drawX, drawW, drawH, drawYTop, drawYBottom: drawYTop - drawH };
   }
   function buildUnits(rect: ReturnType<typeof computeRect>): DiagramUnit[] {
-    return links.map((link) => {
-      const buyUrl = buyUrlOf(rowsByUrl.get(link.url));
-      return {
-        link,
-        pointX: rect.drawX + (link.left / image.width) * rect.drawW,
-        pointY: rect.drawYTop - (link.top / image.height) * rect.drawH,
-        matrix: buyUrl ? buildQrMatrix(buildInstantBuyUrl(buyUrl, meta), "L") : null,
-        badgeW: link.name ? font.widthOfTextAtSize(link.name, TILE_BADGE_FONT_SIZE) + TILE_BADGE_PADDING * 2 : 0,
-        badgeH: TILE_BADGE_FONT_SIZE + TILE_BADGE_PADDING * 1.5,
-      };
-    });
+    return links.map((link) => ({
+      link,
+      pointX: rect.drawX + (link.left / image.width) * rect.drawW,
+      pointY: rect.drawYTop - (link.top / image.height) * rect.drawH,
+      matrix: showOnImage ? (qrByUrl.get(link.url) ?? null) : null,
+      badgeW: link.name ? font.widthOfTextAtSize(link.name, TILE_BADGE_FONT_SIZE) + TILE_BADGE_PADDING * 2 : 0,
+      badgeH: TILE_BADGE_FONT_SIZE + TILE_BADGE_PADDING * 1.5,
+    }));
   }
 
   // Detected once at full size — crowding is a property of how close the
   // hotspots are relative to the label size, which doesn't change enough
-  // from reserving a margin afterward to be worth re-checking.
-  const toMove = grid ? new Set<number>() : findQrsToMove(buildUnits(computeRect(0)));
+  // from reserving a margin afterward to be worth re-checking. Nothing to
+  // detect at all once on-image QRs are off (qrPlacement "table") — no QR
+  // ever gets drawn, so there's nothing to collide, and the diagram gets
+  // the whole page instead of paying for a margin it wouldn't use.
+  const toMove = grid || !showOnImage ? new Set<number>() : findQrsToMove(buildUnits(computeRect(0)));
   const rect = toMove.size > 0 ? computeRect(LEADER_MARGIN) : computeRect(0);
   const units = buildUnits(rect);
 
@@ -575,11 +676,117 @@ async function renderDiagramPage(
   }
 
   cursor.y = (toMove.size > 0 ? CONTENT_BOTTOM : rect.drawYBottom) - 10;
-  drawTableRows(
-    cursor,
-    font,
-    rows.map((row) => ({ row, no: (namesByUrl.get(row.url) ?? []).join(", ") })),
-  );
+}
+
+/**
+ * The "real-size" half of renderDiagramPage's own doc: prints the diagram
+ * at its real on-screen size (REAL_SIZE_PT_PER_PX) instead of shrinking it
+ * to fit one page, tiling it across a grid of full A4 sheets — each sheet
+ * gets the same full image drawn at one shared scale, just offset so only
+ * its own slice falls inside the page's own bounds (a PDF page clips
+ * anything drawn outside its own box for free, the same trick a poster
+ * print relies on). A small footer on each sheet says where it sits in
+ * that grid, to help reassemble the printout.
+ *
+ * Deliberately skips findQrsToMove's collision/leader-line machinery —
+ * real-size mode's whole reason to exist is more room per hotspot (the
+ * same physical badge/QR size against much more image per point of
+ * on-screen crowding), so the crowding that machinery resolves is expected
+ * to be rare here — and unlike fit-to-page, there's no single shared
+ * margin to relocate a colliding QR into without shifting some sheets'
+ * tiling grid out of alignment with their neighbors. Left for a future
+ * pass if a real print turns up a diagram dense enough to need it.
+ */
+async function renderDiagramRealSize(
+  cursor: Cursor,
+  doc: PDFDocument,
+  font: PDFFont,
+  image: CatalogImage,
+  pdfImage: PDFImage,
+  links: CatalogLink[],
+  grid: ReturnType<typeof detectGrid>,
+  qrByUrl: Map<string, QrMatrix>,
+  showOnImage: boolean,
+) {
+  const drawW = image.width * REAL_SIZE_PT_PER_PX;
+  const drawH = image.height * REAL_SIZE_PT_PER_PX;
+  const cols = Math.max(1, Math.ceil(drawW / CONTENT_WIDTH));
+  const sheetRows = Math.max(1, Math.ceil(drawH / CONTENT_HEIGHT));
+  if (cols * sheetRows > MAX_REAL_SIZE_SHEETS) {
+    throw new Error(
+      `This diagram's real size would need ${cols * sheetRows} A4 sheets (${cols}×${sheetRows}) — too many to export. Try "fit to one page" instead.`,
+    );
+  }
+
+  // Each hotspot's real-size point, translated into whichever sheet cell it
+  // falls in and that cell's own local page coordinates (same MARGIN/
+  // CONTENT_TOP origin every other page on this document uses).
+  const unitsByCell = new Map<string, DiagramUnit[]>();
+  for (const link of links) {
+    const gx = link.left * REAL_SIZE_PT_PER_PX;
+    const gy = link.top * REAL_SIZE_PT_PER_PX;
+    const col = Math.min(cols - 1, Math.floor(gx / CONTENT_WIDTH));
+    const row = Math.min(sheetRows - 1, Math.floor(gy / CONTENT_HEIGHT));
+    const unit: DiagramUnit = {
+      link,
+      pointX: MARGIN + (gx - col * CONTENT_WIDTH),
+      pointY: CONTENT_TOP - (gy - row * CONTENT_HEIGHT),
+      matrix: showOnImage ? (qrByUrl.get(link.url) ?? null) : null,
+      badgeW: link.name ? font.widthOfTextAtSize(link.name, TILE_BADGE_FONT_SIZE) + TILE_BADGE_PADDING * 2 : 0,
+      badgeH: TILE_BADGE_FONT_SIZE + TILE_BADGE_PADDING * 1.5,
+    };
+    const key = `${row}:${col}`;
+    const list = unitsByCell.get(key);
+    if (list) list.push(unit);
+    else unitsByCell.set(key, [unit]);
+  }
+
+  const cellWPdf = grid ? grid.cellW * REAL_SIZE_PT_PER_PX : 0;
+  const cellHPdf = grid ? grid.cellH * REAL_SIZE_PT_PER_PX : 0;
+
+  for (let row = 0; row < sheetRows; row++) {
+    for (let col = 0; col < cols; col++) {
+      cursor.page = newPage(cursor.doc);
+      cursor.y = CONTENT_TOP;
+      const imgX = MARGIN - col * CONTENT_WIDTH;
+      const imgTopY = CONTENT_TOP + row * CONTENT_HEIGHT;
+      cursor.page.drawImage(pdfImage, { x: imgX, y: imgTopY - drawH, width: drawW, height: drawH });
+
+      const units = unitsByCell.get(`${row}:${col}`) ?? [];
+      if (grid) {
+        for (const u of units) {
+          const cellLeft = u.pointX - cellWPdf * GRID_MARGIN_X_FRACTION;
+          const cellTop = u.pointY + cellHPdf * GRID_MARGIN_Y_FRACTION;
+          const cellRight = cellLeft + cellWPdf * GRID_VISIBLE_FRACTION;
+          drawTileBadge(cursor.page, u.link.name, font, cellLeft + TILE_BADGE_INSET, cellTop - TILE_BADGE_INSET);
+          if (u.matrix) drawQrCode(cursor.page, u.matrix, cellRight - DIAGRAM_QR_SIZE - TILE_QR_INSET, cellTop - TILE_QR_INSET, DIAGRAM_QR_SIZE);
+        }
+      } else {
+        for (const u of units) {
+          drawBadgeCentered(cursor.page, u.link.name, font, u.pointX, u.pointY);
+          if (u.matrix) {
+            const qrX = Math.min(Math.max(u.pointX + 8, MARGIN), MARGIN + CONTENT_WIDTH - DIAGRAM_QR_SIZE);
+            const qrYTop = Math.min(Math.max(u.pointY - 8, CONTENT_BOTTOM + DIAGRAM_QR_SIZE), CONTENT_TOP);
+            drawQrCode(cursor.page, u.matrix, qrX, qrYTop, DIAGRAM_QR_SIZE);
+          }
+        }
+      }
+
+      cursor.page.drawText(`Sheet ${row * cols + col + 1} of ${sheetRows * cols} — row ${row + 1}/${sheetRows}, column ${col + 1}/${cols}`, {
+        x: MARGIN,
+        y: CONTENT_BOTTOM - 16,
+        size: 7,
+        font,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+    }
+  }
+
+  // The table always starts fresh after a real-size diagram — the last
+  // sheet's page is full of image (plus its footer), with nowhere for it
+  // to follow directly the way a fit-to-page diagram's table does.
+  cursor.page = newPage(cursor.doc);
+  cursor.y = CONTENT_TOP;
 }
 
 /** One buffered "tile" image: exactly one link, so the whole picture is one buy target. */
@@ -630,16 +837,23 @@ async function flushTileBuffer(cursor: Cursor, doc: PDFDocument, font: PDFFont, 
   if (col !== 0) cursor.y -= cellH + TILE_GAP; // a partial last row still consumes a full row's height
 
   cursor.y += TILE_GAP - 4; // undo the trailing gap, leave a little breathing room before the table
-  drawTableRows(cursor, font, entries);
+  // A tile's own QR always stays on the tile itself (see pdfExportOptions.ts's
+  // own doc) — its shared table never gets the extra QR column.
+  drawTableRows(cursor, font, entries, false);
 }
 
 /**
  * Builds the whole catalog's PDF and returns its bytes — hand these to a
  * Blob/download, same as exportCatalog's .ecatm bytes. `fontBytes` is the
  * caller's own fetch of assets/fonts/DejaVuSans.ttf (resolved however its
- * bundler does URLs, same split as initSqlite's wasmUrl).
+ * bundler does URLs, same split as initSqlite's wasmUrl). `options` — see
+ * pdfExportOptions.ts — defaults to DEFAULT_PDF_EXPORT_OPTIONS.
  */
-export async function exportCatalogPdf(db: Database, fontBytes: Uint8Array): Promise<Uint8Array> {
+export async function exportCatalogPdf(
+  db: Database,
+  fontBytes: Uint8Array,
+  options: PdfExportOptions = DEFAULT_PDF_EXPORT_OPTIONS,
+): Promise<Uint8Array> {
   const meta = readMeta(db);
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
@@ -702,12 +916,15 @@ export async function exportCatalogPdf(db: Database, fontBytes: Uint8Array): Pro
       }
 
       await flush();
-      if (!freshPage) {
+      // Real-size mode always starts its first sheet on a fresh page of its
+      // own regardless (see renderDiagramRealSize) — forcing one here too
+      // would just insert a genuinely blank page in between.
+      if (options.diagramPageMode !== "real-size" && !freshPage) {
         cursor.page = newPage(doc);
         cursor.y = CONTENT_TOP;
       }
       freshPage = false;
-      await renderDiagramPage(cursor, doc, font, image, links, rows, meta);
+      await renderDiagramPage(cursor, doc, font, image, links, rows, meta, options);
     }
     await flush();
   }

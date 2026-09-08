@@ -6,6 +6,7 @@ import {
   addLink,
   addRow,
   CATALOG_FILE_EXTENSION,
+  catalogHasAnyBuyUrl,
   collectExtraKeys,
   collectFolders,
   COLLAB_AUTO_DETECT_BASE_PORT,
@@ -14,6 +15,7 @@ import {
   DEFAULT_CART_CHECKOUT_BASE_URL,
   DEFAULT_CART_ID_PATTERN,
   DEFAULT_CART_ITEM_PARAM,
+  DEFAULT_PDF_EXPORT_OPTIONS,
   deleteImage,
   deleteLink,
   deleteRoom,
@@ -51,7 +53,10 @@ import {
   type CatalogLink,
   type CatalogRow,
   type Database,
+  type DiagramPageMode,
   type LinkConflict,
+  type PdfExportOptions,
+  type QrPlacement,
   type SearchField,
   type SqlJsStatic,
 } from "@ecm/shared";
@@ -133,6 +138,12 @@ let statusMessage = "";
 // ~2MB embedded font unless they actually click the button.
 let exportPdfBusy = false;
 let pdfFontBytesPromise: Promise<Uint8Array> | null = null;
+// Options dialog asked every time "Export PDF…" is clicked (see
+// renderPdfOptionsDialog) — chosen values persist across opens within this
+// session (last choice wins), same pattern as the viewer's own.
+let pdfOptionsDialogOpen = false;
+let pdfQrPlacement: QrPlacement = DEFAULT_PDF_EXPORT_OPTIONS.qrPlacement;
+let pdfDiagramPageMode: DiagramPageMode = DEFAULT_PDF_EXPORT_OPTIONS.diagramPageMode;
 // Set when the catalog was opened (or first saved) via the File System
 // Access API, so subsequent Save calls can overwrite it in place.
 let openedFileHandle: FileSystemFileHandle | null = null;
@@ -827,14 +838,28 @@ function suggestedPdfFileName(): string {
   return `${base}.pdf`;
 }
 
+/** Opens the "Export PDF…" options dialog — the button's own click handler; the actual export happens in actionConfirmExportPdf once it's submitted. */
+function actionOpenPdfOptions() {
+  if (!db || exportPdfBusy) return;
+  pdfOptionsDialogOpen = true;
+  render();
+}
+
+function actionCancelPdfOptions() {
+  pdfOptionsDialogOpen = false;
+  render();
+}
+
 /**
  * Builds and downloads the whole catalog as a printable A4 PDF — see
- * pdfExport.ts. Offered in the editor too (see backlog discussion) so the
- * author can check the result — QR placement, page breaks — without
- * leaving the editor to open the same file in the viewer.
+ * pdfExport.ts — using whatever the options dialog last had selected.
+ * Offered in the editor too (see backlog discussion) so the author can
+ * check the result — QR placement, page breaks — without leaving the
+ * editor to open the same file in the viewer.
  */
-async function actionExportPdf() {
+async function actionConfirmExportPdf() {
   if (!db || exportPdfBusy) return;
+  pdfOptionsDialogOpen = false;
   exportPdfBusy = true;
   render();
   try {
@@ -848,7 +873,8 @@ async function actionExportPdf() {
     // isn't pulled into this app's main bundle for everyone who never
     // clicks this button. See index.ts's own comment on that export.
     const [{ exportCatalogPdf }, fontBytes] = await Promise.all([import("../../shared/src/pdfExport.js"), pdfFontBytesPromise]);
-    const bytes = await exportCatalogPdf(db, fontBytes);
+    const options: PdfExportOptions = { qrPlacement: pdfQrPlacement, diagramPageMode: pdfDiagramPageMode };
+    const bytes = await exportCatalogPdf(db, fontBytes, options);
     const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -2248,6 +2274,7 @@ function render() {
     ${renderNoticeOverlay()}
     ${renderRemoteDialog()}
     ${renderStoreSettingsDialog()}
+    ${renderPdfOptionsDialog()}
     ${renderCollabNotFoundDialog()}
     ${renderCollabNameDialog()}
     ${renderCollabShareDialog()}
@@ -2589,6 +2616,56 @@ function renderStoreSettingsDialog(): string {
   `;
 }
 
+/** "Export PDF…" options — see pdfOptionsDialogOpen's own doc; asked every time so a per-export choice (e.g. "real-size" for one especially dense diagram) doesn't linger unnoticed into the next, ordinary export. The QR placement question is grayed out entirely when the open catalog has no buy_url anywhere — there's nothing for any of the three choices to affect. */
+function renderPdfOptionsDialog(): string {
+  if (!pdfOptionsDialogOpen || !db) return "";
+  const hasBuyUrl = catalogHasAnyBuyUrl(listAllRows(db));
+  return `
+    <div class="confirm-overlay">
+      <div class="confirm-box">
+        <h2>Export PDF</h2>
+        <div class="field">
+          <label>QR code placement on diagrams</label>
+          <label class="radio-option">
+            <input type="radio" name="pdf-qr-placement" value="table" ${pdfQrPlacement === "table" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
+            In the table only
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="pdf-qr-placement" value="image" ${pdfQrPlacement === "image" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
+            On the diagram only
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="pdf-qr-placement" value="both" ${pdfQrPlacement === "both" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
+            Both
+          </label>
+          <p class="hint">
+            ${
+              hasBuyUrl
+                ? "A tile catalog's own on-corner QR is unaffected either way."
+                : "This catalog has no items linked to an online store, so there's nothing to put a QR code on."
+            }
+          </p>
+        </div>
+        <div class="field">
+          <label>Diagram page size</label>
+          <label class="radio-option">
+            <input type="radio" name="pdf-diagram-page-mode" value="fit" ${pdfDiagramPageMode === "fit" ? "checked" : ""} />
+            Fit to one page
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="pdf-diagram-page-mode" value="real-size" ${pdfDiagramPageMode === "real-size" ? "checked" : ""} />
+            Real size, split across sheets
+          </label>
+        </div>
+        <div class="confirm-actions">
+          <button id="pdf-options-cancel">Cancel</button>
+          <button id="pdf-options-submit">Export</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderCollabNotFoundDialog(): string {
   if (!collabNotFoundOpen) return "";
   return `
@@ -2907,7 +2984,19 @@ function wireEvents(links: CatalogLink[]) {
 
   document.getElementById("btn-save")?.addEventListener("click", () => void actionSave());
   document.getElementById("btn-export")?.addEventListener("click", actionExportCatalog);
-  document.getElementById("btn-export-pdf")?.addEventListener("click", () => void actionExportPdf());
+  document.getElementById("btn-export-pdf")?.addEventListener("click", actionOpenPdfOptions);
+  document.getElementById("pdf-options-cancel")?.addEventListener("click", actionCancelPdfOptions);
+  document.getElementById("pdf-options-submit")?.addEventListener("click", () => void actionConfirmExportPdf());
+  document.querySelectorAll<HTMLInputElement>('input[name="pdf-qr-placement"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      if (input.checked) pdfQrPlacement = input.value as QrPlacement;
+    });
+  });
+  document.querySelectorAll<HTMLInputElement>('input[name="pdf-diagram-page-mode"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      if (input.checked) pdfDiagramPageMode = input.value as DiagramPageMode;
+    });
+  });
 
   document.getElementById("btn-copy-remote")?.addEventListener("click", actionOpenRemoteDialog);
   document.getElementById("remote-cancel")?.addEventListener("click", actionCancelRemoteDialog);

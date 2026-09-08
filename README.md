@@ -196,12 +196,23 @@ page to itself, image filling it, table right below. Folders (see
 own table — a run of tiles never shares its table across a folder boundary.
 
 Every row with a `buy_url` (see "Selling from a catalog" above) gets a
-small QR code — in a tile's own top-right corner, or right next to a
-diagram hotspot's label — always pointing straight at a one-item checkout
-for that row, regardless of the catalog's own cart behavior: a printed code
-has no cart to add to. Rows without a `buy_url` get no QR at all. The
-table's own Extra column never prints `buy_url` itself, since it's already
-the QR code.
+small QR code, always pointing straight at a one-item checkout for that
+row, regardless of the catalog's own cart behavior: a printed code has no
+cart to add to. Rows without a `buy_url` get no QR at all. The table's own
+Extra column never prints `buy_url` itself, since it's already the QR code.
+A tile's QR always sits in its own top-right corner — the button opens an
+options dialog before exporting that only asks about a diagram's own two
+questions:
+
+- **QR code placement** — in the table only (default: a new "QR" column,
+  next to the existing "No." column), right next to the diagram's own
+  hotspot label, or both.
+- **Diagram page size** — shrink the whole diagram to fit one page
+  (default), or print it at its real on-screen size (the same pixel-to-
+  point mapping as this app's own 100% zoom), split across as many A4
+  sheets as that takes — for a diagram too detailed to stay legible once
+  shrunk down. Each sheet gets a small footer saying where it sits in the
+  sheet grid, to help line them up after printing.
 
 ## Embedding the viewer
 

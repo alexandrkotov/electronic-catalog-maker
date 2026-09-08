@@ -1,7 +1,7 @@
 import "./style.css";
 import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import pdfFontUrl from "@ecm/shared/assets/fonts/DejaVuSans.ttf?url";
-import { mountViewer, setUpPwa, type Database } from "@ecm/shared";
+import { mountViewer, setUpPwa, type Database, type PdfExportOptions } from "@ecm/shared";
 
 // Service Worker registration + the standalone-aware GoatCounter gate —
 // see packages/shared/src/pwa.ts.
@@ -28,7 +28,7 @@ const initialLinkId = params.has("link") ? Number(params.get("link")) : undefine
 // than inside viewerEngine.ts itself.
 let pdfFontBytesPromise: Promise<Uint8Array> | null = null;
 
-async function exportPdf(db: Database): Promise<Uint8Array> {
+async function exportPdf(db: Database, options: PdfExportOptions): Promise<Uint8Array> {
   if (!pdfFontBytesPromise) {
     pdfFontBytesPromise = fetch(pdfFontUrl)
       .then((r) => r.arrayBuffer())
@@ -36,7 +36,7 @@ async function exportPdf(db: Database): Promise<Uint8Array> {
   }
   try {
     const [{ exportCatalogPdf }, fontBytes] = await Promise.all([import("../../shared/src/pdfExport.js"), pdfFontBytesPromise]);
-    return await exportCatalogPdf(db, fontBytes);
+    return await exportCatalogPdf(db, fontBytes, options);
   } catch (err) {
     pdfFontBytesPromise = null; // let a retry re-fetch, in case the failure was a network blip fetching the font
     throw err;
