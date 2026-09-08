@@ -7,6 +7,7 @@ export * from "./images.js";
 export * from "./legacySch.js";
 export * from "./qrcode.js";
 export * from "./cart.js";
+export * from "./pdfExportOptions.js";
 // pdfExport.ts (and its pdf-lib/@pdf-lib/fontkit dependencies, well over a
 // MB combined) is deliberately NOT re-exported here — every consumer of
 // this barrel (editor/viewer/viewer-embed's main bundle) statically

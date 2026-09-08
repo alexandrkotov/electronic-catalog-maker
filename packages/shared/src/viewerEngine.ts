@@ -27,7 +27,8 @@ import {
   detectLocalCollabServerViaBridge,
 } from "./collabClient.js";
 import { renderQrCodeSvg } from "./qrcode.js";
-import { buildCartCheckoutUrl, parseCartItemId } from "./cart.js";
+import { buildCartCheckoutUrl, catalogHasAnyBuyUrl, parseCartItemId } from "./cart.js";
+import { DEFAULT_PDF_EXPORT_OPTIONS, type DiagramPageMode, type PdfExportOptions, type QrPlacement } from "./pdfExportOptions.js";
 import type { CatalogImage, CatalogLink, CatalogRow } from "./types.js";
 import type { Database, SqlJsStatic } from "sql.js";
 
@@ -165,9 +166,11 @@ export interface MountViewerOptions {
    * standalone viewer's own main.ts (a normal multi-chunk build) is where
    * the actual `import("pdfExport.js")` + font fetch happen — see its own
    * comment. Optional: omitting it hides the button entirely, same pattern
-   * as `updateAddressBar` gating "Share view…".
+   * as `updateAddressBar` gating "Share view…". Called with the export
+   * options the user chose in the toolbar's own options dialog (see
+   * actionExportPdf) — the caller just forwards them to exportCatalogPdf.
    */
-  exportPdf?: (db: Database) => Promise<Uint8Array>;
+  exportPdf?: (db: Database, options: PdfExportOptions) => Promise<Uint8Array>;
 }
 
 export interface ViewerController {
@@ -269,8 +272,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // the editor's collabShareCopyFeedback (packages/editor/src/main.ts).
   let shareViewCopyFeedback = false;
   // "Export PDF…" — see the `exportPdf` option's own doc for why this file
-  // doesn't reach for pdfExport.ts directly.
+  // doesn't reach for pdfExport.ts directly. The options dialog asks the
+  // two questions in PdfExportOptions before the actual export runs;
+  // chosen values persist across dialog opens within this session (last
+  // choice wins), reset only to their documented defaults on first load.
   let exportPdfBusy = false;
+  let pdfOptionsDialogOpen = false;
+  let pdfQrPlacement: QrPlacement = DEFAULT_PDF_EXPORT_OPTIONS.qrPlacement;
+  let pdfDiagramPageMode: DiagramPageMode = DEFAULT_PDF_EXPORT_OPTIONS.diagramPageMode;
   // Which single panel is shown below the mobile breakpoint (see .mobile-tabs
   // / .ecm-viewer-app[data-mobile-tab] in style.css) — irrelevant above it,
   // where all three panels sit side by side per the desktop grid regardless
@@ -759,13 +768,26 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     return `${base}.pdf`;
   }
 
-  /** Builds and downloads the whole catalog as a printable PDF via the caller-supplied `exportPdf` (see its own doc). */
-  async function actionExportPdf() {
+  /** Opens the "Export PDF…" options dialog (see pdfOptionsDialogOpen's own doc) — the button's click handler, not the export itself. */
+  function actionOpenPdfOptions() {
     if (!db || !exportPdf || exportPdfBusy) return;
+    pdfOptionsDialogOpen = true;
+    render();
+  }
+
+  function actionCancelPdfOptions() {
+    pdfOptionsDialogOpen = false;
+    render();
+  }
+
+  /** Builds and downloads the whole catalog as a printable PDF via the caller-supplied `exportPdf` (see its own doc), using whatever the options dialog last had selected. */
+  async function actionConfirmExportPdf() {
+    if (!db || !exportPdf || exportPdfBusy) return;
+    pdfOptionsDialogOpen = false;
     exportPdfBusy = true;
     render();
     try {
-      const bytes = await exportPdf(db);
+      const bytes = await exportPdf(db, { qrPlacement: pdfQrPlacement, diagramPageMode: pdfDiagramPageMode });
       const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -1095,6 +1117,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         }
 
         ${mode === "full" && updateAddressBar ? renderShareViewDialog() : ""}
+        ${renderPdfOptionsDialog()}
     `;
 
     if (savedScroll) {
@@ -1182,6 +1205,56 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                      </div>`
                   : ""
           }
+        </div>
+      </div>
+    `;
+  }
+
+  /** "Export PDF…" options — see pdfOptionsDialogOpen's own doc; asked every time so a per-export choice (e.g. "real-size" for one especially dense diagram) doesn't linger unnoticed into the next, ordinary export. The QR placement question is grayed out entirely when the open catalog has no buy_url anywhere — there's nothing for any of the three choices to affect. */
+  function renderPdfOptionsDialog(): string {
+    if (!pdfOptionsDialogOpen || !db) return "";
+    const hasBuyUrl = catalogHasAnyBuyUrl(listAllRows(db));
+    return `
+      <div class="open-overlay">
+        <div class="open-box pdf-options-box">
+          <h2>Export PDF</h2>
+          <div class="field">
+            <label>QR code placement on diagrams</label>
+            <label class="radio-option">
+              <input type="radio" name="pdf-qr-placement" value="table" ${pdfQrPlacement === "table" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
+              In the table only
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="pdf-qr-placement" value="image" ${pdfQrPlacement === "image" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
+              On the diagram only
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="pdf-qr-placement" value="both" ${pdfQrPlacement === "both" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
+              Both
+            </label>
+            <p class="hint">
+              ${
+                hasBuyUrl
+                  ? "A tile catalog's own on-corner QR is unaffected either way."
+                  : "This catalog has no items linked to an online store, so there's nothing to put a QR code on."
+              }
+            </p>
+          </div>
+          <div class="field">
+            <label>Diagram page size</label>
+            <label class="radio-option">
+              <input type="radio" name="pdf-diagram-page-mode" value="fit" ${pdfDiagramPageMode === "fit" ? "checked" : ""} />
+              Fit to one page
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="pdf-diagram-page-mode" value="real-size" ${pdfDiagramPageMode === "real-size" ? "checked" : ""} />
+              Real size, split across sheets
+            </label>
+          </div>
+          <div class="open-actions">
+            <button type="button" id="pdf-options-cancel">Cancel</button>
+            <button type="button" id="pdf-options-submit">Export</button>
+          </div>
         </div>
       </div>
     `;
@@ -1325,7 +1398,19 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     }
 
     root.getElementById("btn-share-view")?.addEventListener("click", () => void actionShareView());
-    root.getElementById("btn-export-pdf")?.addEventListener("click", () => void actionExportPdf());
+    root.getElementById("btn-export-pdf")?.addEventListener("click", actionOpenPdfOptions);
+    root.getElementById("pdf-options-cancel")?.addEventListener("click", actionCancelPdfOptions);
+    root.getElementById("pdf-options-submit")?.addEventListener("click", () => void actionConfirmExportPdf());
+    root.querySelectorAll<HTMLInputElement>('input[name="pdf-qr-placement"]').forEach((input) => {
+      input.addEventListener("change", () => {
+        if (input.checked) pdfQrPlacement = input.value as QrPlacement;
+      });
+    });
+    root.querySelectorAll<HTMLInputElement>('input[name="pdf-diagram-page-mode"]').forEach((input) => {
+      input.addEventListener("change", () => {
+        if (input.checked) pdfDiagramPageMode = input.value as DiagramPageMode;
+      });
+    });
     root.getElementById("share-view-retry")?.addEventListener("click", () => void actionShareView());
     root.getElementById("share-view-close")?.addEventListener("click", actionCloseShareViewDialog);
     root.getElementById("share-view-copy")?.addEventListener("click", () => void actionCopyShareViewLink());

@@ -1,4 +1,4 @@
-import type { CatalogMeta } from "./types.js";
+import type { CatalogMeta, CatalogRow } from "./types.js";
 
 /**
  * Pulls an item id out of a row's buy_url using the catalog's own
@@ -47,4 +47,15 @@ export function buildInstantBuyUrl(
   const id = parseCartItemId(buyUrl, meta.cartIdPattern);
   if (id === null) return buyUrl;
   return buildCartCheckoutUrl([id], meta.cartItemParam, meta.cartCheckoutBaseUrl);
+}
+
+/**
+ * Whether any row in the catalog has a buy_url at all — used by the "Export
+ * PDF…" options dialog (see pdfExportOptions.ts) to gray out its QR
+ * placement question entirely when there's nothing for it to affect: a
+ * catalog with no store links anywhere gets no QR codes no matter which
+ * placement is picked, on-image or in the table.
+ */
+export function catalogHasAnyBuyUrl(rows: CatalogRow[]): boolean {
+  return rows.some((r) => typeof r.extra.buy_url === "string" && r.extra.buy_url.trim());
 }

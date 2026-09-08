@@ -653,6 +653,25 @@ button:disabled {
   resize: none;
 }
 
+/* "Export PDF…" options dialog — same .open-overlay/.open-box shell, plus
+   the radio groups for its two questions (see pdfExportOptions.ts). */
+.pdf-options-box {
+  width: 22rem;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.radio-option input {
+  cursor: pointer;
+}
+
 /* Reserved space (rather than just fading in on copy) so "Copy link"
    doesn't visibly shift position the moment feedback appears. */
 .share-view-copy-feedback {
