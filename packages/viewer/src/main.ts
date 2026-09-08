@@ -1,6 +1,7 @@
 import "./style.css";
 import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
-import { mountViewer, setUpPwa } from "@ecm/shared";
+import pdfFontUrl from "@ecm/shared/assets/fonts/DejaVuSans.ttf?url";
+import { mountViewer, setUpPwa, type Database } from "@ecm/shared";
 
 // Service Worker registration + the standalone-aware GoatCounter gate —
 // see packages/shared/src/pwa.ts.
@@ -20,6 +21,28 @@ const params = new URLSearchParams(location.search);
 const initialImageId = params.has("image") ? Number(params.get("image")) : undefined;
 const initialLinkId = params.has("link") ? Number(params.get("link")) : undefined;
 
+// The font bytes are only ever needed once someone actually clicks
+// "Export PDF…" — fetched lazily and cached, same reasoning as the dynamic
+// import() below. mountViewer's own `exportPdf` option doc explains why
+// this (pdfExport.ts + pdf-lib + @pdf-lib/fontkit) is resolved here rather
+// than inside viewerEngine.ts itself.
+let pdfFontBytesPromise: Promise<Uint8Array> | null = null;
+
+async function exportPdf(db: Database): Promise<Uint8Array> {
+  if (!pdfFontBytesPromise) {
+    pdfFontBytesPromise = fetch(pdfFontUrl)
+      .then((r) => r.arrayBuffer())
+      .then((buf) => new Uint8Array(buf));
+  }
+  try {
+    const [{ exportCatalogPdf }, fontBytes] = await Promise.all([import("../../shared/src/pdfExport.js"), pdfFontBytesPromise]);
+    return await exportCatalogPdf(db, fontBytes);
+  } catch (err) {
+    pdfFontBytesPromise = null; // let a retry re-fetch, in case the failure was a network blip fetching the font
+    throw err;
+  }
+}
+
 mountViewer({
   container: document.getElementById("app")!,
   mode: "full",
@@ -28,4 +51,5 @@ mountViewer({
   initialLinkId: Number.isFinite(initialLinkId) ? initialLinkId : undefined,
   updateAddressBar: true,
   wasmUrl,
+  exportPdf,
 });

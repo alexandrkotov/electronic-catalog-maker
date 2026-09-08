@@ -27,6 +27,7 @@ import {
   detectLocalCollabServerViaBridge,
 } from "./collabClient.js";
 import { renderQrCodeSvg } from "./qrcode.js";
+import { buildCartCheckoutUrl, parseCartItemId } from "./cart.js";
 import type { CatalogImage, CatalogLink, CatalogRow } from "./types.js";
 import type { Database, SqlJsStatic } from "sql.js";
 
@@ -95,35 +96,6 @@ function getShowOpenFilePicker(): ShowOpenFilePicker | undefined {
 }
 
 /**
- * Pulls an item id out of a row's buy_url using the catalog's own
- * cart_id_pattern (see schema.ts DEFAULT_CART_ID_PATTERN and CatalogMeta),
- * so several rows can be combined into one multi-item checkout — see
- * cartItems/buildCartCheckoutUrl. Returns null for anything that doesn't
- * match (a different/unrecognized store, no buy_url at all, or a malformed
- * saved pattern), which is the signal for that row to fall back to the
- * single-item instant-navigate Buy button instead.
- */
-function parseCartItemId(buyUrl: string, cartIdPattern: string): string | null {
-  let re: RegExp;
-  try {
-    re = new RegExp(cartIdPattern);
-  } catch {
-    return null; // malformed regex saved via the editor's Store settings dialog
-  }
-  const m = re.exec(buyUrl);
-  return m?.[1] ?? null;
-}
-
-/**
- * Builds the combined checkout URL for several cart item ids, using the
- * catalog's own cart_item_param/cart_checkout_base_url (see schema.ts).
- */
-function buildCartCheckoutUrl(ids: string[], cartItemParam: string, cartCheckoutBaseUrl: string): string {
-  const itemsParams = ids.map((id) => cartItemParam.replaceAll("{id}", encodeURIComponent(id))).join("&");
-  return `${cartCheckoutBaseUrl}${itemsParams}`;
-}
-
-/**
  * The viewer's actual behavior — rendering, state, event wiring — factored
  * out of packages/viewer's own entry point so it can be mounted more than
  * once: as the full-page standalone app, and inside the embeddable
@@ -179,6 +151,23 @@ export interface MountViewerOptions {
   themeTarget?: HTMLElement;
   /** Passed straight through to sql.js's `initSqlite`. */
   wasmUrl: string | ((file: string) => string);
+  /**
+   * Enables the toolbar's "Export PDF…" button — called with the live
+   * Database, resolves to the finished PDF's bytes. Deliberately a
+   * caller-supplied callback rather than this module reaching for
+   * pdfExport.ts itself: pdfExport.ts pulls in pdf-lib + @pdf-lib/fontkit
+   * (well over a MB combined), and this same engine also mounts inside
+   * packages/viewer-embed's single self-contained IIFE bundle, which has
+   * no way to code-split a dynamic import() out into a separate chunk —
+   * anything this file imports, even lazily, gets inlined into that one
+   * committed script for every embedder. Keeping this file's own module
+   * graph free of pdfExport.ts is what keeps that widget lean; the
+   * standalone viewer's own main.ts (a normal multi-chunk build) is where
+   * the actual `import("pdfExport.js")` + font fetch happen — see its own
+   * comment. Optional: omitting it hides the button entirely, same pattern
+   * as `updateAddressBar` gating "Share view…".
+   */
+  exportPdf?: (db: Database) => Promise<Uint8Array>;
 }
 
 export interface ViewerController {
@@ -192,6 +181,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   const mode = options.mode ?? "full";
   const updateAddressBar = options.updateAddressBar ?? false;
   const themeTarget = options.themeTarget ?? document.documentElement;
+  const exportPdf = options.exportPdf;
 
   applyTheme(resolveInitialTheme(), themeTarget);
 
@@ -278,6 +268,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // Briefly true right after a successful in-dialog copy — same pattern as
   // the editor's collabShareCopyFeedback (packages/editor/src/main.ts).
   let shareViewCopyFeedback = false;
+  // "Export PDF…" — see the `exportPdf` option's own doc for why this file
+  // doesn't reach for pdfExport.ts directly.
+  let exportPdfBusy = false;
   // Which single panel is shown below the mobile breakpoint (see .mobile-tabs
   // / .ecm-viewer-app[data-mobile-tab] in style.css) — irrelevant above it,
   // where all three panels sit side by side per the desktop grid regardless
@@ -760,6 +753,33 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (link) centerSelection();
   }
 
+  function suggestedPdfFileName(): string {
+    const name = db ? readMeta(db).catalogName : "";
+    const base = name.replace(/[^\w-]+/g, "_") || "catalog";
+    return `${base}.pdf`;
+  }
+
+  /** Builds and downloads the whole catalog as a printable PDF via the caller-supplied `exportPdf` (see its own doc). */
+  async function actionExportPdf() {
+    if (!db || !exportPdf || exportPdfBusy) return;
+    exportPdfBusy = true;
+    render();
+    try {
+      const bytes = await exportPdf(db);
+      const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = suggestedPdfFileName();
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (err) {
+      statusMessage = `PDF export failed: ${err instanceof Error ? err.message : String(err)}`;
+    } finally {
+      exportPdfBusy = false;
+      render();
+    }
+  }
+
   /** Tooltip for the toolbar's "Share view…" button — explains the one case it's disabled for, or what it does the rest of the time. */
   function shareViewButtonTitle(): string {
     if (isLoopbackHostname(location.hostname)) {
@@ -986,6 +1006,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                  <button id="btn-refresh" ${currentSrcUrl || openedFileHandle ? "" : "disabled"} title="Re-read the catalog from its source (URL or local file) — see changes someone else just saved">${refreshing ? "Refreshing…" : "Refresh"}</button>
                  <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
                  ${updateAddressBar ? `<button id="btn-share-view" ${db && !isLoopbackHostname(location.hostname) ? "" : "disabled"} title="${escapeHtml(shareViewButtonTitle())}">Share view…</button>` : ""}
+                 ${exportPdf ? `<button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="Export this catalog as a printable A4 PDF — a QR code next to each item that has a Buy link">${exportPdfBusy ? "Exporting PDF…" : "Export PDF…"}</button>` : ""}
                  ${cartMode === "accumulate" ? `<button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="Open one combined checkout for everything added to cart">🛒 Cart (${cartItems.size})</button>` : ""}
                  <span class="spacer"></span>
                  <button id="btn-theme" title="Toggle light/dark theme">${currentTheme(themeTarget) === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
@@ -1304,6 +1325,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     }
 
     root.getElementById("btn-share-view")?.addEventListener("click", () => void actionShareView());
+    root.getElementById("btn-export-pdf")?.addEventListener("click", () => void actionExportPdf());
     root.getElementById("share-view-retry")?.addEventListener("click", () => void actionShareView());
     root.getElementById("share-view-close")?.addEventListener("click", actionCloseShareViewDialog);
     root.getElementById("share-view-copy")?.addEventListener("click", () => void actionCopyShareViewLink());

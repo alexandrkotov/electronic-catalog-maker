@@ -1,5 +1,6 @@
 import "./style.css";
 import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
+import pdfFontUrl from "@ecm/shared/assets/fonts/DejaVuSans.ttf?url";
 import {
   addImage,
   addLink,
@@ -126,6 +127,12 @@ let editingLinkId: number | null = null;
 let editingRowId: number | null = null;
 let zoom = 1;
 let statusMessage = "";
+// "Export PDF…" — see pdfExport.ts. Both the module itself and the font
+// bytes it needs are fetched lazily (dynamic import / cached fetch, see
+// actionExportPdf) so opening the editor doesn't cost anyone pdf-lib or the
+// ~2MB embedded font unless they actually click the button.
+let exportPdfBusy = false;
+let pdfFontBytesPromise: Promise<Uint8Array> | null = null;
 // Set when the catalog was opened (or first saved) via the File System
 // Access API, so subsequent Save calls can overwrite it in place.
 let openedFileHandle: FileSystemFileHandle | null = null;
@@ -812,6 +819,49 @@ function downloadBytes(bytes: Uint8Array) {
 function actionExportCatalog() {
   if (!db) return;
   downloadBytes(exportCatalog(db));
+}
+
+function suggestedPdfFileName(): string {
+  const meta = db ? readMeta(db) : null;
+  const base = meta?.catalogName.replace(/[^\w-]+/g, "_") || "catalog";
+  return `${base}.pdf`;
+}
+
+/**
+ * Builds and downloads the whole catalog as a printable A4 PDF — see
+ * pdfExport.ts. Offered in the editor too (see backlog discussion) so the
+ * author can check the result — QR placement, page breaks — without
+ * leaving the editor to open the same file in the viewer.
+ */
+async function actionExportPdf() {
+  if (!db || exportPdfBusy) return;
+  exportPdfBusy = true;
+  render();
+  try {
+    if (!pdfFontBytesPromise) {
+      pdfFontBytesPromise = fetch(pdfFontUrl)
+        .then((r) => r.arrayBuffer())
+        .then((buf) => new Uint8Array(buf));
+    }
+    // Relative, not a bare "@ecm/shared" import — the package's own barrel
+    // (index.ts) deliberately doesn't re-export this module, so pdf-lib
+    // isn't pulled into this app's main bundle for everyone who never
+    // clicks this button. See index.ts's own comment on that export.
+    const [{ exportCatalogPdf }, fontBytes] = await Promise.all([import("../../shared/src/pdfExport.js"), pdfFontBytesPromise]);
+    const bytes = await exportCatalogPdf(db, fontBytes);
+    const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = suggestedPdfFileName();
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (err) {
+    pdfFontBytesPromise = null; // let a retry re-fetch, in case the failure was a network blip fetching the font
+    statusMessage = `PDF export failed: ${err instanceof Error ? err.message : String(err)}`;
+  } finally {
+    exportPdfBusy = false;
+    render();
+  }
 }
 
 /**
@@ -2135,6 +2185,7 @@ function render() {
       <input type="file" id="file-image" accept="image/*" style="display:none" />
       <button id="btn-save" ${db ? "" : "disabled"} title="Save in place (overwrites the opened file where your browser supports it)">Save</button>
       <button id="btn-export" ${db ? "" : "disabled"} title="Always downloads a new copy">Export .${CATALOG_FILE_EXTENSION}</button>
+      <button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="Export this catalog as a printable A4 PDF — a QR code next to each item that has a Buy link">${exportPdfBusy ? "Exporting PDF…" : "Export PDF…"}</button>
       <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
       <button id="btn-store-settings" ${db ? "" : "disabled"} title="Configure this catalog's store link and Buy-button behavior">⚙️ Store settings…</button>
       ${db && !collabRoomId ? `<button id="btn-start-collab" title="Start a live session others can join to edit this catalog with you">🤝 Start collaboration</button>` : ""}
@@ -2856,6 +2907,7 @@ function wireEvents(links: CatalogLink[]) {
 
   document.getElementById("btn-save")?.addEventListener("click", () => void actionSave());
   document.getElementById("btn-export")?.addEventListener("click", actionExportCatalog);
+  document.getElementById("btn-export-pdf")?.addEventListener("click", () => void actionExportPdf());
 
   document.getElementById("btn-copy-remote")?.addEventListener("click", actionOpenRemoteDialog);
   document.getElementById("remote-cancel")?.addEventListener("click", actionCancelRemoteDialog);
