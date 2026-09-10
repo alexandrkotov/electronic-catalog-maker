@@ -286,7 +286,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // of this value. Starts on "images" so a freshly opened catalog shows its
   // image list first, same as the desktop layout's left panel; picking an
   // image switches to "stage" (see actionSelectImage) since that's the part
-  // the user just asked to look at.
+  // the user just asked to look at. Selecting a hotspot (see
+  // actionSelectHotspot) then goes the *other* way depending on how it was
+  // selected: tapping a marker on the stage jumps to "table" (you were
+  // already looking at the stage — the row's data is the new information),
+  // while tapping a table row or stepping through instance-nav jumps to
+  // "stage" (you already have the data — seeing where it is is the point).
   let mobileTab: "images" | "stage" | "table" = "images";
 
   // ---------- resizable layout (side panels + the row-data table's columns) ----------
@@ -692,14 +697,22 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     render();
   }
 
-  /** Clicking a hotspot directly: we know exactly which physical instance was clicked. */
-  function actionSelectHotspot(linkId: number) {
+  /**
+   * Clicking a hotspot directly: we know exactly which physical instance was
+   * clicked. Also reached — with `toTab: "stage"` — from actionSelectRowByUrl
+   * (tapping a table row) and actionCycleInstance (the instance-nav control),
+   * which both want the highlight this just produced to actually become
+   * visible below the mobile breakpoint (a table row's or instance-nav's
+   * whole point is "show me where this is"). A *direct* tap on a hotspot
+   * marker on the stage itself defaults to `"table"` instead: switching *to*
+   * the stage would be a no-op (you're already looking at it), whereas
+   * jumping to that row's actual name/sku/description is the useful
+   * direction — no-op above the mobile breakpoint either way, see
+   * mobileTab's declaration.
+   */
+  function actionSelectHotspot(linkId: number, toTab: "stage" | "table" = "table") {
     selectedLinkId = linkId;
-    // Also reached from actionSelectRowByUrl (tapping a table row) — jump to
-    // the stage so the highlight this just produced is actually visible.
-    // No-op above the mobile breakpoint and when a hotspot on the stage
-    // itself was the thing clicked — see mobileTab's declaration.
-    mobileTab = "stage";
+    mobileTab = toTab;
     syncAddressBar();
     render();
     centerSelection();
@@ -715,7 +728,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function actionSelectRowByUrl(url: string) {
     if (!db || activeImageId === null) return;
     const link = listLinksForImage(db, activeImageId).find((l) => l.url === url);
-    if (link) actionSelectHotspot(link.id);
+    if (link) actionSelectHotspot(link.id, "stage");
   }
 
   /** Steps to the next/previous hotspot sharing the current selection's url, wrapping around. */
@@ -728,7 +741,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const index = siblings.findIndex((l) => l.id === selectedLinkId);
     if (index === -1) return;
     const next = siblings[(index + delta + siblings.length) % siblings.length];
-    if (next) actionSelectHotspot(next.id);
+    if (next) actionSelectHotspot(next.id, "stage");
   }
 
   function actionToggleCart(rowUrl: string) {
