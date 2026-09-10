@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Northgate Auto Supply</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    color: #1a1a1a;
+    background: #fff;
+  }
+  header {
+    background: #1f2d3d;
+    color: #fff;
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header .brand {
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  header nav a {
+    color: #cbd5e1;
+    text-decoration: none;
+    margin-left: 1.5rem;
+    font-size: 0.95rem;
+  }
+  .demo-note {
+    background: #fff7e6;
+    border-bottom: 1px solid #f0d999;
+    color: #6b5100;
+    font-size: 0.85rem;
+    padding: 0.5rem 2rem;
+  }
+  .demo-note a { color: #6b5100; }
+  main {
+    display: flex;
+    gap: 2rem;
+    max-width: 1200px;
+    margin: 2rem auto;
+    padding: 0 2rem;
+    align-items: flex-start;
+  }
+  .content {
+    flex: 2 1 0;
+    min-width: 0;
+  }
+  .content h1 {
+    font-size: 1.8rem;
+    margin-top: 0;
+  }
+  .content p {
+    line-height: 1.6;
+    color: #333;
+  }
+  .catalog-panel {
+    flex: 1 1 0;
+    min-width: 320px;
+    position: sticky;
+    top: 1rem;
+  }
+  .catalog-panel h2 {
+    font-size: 1.1rem;
+    margin: 0 0 0.75rem;
+  }
+  ecm-viewer {
+    display: block;
+    width: 100%;
+    height: 520px;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  @media (max-width: 800px) {
+    main { flex-direction: column; }
+    .catalog-panel { position: static; width: 100%; }
+  }
+  footer {
+    border-top: 1px solid #e5e5e5;
+    padding: 1.5rem 2rem;
+    color: #888;
+    font-size: 0.85rem;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="demo-note">
+  Demo page — shows what an embedded Electronic Catalog Maker viewer looks like on a client's own website (mini-series episode A4). Not a real business.
+  Built with <a href="https://github.com/alexandrkotov/electronic-catalog-maker#embedding-the-viewer">&lt;ecm-viewer&gt;</a>.
+</div>
+
+<header>
+  <div class="brand">Northgate Auto Supply</div>
+  <nav>
+    <a href="#">Home</a>
+    <a href="#">Parts Catalog</a>
+    <a href="#">About</a>
+    <a href="#">Contact</a>
+  </nav>
+</header>
+
+<main>
+  <div class="content">
+    <h1>Genuine parts, straight from the source</h1>
+    <p>
+      Lorem ipsum dolor sit amet, consectetur adipiscing elit. Northgate
+      Auto Supply has been sourcing quality replacement parts for
+      independent repair shops and DIY mechanics since our founding.
+      Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+    </p>
+    <p>
+      Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris
+      nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in
+      reprehenderit in voluptate velit esse cillum dolore eu fugiat
+      nulla pariatur. Excepteur sint occaecat cupidatat non proident,
+      sunt in culpa qui officia deserunt mollit anim id est laborum.
+    </p>
+    <p>
+      Browse our full parts catalog on the right — find the exact
+      component you need by clicking through the diagram, or use the
+      search bar to jump straight to a part number.
+    </p>
+    <p>
+      Sed ut perspiciatis unde omnis iste natus error sit voluptatem
+      accusantium doloremque laudantium, totam rem aperiam, eaque ipsa
+      quae ab illo inventore veritatis et quasi architecto beatae vitae
+      dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit
+      aspernatur aut odit aut fugit.
+    </p>
+    <p>
+      Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet,
+      consectetur, adipisci velit, sed quia non numquam eius modi
+      tempora incidunt ut labore et dolore magnam aliquam quaerat
+      voluptatem.
+    </p>
+  </div>
+
+  <div class="catalog-panel">
+    <h2>Parts catalog</h2>
+    <ecm-viewer src="https://alexandrkotov.github.io/electronic-catalog-maker/demo/auto-spare-parts.ecatm"></ecm-viewer>
+  </div>
+</main>
+
+<footer>
+  Northgate Auto Supply — a fictional business used to demonstrate the
+  &lt;ecm-viewer&gt; embed feature of
+  <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Electronic Catalog Maker</a>.
+</footer>
+
+<script src="https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js"></script>
+</body>
+</html>
