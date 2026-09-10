@@ -22,6 +22,23 @@
   --hotspot-text: #1a1a1a;
   --hotspot-selected-bg: #f97316;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Establishes the mobile breakpoint below (@container ecm-viewer) as
+     measuring *this* element's own width rather than always the browser
+     window's — see that rule's comment for why. This has to live here
+     (on :root, i.e. <html>, standalone — or :host, i.e. <ecm-viewer>
+     itself, once embedded) and NOT on .ecm-viewer-app: a `@container`
+     rule can never match styles on the very element that establishes the
+     container (that's a spec restriction, to avoid the element's size
+     deciding its own size) — confirmed empirically, self-querying
+     silently never matched in a real browser. Putting it here instead
+     makes .ecm-viewer-app a genuine *descendant* of the query container in
+     both contexts, which does work. In the standalone app :root is
+     <html>, so this ends up equivalent to the old page-viewport-based
+     @media query; in the embedded case the :root -> :host swap below
+     (see packages/viewer-embed/src/ecm-viewer.ts) turns this into the
+     widget's own assigned width instead — which is the whole point. */
+  container-type: inline-size;
+  container-name: ecm-viewer;
 }
 
 :root[data-theme="dark"] {
@@ -757,8 +774,27 @@ button:disabled {
    full-width panel at a time, switched via .mobile-tabs (grid-area "tabs",
    hidden above the breakpoint — see there). Panel-resize dividers make no
    sense with only one panel visible, so they're hidden too; their drag
-   handlers (startPanelResize) simply never fire without a divider to grab. */
-@media (max-width: 860px) {
+   handlers (startPanelResize) simply never fire without a divider to grab.
+
+   @container, not @media: this used to be `@media (max-width: 860px)`,
+   which only ever measures the top-level page's own viewport — so
+   <ecm-viewer> embedded narrow (e.g. a sidebar widget on someone else's
+   site, `style="width: 30%"`) never got this layout no matter how little
+   room it actually had, since the *page* around it could easily still be
+   well over 860px wide. The desktop grid's two fixed-px tracks then just
+   overflowed the narrow host and squeezed the middle "stage" (1fr) column
+   down to 0 — the diagram silently disappeared with no way to reach it,
+   while the images/table panels rendered fine (their tracks are fixed-px,
+   not 1fr, so they don't collapse the same way). A `@container` query
+   measures the actual size of the nearest ancestor with `container-type`
+   set — here that's :root/:host (see the top of this file), deliberately
+   *not* .ecm-viewer-app itself: a container query can't match styles on
+   the very element establishing the container (confirmed empirically —
+   self-querying silently never matched), so containment has to sit one
+   level up, on an actual ancestor of .ecm-viewer-app, for this to fire at
+   all. Net effect: this now correctly reacts to how much room the
+   *widget* has, matching a plain narrow browser window too. */
+@container ecm-viewer (max-width: 860px) {
   .ecm-viewer-app.mode-full {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto 1fr;
