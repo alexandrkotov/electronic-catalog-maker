@@ -271,6 +271,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // Briefly true right after a successful in-dialog copy — same pattern as
   // the editor's collabShareCopyFeedback (packages/editor/src/main.ts).
   let shareViewCopyFeedback = false;
+  // Identifies the one table-cell copy button that should show "just
+  // copied" feedback, briefly, after a click. Keyed by row url + column
+  // (rather than just the button element) because render() rebuilds the
+  // whole table on every state change — the DOM node the click happened on
+  // won't exist anymore by the time the timeout fires.
+  let copiedCell: { url: string; column: string } | null = null;
   // "Export PDF…" — see the `exportPdf` option's own doc for why this file
   // doesn't reach for pdfExport.ts directly. The options dialog asks the
   // two questions in PdfExportOptions before the actual export runs;
@@ -729,6 +735,29 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (!db || activeImageId === null) return;
     const link = listLinksForImage(db, activeImageId).find((l) => l.url === url);
     if (link) actionSelectHotspot(link.id, "stage");
+  }
+
+  /**
+   * Copies one table cell's full value (button lives inside the cell's own
+   * hover popover — see copyCellBtn). Deliberately separate from row
+   * selection: the popover fills the whole cell, so without stopPropagation
+   * on the button's own click listener (see wireEvents) this would also
+   * re-select the row and jump the hotspot, which nothing here asks for.
+   */
+  async function actionCopyCellText(url: string, column: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Clipboard permission denied/unavailable — nothing else useful to do;
+      // the value was still visible in the (already-open) popover to select by hand.
+      return;
+    }
+    copiedCell = { url, column };
+    render();
+    setTimeout(() => {
+      if (copiedCell?.url === url && copiedCell?.column === column) copiedCell = null;
+      render();
+    }, 1200);
   }
 
   /** Steps to the next/previous hotspot sharing the current selection's url, wrapping around. */
@@ -1339,6 +1368,16 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     return `<div class="${classes.join(" ")}" data-id="${l.id}" data-url="${escapeHtml(l.url)}" style="top:${l.top}px;left:${l.left}px;font-size:${l.fontSize}px" title="${escapeHtml(l.url)}">${escapeHtml(l.name)}</div>`;
   }
 
+  // Small dot button rendered inside a table cell's hover popover — copies
+  // the cell's full (untruncated) value. `text` is already HTML-escaped by
+  // the caller; emptiness is unaffected by escaping, so checking it here is
+  // safe and skips rendering a button with nothing to copy.
+  function copyCellBtn(url: string, column: string, text: string): string {
+    if (!text) return "";
+    const copied = copiedCell?.url === url && copiedCell?.column === column;
+    return `<button type="button" class="copy-cell-btn ${copied ? "copied" : ""}" data-copy-url="${escapeHtml(url)}" data-copy-column="${escapeHtml(column)}" aria-label="${copied ? "Copied" : "Copy value"}"></button>`;
+  }
+
   function rowHtml(r: CatalogRow, selectedUrl: string | null): string {
     const selected = r.url === selectedUrl ? "selected" : "";
     const buyUrl = typeof r.extra.buy_url === "string" && r.extra.buy_url ? r.extra.buy_url : null;
@@ -1347,7 +1386,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       .filter(([k]) => k !== "buy_url")
       .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(String(v))}`)
       .join(", ");
-    const cell = (text: string) => `<td><span class="cell-text">${text}</span></td>`;
+    // The copy button is a sibling of .cell-text, not nested inside it,
+    // and anchored to the <td>'s own corner (see .copy-cell-btn CSS) rather
+    // than the balloon's — the balloon's box can grow much wider than the
+    // cell itself (up to 18rem), and a button anchored to *that* box's
+    // corner would drift out over neighboring columns, including Buy's
+    // higher-stacked button, and lose clicks to it. Omitted entirely for
+    // empty cells, nothing there worth copying.
+    const cell = (column: string, text: string) => `<td><span class="cell-text">${text}</span>${copyCellBtn(r.url, column, text)}</td>`;
     let buyControl = "";
     if (cartId) {
       const inCart = cartItems.has(r.url);
@@ -1363,9 +1409,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // right after variable-length extra text made its on-screen position
     // jump around row to row, and Extra's hover-expand tooltip would flash
     // under the cursor while aiming straight down the Buy column.
-    const extraCell = `<td class="extra-cell"><span class="cell-text">${extra}</span></td>`;
+    const extraCell = `<td class="extra-cell"><span class="cell-text">${extra}</span>${copyCellBtn(r.url, "extra", extra)}</td>`;
     const buyCell = `<td class="buy-cell">${buyControl}</td>`;
-    return `<tr data-url="${escapeHtml(r.url)}" class="${selected}">${cell(escapeHtml(r.name))}${cell(escapeHtml(r.sku))}${cell(escapeHtml(r.description))}${extraCell}${buyCell}</tr>`;
+    return `<tr data-url="${escapeHtml(r.url)}" class="${selected}">${cell("name", escapeHtml(r.name))}${cell("sku", escapeHtml(r.sku))}${cell("description", escapeHtml(r.description))}${extraCell}${buyCell}</tr>`;
   }
 
   function wireEvents() {
@@ -1487,6 +1533,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
     root.querySelectorAll<HTMLTableRowElement>("tr[data-url]").forEach((tr) => {
       tr.addEventListener("click", () => actionSelectRowByUrl(tr.dataset.url!));
+    });
+
+    root.querySelectorAll<HTMLButtonElement>(".copy-cell-btn[data-copy-url]").forEach((btn) => {
+      btn.addEventListener("click", (evt) => {
+        evt.stopPropagation(); // don't also select the row/hotspot underneath
+        const value = btn.previousElementSibling as HTMLElement | null; // .cell-text
+        void actionCopyCellText(btn.dataset.copyUrl!, btn.dataset.copyColumn!, value?.textContent ?? "");
+      });
     });
 
     root.querySelectorAll<HTMLButtonElement>(".buy-btn[data-cart-url]").forEach((btn) => {
