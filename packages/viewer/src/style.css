@@ -421,6 +421,13 @@ td {
   white-space: nowrap;
 }
 
+/* Hidden outside the popover (see the copy-cell-btn rules below) — a plain
+   <button> would otherwise render inline right after the text, clipped from
+   view by .cell-text's overflow:hidden but still reachable by Tab. */
+.copy-cell-btn {
+  display: none;
+}
+
 /* Hover-to-expand only where a real pointer can hover without "using up" a
    tap to get there — on iOS Safari, a touch on an element with :hover
    styles fires the hover state on the *first* tap instead of a click (the
@@ -451,7 +458,10 @@ td {
     color: #1a1a1a;
     border: 1px solid #eab308;
     border-radius: 4px;
-    padding: 0.3rem 0.5rem;
+    /* Extra left padding gives .copy-cell-btn (see below) some breathing
+       room from the text — it sits in this box's own top-left corner,
+       matching the left: -1px anchor above. */
+    padding: 0.3rem 0.5rem 0.3rem 1.1rem;
     box-shadow: 0 4px 12px rgb(0 0 0 / 0.35);
   }
 
@@ -462,6 +472,60 @@ td {
   .extra-cell:hover .cell-text {
     left: auto;
     right: -1px;
+    /* Mirror the base rule's padding — the copy button now reserves room
+       on the right (its anchor corner here), not the left. */
+    padding: 0.3rem 1.1rem 0.3rem 0.5rem;
+  }
+
+  /* Copy button: a small dot in the cell's own corner (backlog request —
+     click straight on the balloon would also re-select the row/hotspot
+     underneath, since the popover fills the whole cell, so this needed to
+     be its own distinct hit target rather than reusing the balloon click).
+     Anchored to <td> (a sibling of .cell-text, not nested inside it) so it
+     stays put at the cell's own corner instead of following the balloon —
+     the balloon can grow much wider than the cell, and a button chasing
+     *its* corner would drift over neighboring columns (Buy's button in
+     particular, which sits at z-index 21 to stay clickable through the
+     balloon and would otherwise steal this button's clicks too).
+
+     Anchored top-*left* by default to match .cell-text's own left-anchor
+     (left: -1px above) — the balloon's text always starts right there, so
+     the dot sits in the empty corner before any text rather than drifting
+     out over the middle of a word as the balloon grows wider. .extra-cell
+     overrides to top-right below, matching *its* right-anchored balloon
+     the same way. */
+  td:hover .copy-cell-btn {
+    display: inline-block;
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: #eab308; /* same amber as the balloon's own border, just as a solid dot */
+    cursor: pointer;
+    /* Above the balloon itself (.cell-text, z-index: 20) — otherwise the
+       balloon (an explicitly z-indexed box, unlike this button which would
+       otherwise be z-index:auto) paints over it despite coming first in
+       the DOM. */
+    z-index: 21;
+  }
+
+  td.extra-cell:hover .copy-cell-btn {
+    left: auto;
+    right: 4px;
+  }
+
+  td:hover .copy-cell-btn:hover {
+    background: #a16207;
+  }
+
+  /* "Just copied" feedback — a contrasting color swap, not a text/layout
+     change, so it can't shift the wrapped text underneath it. */
+  td:hover .copy-cell-btn.copied {
+    background: #16a34a;
   }
 }
 
