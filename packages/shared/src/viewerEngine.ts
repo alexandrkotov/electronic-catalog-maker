@@ -1386,14 +1386,16 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       .filter(([k]) => k !== "buy_url")
       .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(String(v))}`)
       .join(", ");
-    // The copy button is a sibling of .cell-text, not nested inside it,
-    // and anchored to the <td>'s own corner (see .copy-cell-btn CSS) rather
-    // than the balloon's — the balloon's box can grow much wider than the
-    // cell itself (up to 18rem), and a button anchored to *that* box's
-    // corner would drift out over neighboring columns, including Buy's
-    // higher-stacked button, and lose clicks to it. Omitted entirely for
-    // empty cells, nothing there worth copying.
-    const cell = (column: string, text: string) => `<td><span class="cell-text">${text}</span>${copyCellBtn(r.url, column, text)}</td>`;
+    // The copy button lives inside .cell-text (so it can center itself
+    // vertically against the balloon's own — variable, wraps-with-content —
+    // height, see .copy-cell-btn CSS) but anchored horizontally to
+    // .cell-text's *stable* edge (left here, right for .extra-cell below):
+    // that edge never moves as the balloon grows wider with more text,
+    // unlike the opposite edge, which would drift the button out over
+    // neighboring columns — Buy's button in particular, caught live via
+    // Playwright colliding right through it. Omitted entirely for empty
+    // cells, nothing there worth copying.
+    const cell = (column: string, text: string) => `<td><span class="cell-text">${text}${copyCellBtn(r.url, column, text)}</span></td>`;
     let buyControl = "";
     if (cartId) {
       const inCart = cartItems.has(r.url);
@@ -1409,7 +1411,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // right after variable-length extra text made its on-screen position
     // jump around row to row, and Extra's hover-expand tooltip would flash
     // under the cursor while aiming straight down the Buy column.
-    const extraCell = `<td class="extra-cell"><span class="cell-text">${extra}</span>${copyCellBtn(r.url, "extra", extra)}</td>`;
+    const extraCell = `<td class="extra-cell"><span class="cell-text">${extra}${copyCellBtn(r.url, "extra", extra)}</span></td>`;
     const buyCell = `<td class="buy-cell">${buyControl}</td>`;
     return `<tr data-url="${escapeHtml(r.url)}" class="${selected}">${cell("name", escapeHtml(r.name))}${cell("sku", escapeHtml(r.sku))}${cell("description", escapeHtml(r.description))}${extraCell}${buyCell}</tr>`;
   }
@@ -1538,8 +1540,10 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     root.querySelectorAll<HTMLButtonElement>(".copy-cell-btn[data-copy-url]").forEach((btn) => {
       btn.addEventListener("click", (evt) => {
         evt.stopPropagation(); // don't also select the row/hotspot underneath
-        const value = btn.previousElementSibling as HTMLElement | null; // .cell-text
-        void actionCopyCellText(btn.dataset.copyUrl!, btn.dataset.copyColumn!, value?.textContent ?? "");
+        // .cell-text's own textContent (button is now its last child, but
+        // the button itself has no text, so this is just the cell's value).
+        const text = btn.parentElement?.textContent ?? "";
+        void actionCopyCellText(btn.dataset.copyUrl!, btn.dataset.copyColumn!, text);
       });
     });
 
