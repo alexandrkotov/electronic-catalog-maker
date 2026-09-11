@@ -141,6 +141,9 @@ A few other things worth knowing:
    jump straight to it.
 5. Zoom with **+ / − / Reset** (bottom-right) or Ctrl/Cmd+scroll over the
    image; drag the bare image to pan around it.
+6. A table cell too narrow for its full value shows it in a popover on
+   hover — click the small dot in its corner to copy that value to the
+   clipboard.
 
 Someone shared a catalog with you as a link instead of a file? Click
 **Open remote catalog…** and paste it in, or just open the link directly —
@@ -474,7 +477,9 @@ a Buy button per row (from an `extra.buy_url`) that can accumulate into a
 combined multi-item checkout — configurable per catalog, and not tied to
 any one store (see "Selling from a catalog"), and exporting the whole
 catalog as a printable A4 PDF with a QR code per item (see "Exporting to
-PDF"). Both apps are also
+PDF"), and a copy button on the viewer's table-cell hover popover, for
+grabbing a full value (SKU, description, `extra`, …) without retyping it.
+Both apps are also
 installable as standalone desktop apps straight from the browser (see
 "Installing as an app") — purely optional, same behavior either way. The
 viewer is also embeddable elsewhere as `<ecm-viewer>` (see "Embedding the
