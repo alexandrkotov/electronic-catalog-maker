@@ -20,6 +20,7 @@
   --hotspot-bg: #fde047;
   --hotspot-border: #a16207;
   --hotspot-row-match-bg: #f97316;
+  --row-match-soft: #ffedd5;
   --hotspot-pending-bg: #fecaca;
   --hotspot-pending-border: #b91c1c;
   --hotspot-pending-text: #1a1a1a;
@@ -42,6 +43,7 @@
   --hotspot-bg: #eab308;
   --hotspot-border: #fde68a;
   --hotspot-row-match-bg: #fb923c;
+  --row-match-soft: #7c2d12;
   --hotspot-pending-bg: #7f1d1d;
   --hotspot-pending-border: #fca5a5;
   /* The fixed dark `.hotspot` text color (#1a1a1a, kept for the yellow
@@ -473,6 +475,15 @@ tr.clickable-row:hover {
 
 tr.clickable-row.editing {
   background: var(--accent-soft);
+}
+
+/* A Table row whose Address matches the hotspot/link currently being
+   edited — not itself open for editing, so it gets a distinct (softer,
+   warm) tint rather than .editing's own blue, mirroring the stage's own
+   .hotspot.row-match. Only ever applied when .editing isn't (see
+   renderRowsSection), so the two never compete on one row. */
+tr.clickable-row.row-match {
+  background: var(--row-match-soft);
 }
 
 .inspector {

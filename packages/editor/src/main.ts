@@ -1949,9 +1949,27 @@ function actionCycleInstance(delta: number) {
  * to do with where the form ends up) and clicking a row in "Links on this
  * image" (whose form renders *above* the list in the DOM, so on an image
  * with many hotspots a preserved scroll position can leave it off-screen).
+ *
+ * Also nudges the highlighted row itself into view within its own list —
+ * "Links on this image" is capped to ~10 rows with its own internal scroll
+ * (see .table-scroll in style.css), independent of the inspector panel's
+ * scroll that the line above handles. Without this, clicking a hotspot far
+ * down a long list (or stepping through duplicates via ‹ N of M ›)
+ * highlighted the right row but left it scrolled out of view — caught live
+ * by the user on a real 86-hotspot image.
+ *
+ * And — same idea, other direction — "Table (N rows)" also highlights
+ * (and now scrolls to) whichever row shares this link's url, per the
+ * user's own follow-up request: a hotspot click should reveal both its own
+ * Links entry *and* its data row, not just the former.
  */
 function scrollInspectorToEditLink() {
   document.getElementById("form-edit-link")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  document.querySelector("tr[data-link-id].editing")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  // .row-match, not .editing — editing a link never sets editingRowId, so
+  // the matching table row (if any) only ever carries .row-match (see
+  // renderRowsSection).
+  document.querySelector("tr[data-row-id].row-match")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 /**
@@ -1959,10 +1977,13 @@ function scrollInspectorToEditLink() {
  * visible. Always runs — the form renders *above* the table in the DOM
  * (see renderEditRowForm/renderRowsSection order in render()), so a long
  * table's preserved scroll position can leave it off-screen above the
- * clicked row, same reasoning as "Edit link" above.
+ * clicked row, same reasoning as "Edit link" above. Also nudges the
+ * highlighted row into view within its own capped-height list, same
+ * reasoning as scrollInspectorToEditLink above.
  */
 function scrollInspectorToEditRow() {
   document.getElementById("form-edit-row")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  document.querySelector("tr[data-row-id].editing")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 /** Clicking a search result: switches image (if needed) and opens the matching hotspot for editing. */
@@ -2299,6 +2320,13 @@ function render() {
   const availableLinks = links.filter((l) => !usedUrls.has(l.url));
   const editingLink = links.find((l) => l.id === editingLinkId) ?? null;
   const editingRow = rows.find((r) => r.id === editingRowId) ?? null;
+  // The url of whichever's being edited (link or row) — feeds the hotspot
+  // row-match highlight below, the Table row-match highlight (see
+  // renderRowsSection), and the instance-nav "N of M" control, mirroring
+  // the viewer. Whichever one you clicked, the *other* representation of
+  // the same part (a hotspot's matching table row, or vice versa) is easy
+  // to lose track of on a dense diagram, so both point back to each other.
+  const editingUrl = editingRow?.url ?? editingLink?.url ?? null;
   // Feeds the Extra field's key datalist below — every key already used
   // anywhere in the catalog, not just this image, same reasoning as the
   // search panel's "Extra: <key>" dropdown a few lines further down.
@@ -2326,6 +2354,22 @@ function render() {
   const prevInspector = document.getElementById("inspector");
   const savedInspectorScrollTop =
     prevInspector && activeImageId === lastRenderedImageId ? prevInspector.scrollTop : null;
+  // Same problem again for "Links on this image"/"Table (N rows)"'s own
+  // internal scroll (see .table-scroll in style.css): clicking a row you
+  // can already see re-renders and would otherwise reset that list's box
+  // back to its own top regardless, which combined with the
+  // highlight-scrolling below (scrollInspectorToEditLink/…Row) looked like
+  // the whole list jumping to the top and animating back down to where it
+  // already was — caught live by the user right after .table-scroll
+  // shipped. Keyed by data-col-key ("links"/"rows") since there are two of
+  // these boxes and #id can't be reused across an innerHTML rebuild.
+  const savedTableScroll: Record<string, number> = {};
+  if (activeImageId === lastRenderedImageId) {
+    document.querySelectorAll<HTMLElement>(".table-scroll").forEach((el) => {
+      const key = el.querySelector("table")?.getAttribute("data-col-key");
+      if (key) savedTableScroll[key] = el.scrollTop;
+    });
+  }
   lastRenderedImageId = activeImageId;
 
   // Read by the mobile breakpoint's CSS (#app[data-mobile-tab=...]) to
@@ -2380,7 +2424,7 @@ function render() {
                  <div class="crosshair-box" id="crosshair-box"></div>
                  <div class="crosshair-h" id="crosshair-h"></div>
                  <div class="crosshair-v" id="crosshair-v"></div>
-                 ${links.map((l) => hotspotHtml(l, editingRow?.url ?? editingLink?.url ?? null)).join("")}
+                 ${links.map((l) => hotspotHtml(l, editingUrl)).join("")}
                  ${pendingHotspot ? `<div class="hotspot pending" style="top:${pendingHotspot.top}px;left:${pendingHotspot.left}px">new…</div>` : ""}
                  <div id="editing-balloons">${renderEditingBalloons(links, activeImage.id)}</div>
                </div>`
@@ -2401,7 +2445,7 @@ function render() {
       ${activeImage ? renderLinksSection(links, editingLinkId) : ""}
       ${activeImage ? renderRowForm(availableLinks) : ""}
       ${activeImage ? renderEditRowForm(editingRow) : ""}
-      ${activeImage ? renderRowsSection(rows, editingRowId) : ""}
+      ${activeImage ? renderRowsSection(rows, editingRowId, editingUrl) : ""}
     </div>
 
     ${renderConfirmOverlay()}
@@ -2425,6 +2469,10 @@ function render() {
     const inspector = document.getElementById("inspector");
     if (inspector) inspector.scrollTop = savedInspectorScrollTop;
   }
+  document.querySelectorAll<HTMLElement>(".table-scroll").forEach((el) => {
+    const key = el.querySelector("table")?.getAttribute("data-col-key");
+    if (key && savedTableScroll[key] !== undefined) el.scrollTop = savedTableScroll[key];
+  });
 
   wireEvents(links);
 }
@@ -3060,7 +3108,7 @@ function extraCellText(extra: Record<string, string>): string {
     .join(", ");
 }
 
-function renderRowsSection(rows: ReturnType<typeof listRowsForImage>, editingRowId: number | null): string {
+function renderRowsSection(rows: ReturnType<typeof listRowsForImage>, editingRowId: number | null, editingUrl: string | null): string {
   const [urlW, nameW, skuW, descriptionW, extraW] = colWidths.rows;
   return `
     <section>
@@ -3077,15 +3125,25 @@ function renderRowsSection(rows: ReturnType<typeof listRowsForImage>, editingRow
           </tr></thead>
           <tbody>
             ${rows
-              .map(
-                (r) =>
-                  // Extra alone gets the hover-expand treatment (see .extra-cell in
-                  // style.css) — it's the column most likely to overflow a
-                  // reasonably-sized column, and this is meant for a quick spot-check
-                  // across the whole image, not a place to also copy from (that's
-                  // still the row's own edit form).
-                  `<tr data-row-id="${r.id}" class="clickable-row${r.id === editingRowId ? " editing" : ""}"><td>${escapeHtml(r.url)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.sku)}</td><td>${escapeHtml(r.description)}</td><td class="extra-cell"><span class="cell-text">${escapeHtml(extraCellText(r.extra))}</span></td></tr>`,
-              )
+              .map((r) => {
+                // .editing: this exact row is open for editing. .row-match
+                // (new, mutually exclusive with .editing): not itself open,
+                // but its Address matches the hotspot/link that *is* — e.g.
+                // clicking a hotspot only ever sets editingLinkId, never
+                // editingRowId, so the id check alone would miss this
+                // row-in-the-table entirely. Mirrors the stage's own
+                // hotspot .row-match highlight (see hotspotHtml above),
+                // just pointed the other direction: hotspot → table row.
+                const isEditing = r.id === editingRowId;
+                const isRowMatch = !isEditing && editingUrl !== null && r.url === editingUrl;
+                const rowClass = isEditing ? " editing" : isRowMatch ? " row-match" : "";
+                // Extra alone gets the hover-expand treatment (see .extra-cell in
+                // style.css) — it's the column most likely to overflow a
+                // reasonably-sized column, and this is meant for a quick spot-check
+                // across the whole image, not a place to also copy from (that's
+                // still the row's own edit form).
+                return `<tr data-row-id="${r.id}" class="clickable-row${rowClass}"><td>${escapeHtml(r.url)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.sku)}</td><td>${escapeHtml(r.description)}</td><td class="extra-cell"><span class="cell-text">${escapeHtml(extraCellText(r.extra))}</span></td></tr>`;
+              })
               .join("")}
           </tbody>
         </table>
