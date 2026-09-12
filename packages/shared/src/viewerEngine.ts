@@ -240,6 +240,17 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // 0,0) — tracked so render() can restore the pan position instead of
   // losing it on every unrelated update (selecting a link/row, zooming, ...).
   let lastRenderedImageId: number | null = null;
+  // Whether the table panel has already had its one-time "reveal the Buy
+  // column" auto-scroll for the currently loaded catalog (see render() below
+  // and the reset in openBytes()). Buy sits in the rightmost table column and
+  // the panel's default column widths overflow its own width (see
+  // .table-panel's overflow-x in style.css), so a catalog with any buy_url
+  // anywhere gets scrolled all the way right the first time its table
+  // actually renders — after that, render()'s wholesale innerHTML rebuild
+  // preserves whatever scroll position the table panel already had (same
+  // pattern as #stage-scroll's pan position below) instead of fighting a
+  // deliberate manual scroll.
+  let tableAutoScrolledForBuy = false;
   // The URL the catalog was last (re)loaded from, if any — set on every
   // successful loadFromUrl() and used by actionRefresh() to refetch the same
   // source (e.g. a catalog shared via a cloud drive that another editor
@@ -626,6 +637,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     selectedLinkId = null;
     zoom = 1;
     mobileTab = "images"; // fresh catalog — start from the image list, same as opening one the first time
+    tableAutoScrolledForBuy = false; // this catalog's table hasn't had its first-display Buy-reveal scroll yet
     remoteDialogOpen = false;
     openedFileHandle = handle;
     if (handle) {
@@ -1049,6 +1061,15 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         : null;
     lastRenderedImageId = activeImageId;
 
+    // Same rebuild-loses-scroll problem as #stage-scroll above, but for the
+    // table panel's *horizontal* scroll (its default column widths overflow
+    // its own width — see .table-panel's overflow-x in style.css). Preserved
+    // across every unrelated re-render once the one-time Buy-reveal below
+    // has run, so scrolling right to click Buy doesn't get silently undone
+    // by the next hotspot click.
+    const prevTablePanel = root.querySelector<HTMLElement>(".table-panel");
+    const savedTableScrollLeft = prevTablePanel ? prevTablePanel.scrollLeft : null;
+
     // Styling hooks live on `container` itself (a class, not a hardcoded id —
     // it might be the standalone app's own #app div, or a plain div created
     // inside a shadow root by the embed) so nothing here assumes who created it.
@@ -1167,6 +1188,23 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       if (stageScroll) {
         stageScroll.scrollLeft = savedScroll.left;
         stageScroll.scrollTop = savedScroll.top;
+      }
+    }
+
+    const tablePanel = root.querySelector<HTMLElement>(".table-panel");
+    if (tablePanel) {
+      if (!tableAutoScrolledForBuy) {
+        // First time this catalog's table actually renders: if any row
+        // anywhere has a buy_url, scroll all the way right so the Buy
+        // column (always the table's last column) is visible immediately,
+        // without the visitor needing to notice/discover the panel's own
+        // horizontal scrollbar.
+        if (activeImage && db && catalogHasAnyBuyUrl(listAllRows(db))) {
+          tablePanel.scrollLeft = tablePanel.scrollWidth;
+        }
+        if (activeImage) tableAutoScrolledForBuy = true;
+      } else if (savedTableScrollLeft !== null) {
+        tablePanel.scrollLeft = savedTableScrollLeft;
       }
     }
 
