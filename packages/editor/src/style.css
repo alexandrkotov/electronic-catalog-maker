@@ -550,6 +550,46 @@ tr.clickable-row.editing {
   width: auto;
 }
 
+.extra-pairs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.extra-pair {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.extra-pair .extra-key {
+  flex: 0 0 40%;
+  min-width: 0;
+}
+
+.extra-pair .extra-value {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.btn-remove-pair {
+  flex: 0 0 auto;
+  padding: 0.35rem 0.5rem;
+  line-height: 1;
+  color: #b91c1c;
+  border-color: #b91c1c;
+}
+
+.extra-field-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.extra-field-actions button {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.5rem;
+}
+
 button {
   padding: 0.35rem 0.75rem;
   border: 1px solid var(--border);

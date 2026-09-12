@@ -2083,7 +2083,7 @@ function actionCancelEditLink() {
   render();
 }
 
-/** Parses the "Extra characteristics (JSON)" textarea; returns null (and sets a status message) if invalid. */
+/** Parses the "Edit as JSON…" fallback textarea; returns null (and sets a status message) if invalid. */
 function parseExtraField(extraText: string): Record<string, string> | null {
   if (!extraText.trim()) return {};
   try {
@@ -2094,10 +2094,141 @@ function parseExtraField(extraText: string): Record<string, string> | null {
   }
 }
 
-function actionAddRow(url: string, name: string, sku: string, description: string, extraText: string) {
+/** One key/value row inside an Extra field's pairs UI — used both for the initial render and to rebuild rows after switching back from "Edit as JSON…". */
+function extraPairRowHtml(key: string, value: string): string {
+  return `
+    <div class="extra-pair">
+      <input type="text" class="extra-key" list="extra-key-options" placeholder="Key" value="${escapeHtml(key)}" />
+      <input type="text" class="extra-value" placeholder="Value" value="${escapeHtml(value)}" />
+      <button type="button" class="btn-remove-pair" title="Remove" aria-label="Remove">×</button>
+    </div>`;
+}
+
+/**
+ * The Extra field itself: a list of key/value pairs (the default, backlog
+ * item 8) with a JSON-textarea fallback for pasting a ready-made object —
+ * both live in the DOM at once, `.extra-json`'s `display` says which is
+ * showing. Shared by "New table row" and "Edit table row"; each caller's
+ * form has its own instance, told apart at wiring/submit time by walking up
+ * to the nearest `.extra-field`, not by a per-form id.
+ */
+function renderExtraField(extra: Record<string, string>): string {
+  return `
+    <div class="field extra-field">
+      <label>Extra characteristics</label>
+      <div class="extra-pairs">${Object.entries(extra)
+        .map(([k, v]) => extraPairRowHtml(k, v))
+        .join("")}</div>
+      <textarea class="extra-json" rows="3" placeholder='{"weight": "2.3 kg"}' style="display:none">${escapeHtml(Object.keys(extra).length ? JSON.stringify(extra, null, 2) : "")}</textarea>
+      <div class="extra-field-actions">
+        <button type="button" class="btn-add-pair">+ Add pair</button>
+        <button type="button" class="btn-toggle-extra-json">Edit as JSON…</button>
+      </div>
+    </div>`;
+}
+
+/** Reads every `.extra-pair` row currently inside `fieldEl`, trimming keys and dropping blank ones. `duplicates` lists any key entered more than once (case-sensitive, after trim) — the caller decides whether that needs confirming. */
+function collectExtraPairs(fieldEl: HTMLElement): { entries: [string, string][]; duplicates: string[] } {
+  const entries: [string, string][] = [];
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  fieldEl.querySelectorAll<HTMLDivElement>(".extra-pair").forEach((row) => {
+    const key = (row.querySelector<HTMLInputElement>(".extra-key")?.value ?? "").trim();
+    if (!key) return;
+    const value = row.querySelector<HTMLInputElement>(".extra-value")?.value ?? "";
+    if (seen.has(key)) duplicates.add(key);
+    seen.add(key);
+    entries.push([key, value]);
+  });
+  return { entries, duplicates: [...duplicates] };
+}
+
+/**
+ * Resolves `formEl`'s Extra field (pairs UI or the JSON fallback, whichever
+ * is currently showing) and hands the finished object to `onResolved` — the
+ * shared last step before actionAddRow/actionSaveRowEdit. A duplicate key in
+ * the pairs UI doesn't block saving, same policy as the existing hotspot
+ * name/address conflict check (askConfirm below): it just confirms first,
+ * since the last value winning is often intentional (correcting a typo by
+ * re-adding the pair) rather than a mistake.
+ */
+function resolveExtraThen(formEl: HTMLFormElement, onResolved: (extra: Record<string, string>) => void) {
+  const fieldEl = formEl.querySelector<HTMLElement>(".extra-field");
+  if (!fieldEl) {
+    onResolved({});
+    return;
+  }
+  const jsonTextarea = fieldEl.querySelector<HTMLTextAreaElement>(".extra-json")!;
+  if (jsonTextarea.style.display !== "none") {
+    const extra = parseExtraField(jsonTextarea.value);
+    if (extra === null) return; // parseExtraField already set a status message
+    onResolved(extra);
+    return;
+  }
+  const { entries, duplicates } = collectExtraPairs(fieldEl);
+  const extra = Object.fromEntries(entries);
+  if (duplicates.length > 0) {
+    const list = duplicates.map((k) => `"${k}"`).join(", ");
+    const verb = duplicates.length > 1 ? "are" : "is";
+    askConfirm(`Key ${list} ${verb} entered twice — only the last value for each will be kept. Save anyway?`, () => onResolved(extra));
+    return;
+  }
+  onResolved(extra);
+}
+
+/**
+ * Wires one Extra field's Add/Remove/toggle buttons. Called for every
+ * `.extra-field` after each render() (there can be two live at once — "New
+ * table row" and "Edit table row" — same pattern as the other per-row
+ * listeners in wireEvents()). Add/remove/toggle patch the DOM directly
+ * rather than going through render(), so typing elsewhere in the same form
+ * (or the other one) is never disturbed.
+ */
+function wireExtraField(fieldEl: HTMLElement) {
+  const pairsContainer = fieldEl.querySelector<HTMLDivElement>(".extra-pairs")!;
+  const jsonTextarea = fieldEl.querySelector<HTMLTextAreaElement>(".extra-json")!;
+  const addBtn = fieldEl.querySelector<HTMLButtonElement>(".btn-add-pair")!;
+  const toggleBtn = fieldEl.querySelector<HTMLButtonElement>(".btn-toggle-extra-json")!;
+
+  function wireRemoveButton(row: HTMLElement) {
+    row.querySelector(".btn-remove-pair")?.addEventListener("click", () => row.remove());
+  }
+  pairsContainer.querySelectorAll<HTMLDivElement>(".extra-pair").forEach(wireRemoveButton);
+
+  addBtn.addEventListener("click", () => {
+    pairsContainer.insertAdjacentHTML("beforeend", extraPairRowHtml("", ""));
+    const row = pairsContainer.lastElementChild as HTMLElement;
+    wireRemoveButton(row);
+    row.querySelector<HTMLInputElement>(".extra-key")?.focus();
+  });
+
+  toggleBtn.addEventListener("click", () => {
+    const showingJson = jsonTextarea.style.display !== "none";
+    if (showingJson) {
+      const parsed = parseExtraField(jsonTextarea.value);
+      if (parsed === null) return; // stay in JSON mode, status message already set
+      pairsContainer.innerHTML = Object.entries(parsed)
+        .map(([k, v]) => extraPairRowHtml(k, String(v)))
+        .join("");
+      pairsContainer.querySelectorAll<HTMLDivElement>(".extra-pair").forEach(wireRemoveButton);
+      jsonTextarea.style.display = "none";
+      pairsContainer.style.display = "";
+      addBtn.style.display = "";
+      toggleBtn.textContent = "Edit as JSON…";
+    } else {
+      const { entries } = collectExtraPairs(fieldEl);
+      const obj = Object.fromEntries(entries);
+      jsonTextarea.value = entries.length ? JSON.stringify(obj, null, 2) : "";
+      pairsContainer.style.display = "none";
+      addBtn.style.display = "none";
+      jsonTextarea.style.display = "";
+      toggleBtn.textContent = "Edit as pairs…";
+    }
+  });
+}
+
+function actionAddRow(url: string, name: string, sku: string, description: string, extra: Record<string, string>) {
   if (!db || activeImageId === null) return;
-  const extra = parseExtraField(extraText);
-  if (extra === null) return;
   applyAddAndBroadcast("addRow", addRow, { imageId: activeImageId, url, name, sku, description, extra });
   setStatus(`Row for "${url}" added.`);
 }
@@ -2115,10 +2246,8 @@ function actionCancelEditRow() {
   render();
 }
 
-function actionSaveRowEdit(name: string, sku: string, description: string, extraText: string) {
+function actionSaveRowEdit(name: string, sku: string, description: string, extra: Record<string, string>) {
   if (!db || editingRowId === null) return;
-  const extra = parseExtraField(extraText);
-  if (extra === null) return;
   applyAndBroadcast("updateRow", updateRow, editingRowId, { name, sku, description, extra });
   editingRowId = null;
   setStatus(`Row "${name}" updated.`);
@@ -2170,6 +2299,10 @@ function render() {
   const availableLinks = links.filter((l) => !usedUrls.has(l.url));
   const editingLink = links.find((l) => l.id === editingLinkId) ?? null;
   const editingRow = rows.find((r) => r.id === editingRowId) ?? null;
+  // Feeds the Extra field's key datalist below — every key already used
+  // anywhere in the catalog, not just this image, same reasoning as the
+  // search panel's "Extra: <key>" dropdown a few lines further down.
+  const extraKeys = db ? collectExtraKeys(listAllRows(db)) : [];
   // Other hotspots on this image sharing the edited link's url (same part
   // drawn more than once) — feeds both the row-match highlight below and
   // the instance-nav "N of M" control, mirroring the viewer.
@@ -2261,6 +2394,7 @@ function render() {
     <div class="panel-divider" id="divider-inspector" title="Drag to resize"></div>
 
     <div class="inspector" id="inspector">
+      <datalist id="extra-key-options">${extraKeys.map((k) => `<option value="${escapeHtml(k)}"></option>`).join("")}</datalist>
       ${activeImage ? renderImageForm(activeImage, images) : ""}
       ${activeImage ? renderLinkForm(links) : ""}
       ${activeImage ? renderEditLinkForm(editingLink) : ""}
@@ -2887,7 +3021,7 @@ function renderRowForm(availableLinks: CatalogLink[]): string {
                <div class="field"><label>Name</label><input name="name" /></div>
                <div class="field"><label>SKU</label><input name="sku" /></div>
                <div class="field"><label>Description</label><input name="description" /></div>
-               <div class="field"><label>Extra characteristics (JSON)</label><textarea name="extra" rows="3" placeholder='{"weight": "2.3 kg"}'></textarea></div>
+               ${renderExtraField({})}
                <button type="submit">Add row</button>
              </form>`
       }
@@ -2905,7 +3039,7 @@ function renderEditRowForm(row: CatalogRow | null): string {
         <div class="field"><label>Name</label><input name="name" value="${escapeHtml(row.name)}" /></div>
         <div class="field"><label>SKU</label><input name="sku" value="${escapeHtml(row.sku)}" /></div>
         <div class="field"><label>Description</label><input name="description" value="${escapeHtml(row.description)}" /></div>
-        <div class="field"><label>Extra characteristics (JSON)</label><textarea name="extra" rows="3" placeholder='{"weight": "2.3 kg"}'>${escapeHtml(Object.keys(row.extra).length ? JSON.stringify(row.extra, null, 2) : "")}</textarea></div>
+        ${renderExtraField(row.extra)}
         <div style="display:flex; gap:0.5rem; align-items:center">
           <button type="submit">Save changes</button>
           <button type="button" id="btn-cancel-edit-row">Cancel</button>
@@ -3217,14 +3351,13 @@ function wireEvents(links: CatalogLink[]) {
 
   document.getElementById("form-row")?.addEventListener("submit", (evt) => {
     evt.preventDefault();
-    const fd = new FormData(evt.target as HTMLFormElement);
-    actionAddRow(
-      String(fd.get("url") ?? ""),
-      String(fd.get("name") ?? ""),
-      String(fd.get("sku") ?? ""),
-      String(fd.get("description") ?? ""),
-      String(fd.get("extra") ?? ""),
-    );
+    const formEl = evt.target as HTMLFormElement;
+    const fd = new FormData(formEl);
+    const url = String(fd.get("url") ?? "");
+    const name = String(fd.get("name") ?? "");
+    const sku = String(fd.get("sku") ?? "");
+    const description = String(fd.get("description") ?? "");
+    resolveExtraThen(formEl, (extra) => actionAddRow(url, name, sku, description, extra));
   });
 
   document.querySelectorAll<HTMLTableRowElement>("tr[data-row-id]").forEach((tr) => {
@@ -3233,16 +3366,17 @@ function wireEvents(links: CatalogLink[]) {
 
   document.getElementById("form-edit-row")?.addEventListener("submit", (evt) => {
     evt.preventDefault();
-    const fd = new FormData(evt.target as HTMLFormElement);
-    actionSaveRowEdit(
-      String(fd.get("name") ?? ""),
-      String(fd.get("sku") ?? ""),
-      String(fd.get("description") ?? ""),
-      String(fd.get("extra") ?? ""),
-    );
+    const formEl = evt.target as HTMLFormElement;
+    const fd = new FormData(formEl);
+    const name = String(fd.get("name") ?? "");
+    const sku = String(fd.get("sku") ?? "");
+    const description = String(fd.get("description") ?? "");
+    resolveExtraThen(formEl, (extra) => actionSaveRowEdit(name, sku, description, extra));
   });
   document.getElementById("btn-cancel-edit-row")?.addEventListener("click", actionCancelEditRow);
   document.getElementById("btn-delete-row")?.addEventListener("click", actionDeleteRow);
+
+  document.querySelectorAll<HTMLElement>(".extra-field").forEach(wireExtraField);
 }
 
 // ---------- presence activity tracking (Phase 5) ----------
