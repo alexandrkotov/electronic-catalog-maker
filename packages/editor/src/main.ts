@@ -1965,11 +1965,17 @@ function actionCycleInstance(delta: number) {
  */
 function scrollInspectorToEditLink() {
   document.getElementById("form-edit-link")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  document.querySelector("tr[data-link-id].editing")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  // block: "center", not "nearest" — these tables have a sticky <thead>
+  // (see .table-scroll thead th in style.css), and "nearest" only scrolls
+  // the minimum distance needed to bring the row's box into the container's
+  // viewport. That minimum can land the row directly *behind* the sticky
+  // header instead of below it, so it ends up still hidden. Centering it
+  // leaves enough headroom that it clears the header.
+  document.querySelector("tr[data-link-id].editing")?.scrollIntoView({ behavior: "smooth", block: "center" });
   // .row-match, not .editing — editing a link never sets editingRowId, so
   // the matching table row (if any) only ever carries .row-match (see
   // renderRowsSection).
-  document.querySelector("tr[data-row-id].row-match")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  document.querySelector("tr[data-row-id].row-match")?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 /**
@@ -1983,7 +1989,9 @@ function scrollInspectorToEditLink() {
  */
 function scrollInspectorToEditRow() {
   document.getElementById("form-edit-row")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  document.querySelector("tr[data-row-id].editing")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  // block: "center" — see the comment in scrollInspectorToEditLink: with a
+  // sticky <thead>, "nearest" can leave the row tucked behind the header.
+  document.querySelector("tr[data-row-id].editing")?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 /** Clicking a search result: switches image (if needed) and opens the matching hotspot for editing. */
