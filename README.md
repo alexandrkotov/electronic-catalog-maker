@@ -470,8 +470,10 @@ remember to by hand (though nothing stops you from doing so locally too).
 
 Functional end-to-end in the editor and viewer: create a catalog, place
 hotspots, add and edit data rows (including free-form `extra`
-characteristics as JSON — editing an already-saved row, not just adding a
-new one, highlights every hotspot that row's `url` is shared by), save/
+characteristics as a list of key/value pairs, with an "Edit as JSON…"
+fallback for pasting a ready-made object — editing an already-saved row,
+not just adding a new one, highlights every hotspot that row's `url` is
+shared by), save/
 export, group images into folders, search the whole catalog at once, open
 a catalog by URL or re-fetch it later with the viewer's **Refresh** to
 watch for changes saved elsewhere, share exactly what's on screen as a QR
