@@ -156,6 +156,11 @@ editor" above) — a link to wherever that item can be bought — and the
 viewer shows a **Buy** button next to that row, in its own column so it
 never shifts around as other rows' `extra` text changes length.
 
+If any row anywhere in the catalog has a `buy_url`, the table panel
+auto-scrolls all the way right the first time it's shown, so the Buy
+column is visible right away — no manual scrolling needed to discover it.
+This applies in both the full viewer and the `<ecm-viewer>` embed widget.
+
 By default, Buy adds the item to an in-memory cart (session-only, never
 saved anywhere): the toolbar's **🛒 Cart (N)** button opens one combined
 checkout for everything in it — but only for rows whose `buy_url` matches
