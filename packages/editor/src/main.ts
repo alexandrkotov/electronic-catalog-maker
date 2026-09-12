@@ -2988,21 +2988,23 @@ function renderLinksSection(links: CatalogLink[], editingLinkId: number | null):
   return `
     <section>
       <h2>Links on this image (${links.length})</h2>
-      <table data-col-key="links" style="table-layout:fixed; width:${colTableTotalWidth("links")}px">
-        <colgroup><col style="width:${nameW}px"><col style="width:${urlW}px"></colgroup>
-        <thead><tr>
-          <th>Name<span class="col-resize-handle" data-table="links" data-col="0"></span></th>
-          <th>Address<span class="col-resize-handle" data-table="links" data-col="1"></span></th>
-        </tr></thead>
-        <tbody>
-          ${links
-            .map(
-              (l) =>
-                `<tr data-link-id="${l.id}" class="clickable-row${l.id === editingLinkId ? " editing" : ""}"><td>${escapeHtml(l.name)}</td><td>${escapeHtml(l.url)}</td></tr>`,
-            )
-            .join("")}
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table data-col-key="links" style="table-layout:fixed; width:${colTableTotalWidth("links")}px">
+          <colgroup><col style="width:${nameW}px"><col style="width:${urlW}px"></colgroup>
+          <thead><tr>
+            <th>Name<span class="col-resize-handle" data-table="links" data-col="0"></span></th>
+            <th>Address<span class="col-resize-handle" data-table="links" data-col="1"></span></th>
+          </tr></thead>
+          <tbody>
+            ${links
+              .map(
+                (l) =>
+                  `<tr data-link-id="${l.id}" class="clickable-row${l.id === editingLinkId ? " editing" : ""}"><td>${escapeHtml(l.name)}</td><td>${escapeHtml(l.url)}</td></tr>`,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
       <p class="hint">Click a row (or its hotspot on the image) to edit or delete it.</p>
     </section>
   `;
@@ -3063,29 +3065,31 @@ function renderRowsSection(rows: ReturnType<typeof listRowsForImage>, editingRow
   return `
     <section>
       <h2>Table (${rows.length} rows)</h2>
-      <table data-col-key="rows" style="table-layout:fixed; width:${colTableTotalWidth("rows")}px">
-        <colgroup><col style="width:${urlW}px"><col style="width:${nameW}px"><col style="width:${skuW}px"><col style="width:${descriptionW}px"><col style="width:${extraW}px"></colgroup>
-        <thead><tr>
-          <th>Address<span class="col-resize-handle" data-table="rows" data-col="0"></span></th>
-          <th>Name<span class="col-resize-handle" data-table="rows" data-col="1"></span></th>
-          <th>SKU<span class="col-resize-handle" data-table="rows" data-col="2"></span></th>
-          <th>Description<span class="col-resize-handle" data-table="rows" data-col="3"></span></th>
-          <th>Extra<span class="col-resize-handle" data-table="rows" data-col="4"></span></th>
-        </tr></thead>
-        <tbody>
-          ${rows
-            .map(
-              (r) =>
-                // Extra alone gets the hover-expand treatment (see .extra-cell in
-                // style.css) — it's the column most likely to overflow a
-                // reasonably-sized column, and this is meant for a quick spot-check
-                // across the whole image, not a place to also copy from (that's
-                // still the row's own edit form).
-                `<tr data-row-id="${r.id}" class="clickable-row${r.id === editingRowId ? " editing" : ""}"><td>${escapeHtml(r.url)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.sku)}</td><td>${escapeHtml(r.description)}</td><td class="extra-cell"><span class="cell-text">${escapeHtml(extraCellText(r.extra))}</span></td></tr>`,
-            )
-            .join("")}
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table data-col-key="rows" style="table-layout:fixed; width:${colTableTotalWidth("rows")}px">
+          <colgroup><col style="width:${urlW}px"><col style="width:${nameW}px"><col style="width:${skuW}px"><col style="width:${descriptionW}px"><col style="width:${extraW}px"></colgroup>
+          <thead><tr>
+            <th>Address<span class="col-resize-handle" data-table="rows" data-col="0"></span></th>
+            <th>Name<span class="col-resize-handle" data-table="rows" data-col="1"></span></th>
+            <th>SKU<span class="col-resize-handle" data-table="rows" data-col="2"></span></th>
+            <th>Description<span class="col-resize-handle" data-table="rows" data-col="3"></span></th>
+            <th>Extra<span class="col-resize-handle" data-table="rows" data-col="4"></span></th>
+          </tr></thead>
+          <tbody>
+            ${rows
+              .map(
+                (r) =>
+                  // Extra alone gets the hover-expand treatment (see .extra-cell in
+                  // style.css) — it's the column most likely to overflow a
+                  // reasonably-sized column, and this is meant for a quick spot-check
+                  // across the whole image, not a place to also copy from (that's
+                  // still the row's own edit form).
+                  `<tr data-row-id="${r.id}" class="clickable-row${r.id === editingRowId ? " editing" : ""}"><td>${escapeHtml(r.url)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.sku)}</td><td>${escapeHtml(r.description)}</td><td class="extra-cell"><span class="cell-text">${escapeHtml(extraCellText(r.extra))}</span></td></tr>`,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
       <p class="hint">Click a row to edit its name, SKU, description or extra characteristics.</p>
     </section>
   `;

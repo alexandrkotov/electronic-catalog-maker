@@ -663,6 +663,24 @@ td {
   opacity: 0.5;
 }
 
+/* "Links on this image" and "Table (N rows)" can both run to dozens or
+   hundreds of rows on a real catalog — capping each one's own height to
+   roughly 10 rows and scrolling it internally keeps the rest of the
+   inspector panel (including the New/Edit forms that sit right after these
+   sections) from being pushed arbitrarily far down the page. */
+.table-scroll {
+  max-height: 18rem;
+  overflow: auto;
+}
+
+.table-scroll thead th {
+  position: sticky;
+  top: 0;
+  /* Opaque, matching the panel behind it — rows scrolling underneath a
+     transparent sticky header would show through and overlap its text. */
+  background: var(--bg-page);
+}
+
 /* Extra's cell in "Table (N rows)": its full text (every key/value pair,
    however many) shows as a floating card on hover instead of needing the
    column stretched permanently wide — for spot-checking data across a whole
