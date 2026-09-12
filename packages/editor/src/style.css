@@ -663,6 +663,49 @@ td {
   opacity: 0.5;
 }
 
+/* Extra's cell in "Table (N rows)": its full text (every key/value pair,
+   however many) shows as a floating card on hover instead of needing the
+   column stretched permanently wide — for spot-checking data across a whole
+   image without opening each row's edit form. Same mechanism and the same
+   fixed pale-yellow "note" card as the viewer's own table-cell hover
+   popover (packages/viewer/src/style.css) — reads as a highlighted note in
+   both themes, deliberately not a theme token. No copy button here (unlike
+   the viewer's): this is for audit, not copying, and the row's own edit
+   form already has every value in editable, selectable inputs. */
+td.extra-cell {
+  position: relative;
+}
+
+.extra-cell .cell-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  td.extra-cell:hover {
+    overflow: visible;
+  }
+
+  td.extra-cell:hover .cell-text {
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    z-index: 20;
+    display: block;
+    width: max-content;
+    max-width: 18rem;
+    white-space: normal;
+    background: #fef9c3;
+    color: #1a1a1a;
+    border: 1px solid #eab308;
+    border-radius: 4px;
+    padding: 0.3rem 0.5rem;
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.35);
+  }
+}
+
 .hint {
   font-size: 0.75rem;
   color: var(--muted);

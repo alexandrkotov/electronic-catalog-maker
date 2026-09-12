@@ -425,7 +425,7 @@ type ColTableKey = "links" | "rows";
 const COL_WIDTH_LIMITS = { min: 40, max: 400 };
 const DEFAULT_COL_WIDTHS: Record<ColTableKey, number[]> = {
   links: [110, 130], // Name, URL
-  rows: [60, 150, 80], // URL, Name, SKU
+  rows: [60, 120, 70, 120, 140], // URL, Name, SKU, Description, Extra
 };
 const colWidths: Record<ColTableKey, number[]> = {
   links: loadColWidths("links"),
@@ -2939,6 +2939,7 @@ function renderLinkForm(links: CatalogLink[]): string {
   return `
     <section>
       <h2>New link (hotspot)</h2>
+      <p class="hint">A hotspot's Address is what ties it to a row in the table below — several hotspots can share the same Address when the same part is drawn more than once on this diagram, and they'll all point to that one row.</p>
       ${
         pendingHotspot
           ? `<p class="hint">Position: top=${pendingHotspot.top}, left=${pendingHotspot.left}</p>
@@ -3050,23 +3051,37 @@ function renderEditRowForm(row: CatalogRow | null): string {
   `;
 }
 
+/** Extra's cell text for the row table — every key, unlike the viewer's Extra column which hides `buy_url` (it has a separate Buy button; the editor doesn't, so buy_url is just another value to audit here). */
+function extraCellText(extra: Record<string, string>): string {
+  return Object.entries(extra)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(", ");
+}
+
 function renderRowsSection(rows: ReturnType<typeof listRowsForImage>, editingRowId: number | null): string {
-  const [urlW, nameW, skuW] = colWidths.rows;
+  const [urlW, nameW, skuW, descriptionW, extraW] = colWidths.rows;
   return `
     <section>
       <h2>Table (${rows.length} rows)</h2>
       <table data-col-key="rows" style="table-layout:fixed; width:${colTableTotalWidth("rows")}px">
-        <colgroup><col style="width:${urlW}px"><col style="width:${nameW}px"><col style="width:${skuW}px"></colgroup>
+        <colgroup><col style="width:${urlW}px"><col style="width:${nameW}px"><col style="width:${skuW}px"><col style="width:${descriptionW}px"><col style="width:${extraW}px"></colgroup>
         <thead><tr>
           <th>Address<span class="col-resize-handle" data-table="rows" data-col="0"></span></th>
           <th>Name<span class="col-resize-handle" data-table="rows" data-col="1"></span></th>
           <th>SKU<span class="col-resize-handle" data-table="rows" data-col="2"></span></th>
+          <th>Description<span class="col-resize-handle" data-table="rows" data-col="3"></span></th>
+          <th>Extra<span class="col-resize-handle" data-table="rows" data-col="4"></span></th>
         </tr></thead>
         <tbody>
           ${rows
             .map(
               (r) =>
-                `<tr data-row-id="${r.id}" class="clickable-row${r.id === editingRowId ? " editing" : ""}"><td>${escapeHtml(r.url)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.sku)}</td></tr>`,
+                // Extra alone gets the hover-expand treatment (see .extra-cell in
+                // style.css) — it's the column most likely to overflow a
+                // reasonably-sized column, and this is meant for a quick spot-check
+                // across the whole image, not a place to also copy from (that's
+                // still the row's own edit form).
+                `<tr data-row-id="${r.id}" class="clickable-row${r.id === editingRowId ? " editing" : ""}"><td>${escapeHtml(r.url)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.sku)}</td><td>${escapeHtml(r.description)}</td><td class="extra-cell"><span class="cell-text">${escapeHtml(extraCellText(r.extra))}</span></td></tr>`,
             )
             .join("")}
         </tbody>
