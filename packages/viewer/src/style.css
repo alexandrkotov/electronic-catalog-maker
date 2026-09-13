@@ -830,6 +830,72 @@ button:disabled {
   background: var(--bg-panel);
 }
 
+/* Cart review panel — same dropdown shell as .search-panel above, opened
+   from the toolbar's own "🛒 Cart (N)" button (see renderCartPanel). */
+.cart-panel {
+  position: absolute;
+  top: 100%;
+  right: 12px;
+  z-index: 50;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+  padding: 0.75rem;
+  width: 22rem;
+  max-width: calc(100vw - 2rem);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cart-items {
+  overflow-y: auto;
+}
+
+.cart-items ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cart-items li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.cart-items li:hover {
+  background: var(--bg-panel);
+}
+
+.cart-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.cart-remove-btn {
+  flex-shrink: 0;
+  padding: 0.15rem 0.5rem;
+}
+
+.cart-panel-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+}
+
+.cart-panel-actions button {
+  flex: 1;
+}
+
 /* Mobile layout — below this width the desktop three-column grid (fixed-px
    side panels + a flexible stage, see .ecm-viewer-app above) no longer
    fits: --images-w/--table-w alone already exceed a phone's viewport, which
