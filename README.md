@@ -347,7 +347,10 @@ same familiar `.ecatm` file, downloadable at any point.
 Prebuilt binaries for **Windows and Linux** are on the
 [latest release](https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest)
 (also linked from the [landing page](https://alexandrkotov.github.io/electronic-catalog-maker/)) —
-download, run, and the editor finds it automatically. See
+download, run, and the editor finds it automatically. Ubuntu users can
+instead install it from
+[Snap Store](https://snapcraft.io/ecm-collab-server) (`sudo snap install
+ecm-collab-server`), which also lists it in Ubuntu's App Center. See
 [`packages/collab-server`](packages/collab-server) for how the whole
 live-editing mechanism works (large catalogs are never resent whole — only
 the specific field or photo that changed) and its current known
