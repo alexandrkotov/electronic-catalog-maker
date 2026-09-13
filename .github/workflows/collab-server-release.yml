@@ -57,6 +57,36 @@ jobs:
           path: packages/collab-server/dist/ecm-collab-server-windows-x64.exe
           if-no-files-found: error
 
+  build-macos-arm64:
+    name: Build macOS binary (Apple Silicon, cross-compiled)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Compile
+        working-directory: packages/collab-server
+        run: bun run compile:macos-arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ecm-collab-server-macos-arm64
+          path: packages/collab-server/dist/ecm-collab-server-macos-arm64
+          if-no-files-found: error
+
+  build-macos-x64:
+    name: Build macOS binary (Intel, cross-compiled)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Compile
+        working-directory: packages/collab-server
+        run: bun run compile:macos-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ecm-collab-server-macos-x64
+          path: packages/collab-server/dist/ecm-collab-server-macos-x64
+          if-no-files-found: error
+
   publish-snap:
     name: Build + publish Snap (Snap Store / Ubuntu App Center)
     if: ${{ github.event.inputs.publish_snap == 'true' }}
@@ -78,7 +108,7 @@ jobs:
 
   github-release:
     name: Update the collab-server-latest GitHub Release
-    needs: [build-linux, build-windows]
+    needs: [build-linux, build-windows, build-macos-arm64, build-macos-x64]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -91,6 +121,16 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: ecm-collab-server-windows-x64.exe
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ecm-collab-server-macos-arm64
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ecm-collab-server-macos-x64
           path: dist
 
       - name: Read collab-server version
@@ -121,11 +161,21 @@ jobs:
 
             - `ecm-collab-server-windows-x64.exe` — Windows, portable, no installer
             - `ecm-collab-server-linux-x64` — Linux, portable, no installer
+            - `ecm-collab-server-macos-arm64` — macOS, Apple Silicon, portable, no installer
+            - `ecm-collab-server-macos-x64` — macOS, Intel, portable, no installer
 
             Ubuntu users can instead install from the
             [Snap Store](https://snapcraft.io/ecm-collab-server) (`sudo snap install ecm-collab-server`).
+
+            None of these are code-signed. Windows will show a SmartScreen
+            warning on first run ("More info" → "Run anyway"); macOS will
+            refuse to open the binary the normal way the first time —
+            right-click (or Control-click) it and choose Open instead, then
+            confirm in the dialog that appears.
 
             See [packages/collab-server](https://github.com/alexandrkotov/electronic-catalog-maker/tree/main/packages/collab-server) for details.
           files: |
             dist/ecm-collab-server-linux-x64
             dist/ecm-collab-server-windows-x64.exe
+            dist/ecm-collab-server-macos-arm64
+            dist/ecm-collab-server-macos-x64
