@@ -1,0 +1,61 @@
+name: ecm-collab-server
+base: core22
+version: '0.2.0'
+summary: Self-hosted real-time collaboration server for Electronic Catalog Maker
+description: |
+  Runs a small local server that lets several people edit the same
+  Electronic Catalog Maker (.ecatm) catalog file at the same time, live —
+  hotspot edits, table edits, and cursor presence all sync instantly
+  between everyone connected.
+
+  Launch it and a status page opens in your browser showing:
+    - a local address for collaborators on the same network, and
+    - a public address (via a temporary Cloudflare Quick Tunnel) for
+      collaborators anywhere else — no router configuration, no account,
+      no sign-up.
+
+  This is a companion tool for the free Electronic Catalog Maker editor
+  (https://alexandrkotov.github.io/electronic-catalog-maker/editor/),
+  which detects a running server automatically. It has no window of its
+  own by design — the browser status page is the entire interface, with
+  a single Stop button.
+
+  No files are ever read from or written to disk by this app. A
+  collaboration session exists only in memory for as long as the server
+  keeps running; stopping it (or closing the app) discards it completely.
+
+website: https://alexandrkotov.github.io/electronic-catalog-maker/
+contact: https://github.com/alexandrkotov/electronic-catalog-maker/issues
+issues: https://github.com/alexandrkotov/electronic-catalog-maker/issues
+source-code: https://github.com/alexandrkotov/electronic-catalog-maker
+license: MIT
+icon: packages/collab-server/assets/icons/icon-512.png
+
+grade: stable
+confinement: strict
+
+apps:
+  ecm-collab-server:
+    command: bin/ecm-collab-server-linux-x64
+    plugs:
+      - network
+      - network-bind
+
+parts:
+  collab-server:
+    plugin: nil
+    source: .
+    build-packages:
+      - curl
+      - ca-certificates
+      - unzip
+    override-build: |
+      curl -fsSL https://bun.sh/install | bash
+      export BUN_INSTALL="$HOME/.bun"
+      export PATH="$BUN_INSTALL/bin:$PATH"
+      cd "$SNAPCRAFT_PART_SRC/packages/collab-server"
+      bun run scripts/fetch-cloudflared.ts linux-x64
+      mkdir -p "$SNAPCRAFT_PART_INSTALL/bin"
+      bun build --compile --target=bun-linux-x64 \
+        src/main.compiled.linux-x64.ts \
+        --outfile "$SNAPCRAFT_PART_INSTALL/bin/ecm-collab-server-linux-x64"
