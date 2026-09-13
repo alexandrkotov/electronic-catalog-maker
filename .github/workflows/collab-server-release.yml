@@ -66,10 +66,23 @@ jobs:
       - name: Compile
         working-directory: packages/collab-server
         run: bun run compile:macos-arm64
+      # GitHub Release assets are plain blobs with no unix-permission
+      # metadata: whatever downloads a raw executable from a Release gets
+      # it back without the execute bit, which on macOS means Finder can't
+      # recognize it as a program at all (confirmed live: double-clicking
+      # opened the raw binary as garbled text in TextEdit instead of
+      # running it). A zip's central directory *does* store unix file
+      # modes, and both macOS's built-in Archive Utility and `unzip`
+      # restore them on extract — so zip here, not just at download time.
+      - name: Zip (preserves the executable bit through the Release download)
+        working-directory: packages/collab-server/dist
+        run: |
+          chmod +x ecm-collab-server-macos-arm64
+          zip -j ecm-collab-server-macos-arm64.zip ecm-collab-server-macos-arm64
       - uses: actions/upload-artifact@v4
         with:
           name: ecm-collab-server-macos-arm64
-          path: packages/collab-server/dist/ecm-collab-server-macos-arm64
+          path: packages/collab-server/dist/ecm-collab-server-macos-arm64.zip
           if-no-files-found: error
 
   build-macos-x64:
@@ -81,10 +94,16 @@ jobs:
       - name: Compile
         working-directory: packages/collab-server
         run: bun run compile:macos-x64
+      # See build-macos-arm64's comment above — same reason.
+      - name: Zip (preserves the executable bit through the Release download)
+        working-directory: packages/collab-server/dist
+        run: |
+          chmod +x ecm-collab-server-macos-x64
+          zip -j ecm-collab-server-macos-x64.zip ecm-collab-server-macos-x64
       - uses: actions/upload-artifact@v4
         with:
           name: ecm-collab-server-macos-x64
-          path: packages/collab-server/dist/ecm-collab-server-macos-x64
+          path: packages/collab-server/dist/ecm-collab-server-macos-x64.zip
           if-no-files-found: error
 
   publish-snap:
@@ -161,21 +180,23 @@ jobs:
 
             - `ecm-collab-server-windows-x64.exe` — Windows, portable, no installer
             - `ecm-collab-server-linux-x64` — Linux, portable, no installer
-            - `ecm-collab-server-macos-arm64` — macOS, Apple Silicon, portable, no installer
-            - `ecm-collab-server-macos-x64` — macOS, Intel, portable, no installer
+            - `ecm-collab-server-macos-arm64.zip` — macOS, Apple Silicon, portable, no installer
+            - `ecm-collab-server-macos-x64.zip` — macOS, Intel, portable, no installer
 
             Ubuntu users can instead install from the
             [Snap Store](https://snapcraft.io/ecm-collab-server) (`sudo snap install ecm-collab-server`).
 
             None of these are code-signed. Windows will show a SmartScreen
-            warning on first run ("More info" → "Run anyway"); macOS will
-            refuse to open the binary the normal way the first time —
-            right-click (or Control-click) it and choose Open instead, then
-            confirm in the dialog that appears.
+            warning on first run ("More info" → "Run anyway"). The macOS
+            download is a zip (unzipping restores the file's execute
+            permission, which a direct download can't carry) — after
+            unzipping, right-click (or Control-click) the binary and choose
+            Open instead of double-clicking, then confirm in the dialog that
+            appears.
 
             See [packages/collab-server](https://github.com/alexandrkotov/electronic-catalog-maker/tree/main/packages/collab-server) for details.
           files: |
             dist/ecm-collab-server-linux-x64
             dist/ecm-collab-server-windows-x64.exe
-            dist/ecm-collab-server-macos-arm64
-            dist/ecm-collab-server-macos-x64
+            dist/ecm-collab-server-macos-arm64.zip
+            dist/ecm-collab-server-macos-x64.zip
