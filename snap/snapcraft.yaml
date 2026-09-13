@@ -1,6 +1,7 @@
 name: ecm-collab-server
+title: ECM Collaboration Server
 base: core22
-version: '0.2.0'
+version: '0.2.1'
 summary: Self-hosted real-time collaboration server for Electronic Catalog Maker
 description: |
   Runs a small local server that lets several people edit the same
@@ -40,6 +41,13 @@ apps:
     plugs:
       - network
       - network-bind
+      # Needed for the app's best-effort "open the status page in the
+      # default browser" step (openInBrowser.ts spawns `xdg-open`) to
+      # actually reach the user's browser via the xdg-desktop-portal
+      # OpenURI call — without it, xdg-open runs but can't hand off the
+      # URL, so it just launches a blank browser window instead (caught
+      # live testing the published snap on 2026-09-13).
+      - desktop
 
 parts:
   collab-server:
