@@ -232,6 +232,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // Set alongside cartItems every time a catalog (re)loads — see openBytes().
   // Null only in the instant before any catalog has ever loaded.
   let cartStorageKeyValue: string | null = null;
+  // Whether the toolbar's cart review panel (renderCartPanel) is open — a
+  // non-blocking dropdown, same UI language as searchOpen/renderSearchPanel,
+  // letting someone see exactly what a persisted cart holds before checking
+  // out, remove individual items, or clear it entirely (see
+  // actionRemoveFromCart/actionClearCart) — none of which was possible
+  // before this, short of re-finding each hotspot to toggle it off again.
+  let cartOpen = false;
   // Set from the catalog's own meta (store_url/cart_mode/cart_id_pattern/...,
   // edited in the editor's "Store settings" dialog) each time a catalog
   // loads — see openBytes(). "instant" turns every Buy button into the old
@@ -644,6 +651,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // catalog naturally starts from an empty cart instead.
     cartStorageKeyValue = cartStorageKey(sourceName, loadedMeta.catalogName);
     cartItems = loadPersistedCart(cartStorageKeyValue);
+    cartOpen = false;
     activeImageId = listImages(db)[0]?.id ?? null;
     selectedLinkId = null;
     zoom = 1;
@@ -803,7 +811,33 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     render();
   }
 
-  /** Opens one combined checkout for every cart item, then leaves the cart as-is (mirrors the single-item Buy button, which never cleared itself either). */
+  /** Toggles the toolbar's cart review panel (renderCartPanel) open/closed. */
+  function actionToggleCartPanel() {
+    cartOpen = !cartOpen;
+    render();
+  }
+
+  /**
+   * Removes one item from the cart via its own "✕" in the review panel —
+   * distinct from actionToggleCart (which the Buy button reuses to also
+   * *add*) only in name, since a panel row is only ever rendered for an
+   * item already in the cart, so "toggle" and "remove" are the same
+   * operation here. Kept separate so the panel's intent reads clearly at
+   * the call site.
+   */
+  function actionRemoveFromCart(rowUrl: string) {
+    actionToggleCart(rowUrl);
+  }
+
+  /** Empties the cart entirely (panel's "Clear cart" button) — the only way to do this used to be re-finding and re-clicking every item's own Buy button one at a time. */
+  function actionClearCart() {
+    if (cartItems.size === 0) return;
+    cartItems.clear();
+    if (cartStorageKeyValue) savePersistedCart(cartStorageKeyValue, cartItems);
+    render();
+  }
+
+  /** Opens one combined checkout for every cart item, then leaves the cart as-is (mirrors the single-item Buy button, which never cleared itself either) — just closes the review panel, since the review is done. */
   function actionOpenCart() {
     if (!db || cartItems.size === 0) return;
     const ids = listAllRows(db)
@@ -812,6 +846,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       .filter((id): id is string => id !== null);
     if (ids.length === 0) return;
     window.open(buildCartCheckoutUrl(ids, cartItemParam, cartCheckoutBaseUrl), "_blank", "noopener,noreferrer");
+    cartOpen = false;
+    render();
   }
 
   /** Clicking a search result: unlike actionSelectRowByUrl, this may switch images first. */
@@ -1104,11 +1140,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                  <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
                  ${updateAddressBar ? `<button id="btn-share-view" ${db && !isLoopbackHostname(location.hostname) ? "" : "disabled"} title="${escapeHtml(shareViewButtonTitle())}">Share view…</button>` : ""}
                  ${exportPdf ? `<button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="Export this catalog as a printable A4 PDF — a QR code next to each item that has a Buy link">${exportPdfBusy ? "Exporting PDF…" : "Export PDF…"}</button>` : ""}
-                 ${cartMode === "accumulate" ? `<button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="Open one combined checkout for everything added to cart">🛒 Cart (${cartItems.size})</button>` : ""}
+                 ${cartMode === "accumulate" ? `<button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="Review, edit, or check out everything added to cart">🛒 Cart (${cartItems.size})</button>` : ""}
                  <span class="spacer"></span>
                  <button id="btn-theme" title="Toggle light/dark theme">${currentTheme(themeTarget) === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
                  <span class="hint">${escapeHtml(statusMessage)}</span>
                  ${searchOpen ? renderSearchPanel() : ""}
+                 ${cartOpen ? renderCartPanel() : ""}
                </div>`
             : ""
         }
@@ -1408,6 +1445,46 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     });
   }
 
+  /**
+   * The toolbar cart button's dropdown (same non-blocking-panel UI language
+   * as renderSearchPanel) — lists every row currently in the cart with its
+   * own "✕" remove button, plus "Clear cart"/"Checkout" at the bottom. Lets
+   * someone see exactly what a (now persisted, see cartStorageKey) cart
+   * holds and fix it before committing to a real checkout, rather than
+   * having to re-find each hotspot/row to toggle it off one at a time.
+   */
+  function renderCartPanel(): string {
+    if (!db) return "";
+    const rows = listAllRows(db).filter((r) => cartItems.has(r.url));
+    const imageNameById = new Map(listImages(db).map((i) => [i.id, i.name]));
+    return `
+      <div class="cart-panel" id="cart-panel">
+        <div class="cart-items">
+          ${
+            rows.length === 0
+              ? `<p class="hint">Cart is empty.</p>`
+              : `<ul>${rows
+                  .map(
+                    (r) => `
+                <li data-url="${escapeHtml(r.url)}">
+                  <span class="cart-item-info">
+                    <strong>${escapeHtml(r.name || r.url)}</strong>${r.sku ? ` · ${escapeHtml(r.sku)}` : ""}<br>
+                    <span class="hint">${escapeHtml(imageNameById.get(r.imageId) ?? "")}</span>
+                  </span>
+                  <button type="button" class="cart-remove-btn" data-remove-url="${escapeHtml(r.url)}" title="Remove from cart">✕</button>
+                </li>`,
+                  )
+                  .join("")}</ul>`
+          }
+        </div>
+        <div class="cart-panel-actions">
+          <button type="button" id="cart-clear" ${rows.length === 0 ? "disabled" : ""}>Clear cart</button>
+          <button type="button" id="cart-checkout" ${rows.length === 0 ? "disabled" : ""}>Checkout (${rows.length})</button>
+        </div>
+      </div>
+    `;
+  }
+
   function hotspotHtml(l: CatalogLink, selectedUrl: string | null, selectedLinkId: number | null): string {
     // .selected: this hotspot's part is the one showing in the table (may be several).
     // .current: this is the *specific* instance centering targets — distinct so
@@ -1603,7 +1680,15 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         actionToggleCart(btn.dataset.cartUrl!);
       });
     });
-    root.getElementById("btn-cart")?.addEventListener("click", actionOpenCart);
+    root.getElementById("btn-cart")?.addEventListener("click", actionToggleCartPanel);
+    root.querySelectorAll<HTMLButtonElement>(".cart-remove-btn[data-remove-url]").forEach((btn) => {
+      btn.addEventListener("click", (evt) => {
+        evt.stopPropagation();
+        actionRemoveFromCart(btn.dataset.removeUrl!);
+      });
+    });
+    root.getElementById("cart-clear")?.addEventListener("click", actionClearCart);
+    root.getElementById("cart-checkout")?.addEventListener("click", actionOpenCart);
 
     root.getElementById("divider-images")?.addEventListener("mousedown", (evt) => startPanelResize(evt as MouseEvent, "images"));
     root.getElementById("divider-table")?.addEventListener("mousedown", (evt) => startPanelResize(evt as MouseEvent, "table"));
