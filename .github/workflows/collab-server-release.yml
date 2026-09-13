@@ -1,0 +1,131 @@
+name: Release collab-server (Snap Store + GitHub Release)
+
+# Manual only, on purpose — same philosophy as the rest of collab-server's
+# release process (see feedback-collab-server-binary-release-process in
+# project memory): rebuilding/republishing binaries is a deliberate,
+# occasional action, not something that should fire on every push.
+on:
+  workflow_dispatch:
+    inputs:
+      snap_channel:
+        description: "Snap Store channel to release to"
+        required: true
+        default: "stable"
+        type: choice
+        options:
+          - stable
+          - candidate
+          - beta
+          - edge
+      publish_snap:
+        description: "Also publish to the Snap Store (uncheck to only refresh the GitHub Release binaries)"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Linux binary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Compile
+        working-directory: packages/collab-server
+        run: bun run compile:linux-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ecm-collab-server-linux-x64
+          path: packages/collab-server/dist/ecm-collab-server-linux-x64
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows binary (cross-compiled)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Compile
+        working-directory: packages/collab-server
+        run: bun run compile:windows-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ecm-collab-server-windows-x64.exe
+          path: packages/collab-server/dist/ecm-collab-server-windows-x64.exe
+          if-no-files-found: error
+
+  publish-snap:
+    name: Build + publish Snap (Snap Store / Ubuntu App Center)
+    if: ${{ github.event.inputs.publish_snap == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build snap
+        uses: snapcore/action-build@v1
+        id: build
+
+      - name: Publish to Snap Store
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: ${{ steps.build.outputs.snap }}
+          release: ${{ github.event.inputs.snap_channel }}
+
+  github-release:
+    name: Update the collab-server-latest GitHub Release
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ecm-collab-server-linux-x64
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ecm-collab-server-windows-x64.exe
+          path: dist
+
+      - name: Read collab-server version
+        id: version
+        run: echo "version=$(node -p "require('./packages/collab-server/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # A rolling tag: moved to point at whatever commit this run built
+      # from. Not required for the download URLs to work (those only care
+      # about the tag *name* + asset filename, not what commit the tag
+      # points at) but keeps the release's displayed "Target" accurate.
+      - name: Move the rolling collab-server-latest tag to this commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f collab-server-latest
+          git push origin collab-server-latest --force
+
+      # Updates the existing release in place (creates it on the very
+      # first run) — no delete-and-recreate dance, so the old
+      # stale-tag-on-recreate gotcha doesn't apply here.
+      - name: Create/update the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: collab-server-latest
+          name: "collab-server v${{ steps.version.outputs.version }}"
+          body: |
+            Self-hosted real-time collaboration server for Electronic Catalog Maker.
+
+            - `ecm-collab-server-windows-x64.exe` — Windows, portable, no installer
+            - `ecm-collab-server-linux-x64` — Linux, portable, no installer
+
+            Ubuntu users can instead install from the
+            [Snap Store](https://snapcraft.io/ecm-collab-server) (`sudo snap install ecm-collab-server`).
+
+            See [packages/collab-server](https://github.com/alexandrkotov/electronic-catalog-maker/tree/main/packages/collab-server) for details.
+          files: |
+            dist/ecm-collab-server-linux-x64
+            dist/ecm-collab-server-windows-x64.exe
