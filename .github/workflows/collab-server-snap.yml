@@ -1,0 +1,37 @@
+name: Publish collab-server Snap
+
+# Manual only, on purpose — same philosophy as the Windows/macOS/Linux
+# GitHub Release binaries (see feedback-collab-server-binary-release-process
+# in project memory): server-code releases are deliberate and infrequent,
+# not something that should auto-publish to the Snap Store on every push.
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Snap Store channel to release to"
+        required: true
+        default: "stable"
+        type: choice
+        options:
+          - stable
+          - candidate
+          - beta
+          - edge
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build snap
+        uses: snapcore/action-build@v1
+        id: build
+
+      - name: Publish to Snap Store
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: ${{ steps.build.outputs.snap }}
+          release: ${{ github.event.inputs.channel }}
