@@ -829,11 +829,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     actionToggleCart(rowUrl);
   }
 
-  /** Empties the cart entirely (panel's "Clear cart" button) — the only way to do this used to be re-finding and re-clicking every item's own Buy button one at a time. */
+  /** Empties the cart entirely (panel's "Clear cart" button) — the only way to do this used to be re-finding and re-clicking every item's own Buy button one at a time. Closes the panel too, same as actionOpenCart: nothing left in it to review. */
   function actionClearCart() {
     if (cartItems.size === 0) return;
     cartItems.clear();
     if (cartStorageKeyValue) savePersistedCart(cartStorageKeyValue, cartItems);
+    cartOpen = false;
     render();
   }
 
