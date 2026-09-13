@@ -27,7 +27,7 @@ import {
   detectLocalCollabServerViaBridge,
 } from "./collabClient.js";
 import { renderQrCodeSvg } from "./qrcode.js";
-import { buildCartCheckoutUrl, catalogHasAnyBuyUrl, parseCartItemId } from "./cart.js";
+import { buildCartCheckoutUrl, cartStorageKey, catalogHasAnyBuyUrl, loadPersistedCart, parseCartItemId, savePersistedCart } from "./cart.js";
 import { DEFAULT_PDF_EXPORT_OPTIONS, type DiagramPageMode, type PdfExportOptions, type QrPlacement } from "./pdfExportOptions.js";
 import type { CatalogImage, CatalogLink, CatalogRow } from "./types.js";
 import type { Database, SqlJsStatic } from "sql.js";
@@ -223,9 +223,15 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // with some other/unrecognized buy_url fall back to the old
   // instant-navigate behavior (see rowHtml/parseCartItemId), and cart_mode
   // "instant" opts every row out of this regardless of whether it matches.
-  // Session-only by design (not persisted) — this is a demo-catalog
-  // feature, not a real cart.
+  // Persisted to localStorage per catalog (see cartStorageKey/
+  // loadPersistedCart/savePersistedCart in cart.ts) so a cart survives
+  // closing the tab/app entirely — the point being someone can add parts
+  // while fully offline and check out later once back in range, without
+  // needing to keep the page open the whole time in between.
   let cartItems = new Set<string>(); // row urls
+  // Set alongside cartItems every time a catalog (re)loads — see openBytes().
+  // Null only in the instant before any catalog has ever loaded.
+  let cartStorageKeyValue: string | null = null;
   // Set from the catalog's own meta (store_url/cart_mode/cart_id_pattern/...,
   // edited in the editor's "Store settings" dialog) each time a catalog
   // loads — see openBytes(). "instant" turns every Buy button into the old
@@ -632,7 +638,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     cartIdPattern = loadedMeta.cartIdPattern;
     cartItemParam = loadedMeta.cartItemParam;
     cartCheckoutBaseUrl = loadedMeta.cartCheckoutBaseUrl;
-    cartItems = new Set(); // a freshly (re)loaded catalog starts with an empty cart
+    // Resume a cart saved before the tab/app was closed (see actionToggleCart)
+    // rather than always starting fresh — same sourceName+catalogName pair
+    // must have been used to save it, so switching to a genuinely different
+    // catalog naturally starts from an empty cart instead.
+    cartStorageKeyValue = cartStorageKey(sourceName, loadedMeta.catalogName);
+    cartItems = loadPersistedCart(cartStorageKeyValue);
     activeImageId = listImages(db)[0]?.id ?? null;
     selectedLinkId = null;
     zoom = 1;
@@ -788,6 +799,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function actionToggleCart(rowUrl: string) {
     if (cartItems.has(rowUrl)) cartItems.delete(rowUrl);
     else cartItems.add(rowUrl);
+    if (cartStorageKeyValue) savePersistedCart(cartStorageKeyValue, cartItems);
     render();
   }
 
