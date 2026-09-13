@@ -161,13 +161,16 @@ auto-scrolls all the way right the first time it's shown, so the Buy
 column is visible right away — no manual scrolling needed to discover it.
 This applies in both the full viewer and the `<ecm-viewer>` embed widget.
 
-By default, Buy adds the item to an in-memory cart (session-only, never
-saved anywhere): the toolbar's **🛒 Cart (N)** button opens one combined
-checkout for everything in it — but only for rows whose `buy_url` matches
-the catalog's configured cart recipe, tuned out of the box for
-[Payhip](https://payhip.com/)'s direct-checkout links. A `buy_url`
-pointing anywhere else always opens as an ordinary single-item link
-instead, regardless of any setting below.
+By default, Buy adds the item to a cart that's saved on that device as
+you go (per catalog, in the browser's local storage) — close the tab, or
+the whole app, and it's still there next time you open the same catalog
+from the same place. The toolbar's **🛒 Cart (N)** button opens a panel
+listing everything in it, with a "✕" to drop any single item and a
+"Clear cart" to empty it, plus "Checkout" for one combined order — but
+only for rows whose `buy_url` matches the catalog's configured cart
+recipe, tuned out of the box for [Payhip](https://payhip.com/)'s
+direct-checkout links. A `buy_url` pointing anywhere else always opens as
+an ordinary single-item link instead, regardless of any setting below.
 
 Configure this from the editor's **⚙️ Store settings…** button:
 
