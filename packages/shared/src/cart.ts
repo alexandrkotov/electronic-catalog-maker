@@ -59,3 +59,47 @@ export function buildInstantBuyUrl(
 export function catalogHasAnyBuyUrl(rows: CatalogRow[]): boolean {
   return rows.some((r) => typeof r.extra.buy_url === "string" && r.extra.buy_url.trim());
 }
+
+/**
+ * Identifies "this catalog" for cart persistence (see loadPersistedCart/
+ * savePersistedCart) — combines the source name (the URL/file basename it
+ * was opened from, see openBytes' `sourceName` param in viewerEngine.ts)
+ * with the catalog's own display name, so two different catalogs saved
+ * under a generic filename don't collide, and opening a different catalog
+ * doesn't surface someone else's saved cart. Not a cryptographic identity,
+ * just enough to keep casual per-catalog carts from leaking into each other
+ * in the same browser.
+ */
+export function cartStorageKey(sourceName: string, catalogName: string): string {
+  return `ecm-viewer-cart:${sourceName}::${catalogName}`;
+}
+
+/**
+ * Loads a previously saved cart for this catalog (see cartStorageKey) —
+ * this is what lets a cart survive closing the tab/app entirely, e.g.
+ * someone adding parts to the cart while completely offline (no signal at
+ * all) who won't check out until they're back in range. Never throws: an
+ * unavailable or corrupted localStorage entry just means starting from an
+ * empty cart, same as before this feature existed.
+ */
+export function loadPersistedCart(key: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.every((v) => typeof v === "string")) return new Set(parsed);
+    }
+  } catch {
+    // Unavailable or corrupted storage (privacy mode, etc.) — start from an empty cart instead.
+  }
+  return new Set();
+}
+
+/** Saves the current cart for this catalog (see cartStorageKey) — called after every add/remove. */
+export function savePersistedCart(key: string, items: Set<string>): void {
+  try {
+    localStorage.setItem(key, JSON.stringify([...items]));
+  } catch {
+    // Cart still works for this session, just won't survive a reload.
+  }
+}
