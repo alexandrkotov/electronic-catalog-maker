@@ -303,8 +303,19 @@ from this same Linux environment and then actually run by the project's
 maintainer on a real Windows machine — a real SmartScreen warning bypassed,
 a real `trycloudflare.com` address, a real two-tab collaboration session
 including the Stop button, confirmed working end to end. The macOS build
-uses the identical mechanism but hasn't been run on a real Mac yet — worth
-a real smoke test there before distributing.
+uses the identical mechanism and is now smoke-tested automatically on
+every release run (see `.github/workflows/collab-server-release.yml`'s
+`smoke-test-macos-arm64` job) — real Apple Silicon hardware via GitHub's
+hosted `macos-14` runner, starting the actual compiled binary and polling
+its `/status.json` until it answers. The project's own real Mac (a 2012
+MacBook Pro stuck on Catalina) can't run it at all — Bun's compile output
+requires macOS 13+ (confirmed live: `dyld` reported a missing
+`_preadv$NOCANCEL` symbol, not present before Ventura) — which is exactly
+why this CI smoke test exists instead of relying on manual hardware
+testing the way Windows did. The Intel (x64) build ships too but doesn't
+get its own live run — GitHub's Intel macOS runner pool queues much
+longer and is being phased out, and it exercises the identical code path,
+just a different CPU architecture.
 
 `ecm-collab-server-linux-x64` is now on GitHub Releases (`collab-server-latest`)
 next to the Windows exe, landing-page-downloadable like it. Before that
