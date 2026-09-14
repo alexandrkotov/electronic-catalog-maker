@@ -344,7 +344,7 @@ going to sleep — ends the session for everyone. Nothing is ever lost when
 it does: everyone keeps their own current copy locally the whole time, the
 same familiar `.ecatm` file, downloadable at any point.
 
-Prebuilt binaries for **Windows and Linux** are on the
+Prebuilt binaries for **Windows, Linux, and macOS (13+)** are on the
 [latest release](https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest)
 (also linked from the [landing page](https://alexandrkotov.github.io/electronic-catalog-maker/)) —
 download, run, and the editor finds it automatically. Ubuntu users can
@@ -354,8 +354,10 @@ ecm-collab-server`), which also lists it in Ubuntu's App Center. See
 [`packages/collab-server`](packages/collab-server) for how the whole
 live-editing mechanism works (large catalogs are never resent whole — only
 the specific field or photo that changed) and its current known
-limitations (its binaries aren't code-signed yet, so Windows will warn on
-first run; there's no macOS build yet).
+limitations: none of the binaries are code-signed, so Windows will show a
+SmartScreen warning on first run, and macOS needs a one-line Terminal
+command (see the release page) since it refuses to run an unsigned binary
+via Finder at all.
 
 ### Editing locally, without a shared session
 
