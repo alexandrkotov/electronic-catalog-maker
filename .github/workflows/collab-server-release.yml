@@ -268,3 +268,62 @@ jobs:
             dist/ecm-collab-server-windows-x64.exe
             dist/ecm-collab-server-macos-arm64.zip
             dist/ecm-collab-server-macos-x64.zip
+
+  gitlab-binaries:
+    name: Back up binaries to GitLab (disaster recovery, not linked from the site)
+    needs: [build-linux, build-windows, smoke-test-macos-arm64, build-macos-x64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ecm-collab-server-linux-x64
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ecm-collab-server-windows-x64.exe
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ecm-collab-server-macos-arm64
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ecm-collab-server-macos-x64
+          path: dist
+
+      # These GitHub Release binaries are the only copies of collab-server
+      # end users can download — unlike the source (mirror.yml), they were
+      # never covered by the GitLab disaster-recovery setup. This job
+      # closes that gap by copying the same 4 files to GitLab's generic
+      # package registry on the same mirror project. Deliberately NOT
+      # linked from landing/index.html — the public download links stay on
+      # GitHub Releases (it just works, has a real CDN, no reason to move
+      # normal users off it). These GitLab copies exist purely so the
+      # recovery runbook has somewhere to point the download links during
+      # an actual "GitHub account/repo is gone" recovery, mirroring how
+      # the runbook already repoints the landing page itself.
+      #
+      # One-time setup (not done by this workflow): repo secret
+      # GITLAB_API_TOKEN — a GitLab personal or project access token
+      # scoped to `api` (package registry uploads need this; the
+      # write_repository-scoped GITLAB_MIRROR_URL token from mirror.yml
+      # can't do it). Create it on the same GitLab project as the mirror
+      # (gitlab.com/alexkotovwa/electronic-catalog-maker), then:
+      #   gh secret set GITLAB_API_TOKEN --repo alexandrkotov/electronic-catalog-maker
+      - name: Upload binaries to GitLab's generic package registry
+        env:
+          GITLAB_API_TOKEN: ${{ secrets.GITLAB_API_TOKEN }}
+        run: |
+          if [ -z "$GITLAB_API_TOKEN" ]; then
+            echo "::warning::GITLAB_API_TOKEN secret is not set — skipping GitLab binary backup. See the setup notes in this job's header comment."
+            exit 0
+          fi
+          REGISTRY="https://gitlab.com/api/v4/projects/alexkotovwa%2Felectronic-catalog-maker/packages/generic/collab-server/latest"
+          for f in dist/*; do
+            name=$(basename "$f")
+            echo "Uploading $name..."
+            curl --fail -sS --header "PRIVATE-TOKEN: $GITLAB_API_TOKEN" --upload-file "$f" "$REGISTRY/$name"
+          done
