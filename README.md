@@ -24,20 +24,20 @@ other page — even a plain static HTML file with no build step of its own
 ## Getting started
 
 Just want to use the apps? They're hosted, free, nothing to install — see
-the **[project site](https://alexandrkotov.github.io/electronic-catalog-maker/)**,
+the **[project site](https://tapalog.com/)**,
 or jump straight in:
 
-- **[Editor](https://alexandrkotov.github.io/electronic-catalog-maker/editor/)**
-- **[Viewer](https://alexandrkotov.github.io/electronic-catalog-maker/viewer/)**
+- **[Editor](https://tapalog.com/editor/)**
+- **[Viewer](https://tapalog.com/viewer/)**
 
 Both run entirely in your browser — nothing you build gets uploaded
 anywhere unless you explicitly open a catalog from a URL (see "Sharing a
 catalog via link" below); a saved `.ecatm` file lives on your own disk.
 
 No catalog file of your own yet? Try a demo, no install or download
-needed — [Auto parts](https://alexandrkotov.github.io/electronic-catalog-maker/viewer/?src=https%3A%2F%2Falexandrkotov.github.io%2Felectronic-catalog-maker%2Fdemo%2Fauto-spare-parts.ecatm)
+needed — [Auto parts](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fauto-spare-parts.ecatm)
 (an anonymized catalog of exploded-view truck-part diagrams) or
-[Furniture](https://alexandrkotov.github.io/electronic-catalog-maker/viewer/?src=https%3A%2F%2Falexandrkotov.github.io%2Felectronic-catalog-maker%2Fdemo%2Ffurniture.ecatm)
+[Furniture](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Ffurniture.ecatm)
 (real photos, a smaller catalog to browse).
 
 To develop the project instead (or run it without depending on that
@@ -354,7 +354,7 @@ same familiar `.ecatm` file, downloadable at any point.
 
 Prebuilt binaries for **Windows, Linux, and macOS (13+)** are on the
 [latest release](https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest)
-(also linked from the [landing page](https://alexandrkotov.github.io/electronic-catalog-maker/)) —
+(also linked from the [landing page](https://tapalog.com/)) —
 download, run, and the editor finds it automatically. Windows users can
 instead get it from the
 [Microsoft Store](https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=en-US&gl=US)
