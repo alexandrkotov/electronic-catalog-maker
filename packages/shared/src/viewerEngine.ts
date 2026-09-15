@@ -72,11 +72,11 @@ interface EcmFileSystemFileHandle {
 const DEMO_CATALOGS = [
   {
     label: "Auto parts",
-    url: "https://alexandrkotov.github.io/electronic-catalog-maker/demo/auto-spare-parts.ecatm",
+    url: "https://tapalog.com/demo/auto-spare-parts.ecatm",
   },
   {
     label: "Furniture",
-    url: "https://alexandrkotov.github.io/electronic-catalog-maker/demo/furniture.ecatm",
+    url: "https://tapalog.com/demo/furniture.ecatm",
   },
 ];
 
