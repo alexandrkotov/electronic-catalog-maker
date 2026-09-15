@@ -68,6 +68,9 @@
   }
   .compare {
     margin: 0 0 2rem;
+    padding: 1.25rem;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
   }
   .compare h2 {
     font-size: 1.1rem;
@@ -85,12 +88,48 @@
     border-bottom: 1px solid #eee;
     vertical-align: top;
   }
+  /* Last row's divider would just double up with the card's own border
+     right below it — drop it. */
+  .compare tr:last-child th,
+  .compare tr:last-child td {
+    border-bottom: none;
+  }
+  /* Row label column stays narrow — sized for short labels like "Pricing"/
+     "Storage", not the one long label in the last (exempted) row, so the
+     two comparison columns get the width they need to stay on one line. */
+  .compare th:first-child,
+  .compare td:first-child {
+    width: 5.5em;
+  }
   .compare th {
     color: #666;
     font-weight: 600;
   }
   .compare td:first-child {
     color: #666;
+  }
+  /* Plain-text comparison values (Pricing/Storage/Internet/Checkout) —
+     softened from the page's default near-black body text, which read as
+     jarringly dark next to the gray labels/headers around it. */
+  .compare td:not(:first-child):not(.yes):not(.no) {
+    color: #333;
+  }
+  /* Every row's comparison cells stay on one line above ~700px — reads
+     tidier than ragged per-cell wrapping — except the one row long enough
+     that it can't reasonably fit on one line at this width (`.compare
+     tr.wrap`). Below ~700px there isn't room for this (the page's own
+     640px max-width no longer applies, so the table has much less space
+     to work with), so every row reverts to normal wrapping instead of
+     overflowing the card. */
+  @media (min-width: 700px) {
+    .compare th,
+    .compare td {
+      white-space: nowrap;
+    }
+    .compare tr.wrap th,
+    .compare tr.wrap td {
+      white-space: normal;
+    }
   }
   .compare td.yes,
   .compare td.no {
@@ -121,7 +160,7 @@
     color: #666;
   }
   footer {
-    margin-top: 3rem;
+    margin-top: 1.5rem;
     font-size: 0.85rem;
     color: #888;
   }
@@ -135,6 +174,9 @@
   }
   #visits strong {
     color: #1a1a1a;
+  }
+  .built-by {
+    margin-top: 0.6rem;
   }
 </style>
 </head>
@@ -219,7 +261,7 @@
       <tr>
         <td>Storage</td>
         <td>Their cloud servers</td>
-        <td>Local <code>.ecatm</code> file (SQLite), yours to keep</td>
+        <td>Local <code>.ecatm</code> file (SQLite)</td>
       </tr>
       <tr>
         <td>Internet</td>
@@ -229,15 +271,15 @@
       <tr>
         <td>Checkout</td>
         <td>Built into their platform</td>
-        <td>Buy links to your own store — no lock-in</td>
+        <td>Your own store — no lock-in</td>
       </tr>
       <tr>
         <td>Grid-style catalogs</td>
         <td class="yes">✓</td>
         <td class="yes">✓</td>
       </tr>
-      <tr>
-        <td>Visual/technical catalogs — parts diagrams, machinery, furniture, and more</td>
+      <tr class="wrap">
+        <td>Technical diagrams (parts, machinery, furniture)</td>
         <td class="no">✗</td>
         <td class="yes">✓</td>
       </tr>
@@ -246,12 +288,11 @@
 
   <footer>
     <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Source on GitHub</a>
-    — catalog files stay on your own disk unless you explicitly open one
-    from a URL.
+    — catalogs stay on your disk unless opened from a URL.
     <div><a href="demo/embed-demo.html">See it embedded on a website →</a></div>
     <div><a href="privacy.html">Privacy policy</a></div>
     <div id="visits"></div>
-    <div>
+    <div class="built-by">
       Built by Alexander Kotov
       (<a href="https://www.linkedin.com/in/alexkotovwa/">LinkedIn</a>
       · <a href="https://x.com/kotov_wa">X</a>)
