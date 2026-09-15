@@ -66,6 +66,44 @@
     padding-left: 1.25rem;
     margin: 0.2rem 0 0;
   }
+  .compare {
+    margin: 0 0 2rem;
+  }
+  .compare h2 {
+    font-size: 1.1rem;
+    margin: 0 0 0.75rem;
+  }
+  .compare table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  .compare th,
+  .compare td {
+    text-align: left;
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid #eee;
+    vertical-align: top;
+  }
+  .compare th {
+    color: #666;
+    font-weight: 600;
+  }
+  .compare td:first-child {
+    color: #666;
+  }
+  .compare td.yes,
+  .compare td.no {
+    text-align: center;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  .compare td.yes {
+    color: #16a34a;
+  }
+  .compare td.no {
+    color: #dc2626;
+  }
   .apps h2 {
     margin: 0 0 0.4rem;
     font-size: 1.1rem;
@@ -163,6 +201,47 @@
         </ul>
       </li>
     </ul>
+  </div>
+
+  <div class="compare">
+    <h2>How this is different</h2>
+    <table>
+      <tr>
+        <th></th>
+        <th>Typical catalog tools</th>
+        <th>Electronic Catalog Maker</th>
+      </tr>
+      <tr>
+        <td>Pricing</td>
+        <td>Monthly cloud subscription</td>
+        <td>Free apps, no subscription</td>
+      </tr>
+      <tr>
+        <td>Storage</td>
+        <td>Their cloud servers</td>
+        <td>Local <code>.ecatm</code> file (SQLite), yours to keep</td>
+      </tr>
+      <tr>
+        <td>Internet</td>
+        <td>Required</td>
+        <td>Not required — fully offline</td>
+      </tr>
+      <tr>
+        <td>Checkout</td>
+        <td>Built into their platform</td>
+        <td>Buy links to your own store — no lock-in</td>
+      </tr>
+      <tr>
+        <td>Grid-style catalogs</td>
+        <td class="yes">✓</td>
+        <td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>Visual/technical catalogs — parts diagrams, machinery, furniture, and more</td>
+        <td class="no">✗</td>
+        <td class="yes">✓</td>
+      </tr>
+    </table>
   </div>
 
   <footer>
