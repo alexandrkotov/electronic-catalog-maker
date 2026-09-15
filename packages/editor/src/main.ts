@@ -349,8 +349,24 @@ function saveCollabDisplayName(name: string) {
   }
 }
 
+// crypto.randomUUID() is spec'd as secure-context-only (unlike
+// crypto.getRandomValues(), which isn't) — throws uncaught on a plain-http
+// origin. Confirmed live: an http redirect landing an iPad's Safari on the
+// insecure origin threw here with no visible error, silently breaking
+// "Join". This id is only ever compared for equality, never parsed as a
+// real UUID, so the fallback's exact format doesn't matter beyond looking
+// like one.
+function randomClientId(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 function initPresenceIdentity(name: string) {
-  collabClientId = crypto.randomUUID();
+  collabClientId = randomClientId();
   collabDisplayName = name;
   collabColor = PRESENCE_COLORS[Math.floor(Math.random() * PRESENCE_COLORS.length)]!;
   saveCollabDisplayName(name);
