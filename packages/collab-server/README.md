@@ -383,11 +383,17 @@ size" claim on faith:
 
 ## Known gaps to close before real public distribution
 
-- **Binaries are unsigned.** macOS Gatekeeper and Windows SmartScreen will
-  warn on first run. See the project's collaboration-hosting design notes
-  for the (deliberately deferred) signing plan — macOS isn't being pursued
-  at all for now; Windows is waiting on the same Partner Center identity
-  verification already in progress for the Store submissions.
+- **Direct-download binaries are unsigned.** macOS Gatekeeper and Windows
+  SmartScreen will warn on first run for anyone using the raw GitHub
+  Release download. Windows users can sidestep this via the
+  [Microsoft Store listing](https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=en-US&gl=US)
+  instead (certified and live as of 2026-09-14 — the Store re-signs the
+  package on ingestion, so no SmartScreen warning there). No equivalent
+  exists for macOS — an Apple Developer Program membership ($99/year)
+  would be needed to code-sign/notarize it, deliberately not pursued given
+  this project's low-maintenance, side-income goals; the
+  `xattr -d com.apple.quarantine` Terminal workaround (see the release
+  notes) is the permanent answer there, not a stopgap.
 - **No system-tray/menu-bar presence.** The status page is the app's real
   UI (see "How it works" above); Windows already has no console window at
   all (`--windows-hide-console`), so there it's *already* a genuinely
