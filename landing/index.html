@@ -4,6 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Electronic Catalog Maker</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png" />
+<link rel="apple-touch-icon" href="icon-192.png" />
 <style>
   /* Light-only, deliberately — no `color-scheme: light dark` (see the
      editor/viewer's own style.css for why: without every element paired
@@ -19,6 +22,19 @@
     background: #fff;
   }
   h1 { margin-bottom: 0.25rem; }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .brand img {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.45rem;
+  }
+  .brand h1 {
+    margin: 0;
+  }
   p.tagline { color: #666; margin-top: 0; }
   .apps {
     display: flex;
@@ -181,7 +197,10 @@
 </style>
 </head>
 <body>
-  <h1>Electronic Catalog Maker</h1>
+  <div class="brand">
+    <img src="icon-192.png" alt="" width="32" height="32" />
+    <h1>Electronic Catalog Maker</h1>
+  </div>
   <p class="tagline">
     Build and view interactive image-hotspot catalogs — no backend, no install.
   </p>
