@@ -22,6 +22,7 @@ rm -rf site
 mkdir -p site
 cp landing/index.html site/index.html
 cp landing/privacy.html site/privacy.html
+cp landing/CNAME site/CNAME
 cp -r packages/editor/dist site/editor
 cp -r packages/viewer/dist site/viewer
 cp -r demo site/demo
