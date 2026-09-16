@@ -21,6 +21,7 @@ pnpm --filter @ecm/viewer build
 rm -rf site
 mkdir -p site
 cp landing/index.html site/index.html
+cp landing/schools.html site/schools.html
 cp landing/privacy.html site/privacy.html
 cp landing/CNAME site/CNAME
 cp landing/favicon-16.png site/favicon-16.png
