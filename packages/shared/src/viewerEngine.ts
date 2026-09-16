@@ -86,8 +86,15 @@ const DEMO_CATALOGS = [
 // every mounted viewer, unlike the widths themselves.
 const PANEL_WIDTH_LIMITS = { min: 160, max: 640 };
 const COL_WIDTH_LIMITS = { min: 40, max: 400 };
-/** Name, SKU, Description, Extra, Buy — matches rowHtml()'s cell order below. */
-const DEFAULT_COL_WIDTHS = [100, 70, 110, 120, 64];
+/**
+ * Name, SKU, Description, Extra, Buy — matches rowHtml()'s cell order
+ * below. Buy's default (140, not the original 64) accounts for the
+ * longest label it now has to fit without overflowing its own column —
+ * "Add to collection"/"Add to cart" (addLabel(), ~123px rendered) — a
+ * narrower column just meant the pill visibly overflowed both edges of
+ * its own (overflow: visible) cell instead of sitting inside it.
+ */
+const DEFAULT_COL_WIDTHS = [100, 70, 110, 120, 140];
 type ShowOpenFilePicker = (options?: {
   types?: { description?: string; accept: Record<string, string[]> }[];
   multiple?: boolean;
@@ -341,8 +348,16 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // separately — sharing one localStorage key across instances is fine
   // (same as theme.ts already does), but the in-memory width has to be
   // each instance's own.
-  let imagesPanelWidth = loadPanelWidth("ecm-viewer-images-width", defaultPanelWidth(0.2, 220));
-  let tablePanelWidth = loadPanelWidth("ecm-viewer-table-width", defaultPanelWidth(0.3, 380));
+  // "-v2" (not the original "ecm-viewer-images-width"/"-table-width") is
+  // deliberate: those old keys are already saved in plenty of browsers from
+  // before defaultPanelWidth existed, fixed at the old 220/380px guess —
+  // reusing them would mean loadPanelWidth finds that old saved value and
+  // never even computes the new proportional default. A fresh key name
+  // makes every browser start from the new default exactly once, same as
+  // someone opening the widget for the very first time; an actual manual
+  // resize under the new key still persists normally from then on.
+  let imagesPanelWidth = loadPanelWidth("ecm-viewer-images-width-v2", defaultPanelWidth(0.2, 220));
+  let tablePanelWidth = loadPanelWidth("ecm-viewer-table-width-v2", defaultPanelWidth(0.3, 380));
   let colWidths = loadColWidths();
   applyPanelWidths(); // before the first render — avoids a flash of the default width
 
@@ -382,7 +397,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   function loadColWidths(): number[] {
     try {
-      const raw = localStorage.getItem("ecm-viewer-table-col-widths");
+      // "-v2" — same reasoning as the panel widths above: plenty of
+      // browsers already have the old key saved from before Buy's default
+      // widened from 64 to 140, and that stale array is exactly the right
+      // shape/type to pass every check below despite carrying the outdated
+      // value.
+      const raw = localStorage.getItem("ecm-viewer-table-col-widths-v2");
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length === DEFAULT_COL_WIDTHS.length && parsed.every((n) => typeof n === "number" && n > 0)) {
@@ -397,7 +417,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   function saveColWidths() {
     try {
-      localStorage.setItem("ecm-viewer-table-col-widths", JSON.stringify(colWidths));
+      localStorage.setItem("ecm-viewer-table-col-widths-v2", JSON.stringify(colWidths));
     } catch {
       // Width still applies for this session, just won't persist.
     }
@@ -434,7 +454,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       window.removeEventListener("mouseup", onUp);
       divider.classList.remove("dragging");
       try {
-        localStorage.setItem(side === "images" ? "ecm-viewer-images-width" : "ecm-viewer-table-width", String(side === "images" ? imagesPanelWidth : tablePanelWidth));
+        localStorage.setItem(side === "images" ? "ecm-viewer-images-width-v2" : "ecm-viewer-table-width-v2", String(side === "images" ? imagesPanelWidth : tablePanelWidth));
       } catch {
         // Width still applies for this session, just won't persist.
       }
