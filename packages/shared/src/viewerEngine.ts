@@ -826,14 +826,17 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   /**
    * Removes one item from the cart via its own "✕" in the review panel —
-   * distinct from actionToggleCart (which the Buy button reuses to also
-   * *add*) only in name, since a panel row is only ever rendered for an
-   * item already in the cart, so "toggle" and "remove" are the same
-   * operation here. Kept separate so the panel's intent reads clearly at
-   * the call site.
+   * can't just reuse actionToggleCart (a panel row is only ever rendered
+   * for an item already in the cart, so functionally that would also only
+   * ever remove): unlike toggle, this also closes the panel once the last
+   * item is gone, matching actionClearCart/actionOpenCart's "nothing left
+   * to review" behavior instead of leaving an empty panel stuck open.
    */
   function actionRemoveFromCart(rowUrl: string) {
-    actionToggleCart(rowUrl);
+    cartItems.delete(rowUrl);
+    if (cartStorageKeyValue) savePersistedCart(cartStorageKeyValue, cartItems);
+    if (cartItems.size === 0) cartOpen = false;
+    render();
   }
 
   /** Empties the cart entirely (panel's "Clear cart" button) — the only way to do this used to be re-finding and re-clicking every item's own Buy button one at a time. Closes the panel too, same as actionOpenCart: nothing left in it to review. */
