@@ -329,26 +329,34 @@
     // hits), summed across landing+editor+viewer ("TOTAL") since visiting
     // the landing page alone doesn't mean someone actually used the tool.
     //
-    // `?start=year` is required, not cosmetic: GoatCounter's TOTAL.json
-    // with *no* date-range params once hit a server-side cache entry that
-    // got stuck forever. "year" is effectively "all time" for now since the
-    // site is under a year old; revisit if that ever stops being true.
-    //
-    // A cache-busting `_` param is *also* required: the CDN in front of
-    // TOTAL.json can get stuck on ANY specific full URL, not just the
-    // no-date-range one — confirmed live when this exact `?start=year` URL
-    // itself later froze at a stale count for hours while the no-param
-    // variant was fresh. Appending the current time makes every request a
-    // guaranteed cache miss, so neither variant can freeze again.
-    fetch(`https://ecatm.goatcounter.com/counter/TOTAL.json?start=year&_=${Date.now()}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!data) return;
-        const n = data.count_unique;
-        document.getElementById("visits").innerHTML =
-          `<strong>${n}</strong> ${n === "1" ? "person has" : "people have"} used this tool so far.`;
-      })
-      .catch(() => {});
+    // GoatCounter's TOTAL.json sits behind a CDN (Fastly/Vinyl-Cache) that
+    // can get permanently stuck on either the no-date-range URL or the
+    // `?start=year` one — confirmed live on both sides at different times.
+    // A cache-busting query param does NOT help: the CDN ignores the query
+    // string for its cache key entirely (confirmed via curl — a brand-new
+    // nanosecond-timestamp param still returned the same stale response
+    // with an unchanged `age` header). Since the real count only ever goes
+    // up, fetching both known variants and taking the max sidesteps
+    // whichever one happens to be frozen at any given moment.
+    Promise.all(
+      [
+        "https://ecatm.goatcounter.com/counter/TOTAL.json",
+        "https://ecatm.goatcounter.com/counter/TOTAL.json?start=year",
+      ].map((url) =>
+        fetch(url)
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null),
+      ),
+    ).then((results) => {
+      const counts = results
+        .filter(Boolean)
+        .map((data) => parseInt(data.count_unique, 10))
+        .filter((n) => !Number.isNaN(n));
+      if (counts.length === 0) return;
+      const n = Math.max(...counts);
+      document.getElementById("visits").innerHTML =
+        `<strong>${n}</strong> ${n === 1 ? "person has" : "people have"} used this tool so far.`;
+    });
   </script>
 </body>
 </html>
