@@ -125,7 +125,12 @@ export function readMeta(db: Database): CatalogMeta {
     cartIdPattern: kv.get("cart_id_pattern") ?? DEFAULT_CART_ID_PATTERN,
     cartItemParam: kv.get("cart_item_param") ?? DEFAULT_CART_ITEM_PARAM,
     cartCheckoutBaseUrl: kv.get("cart_checkout_base_url") ?? DEFAULT_CART_CHECKOUT_BASE_URL,
+    defaultView: readDefaultView(kv.get("default_view")),
   };
+}
+
+function readDefaultView(value: string | undefined): "images" | "diagram" | "table" {
+  return value === "diagram" || value === "table" ? value : "images";
 }
 
 export interface StoreSettingsInput {
@@ -135,6 +140,7 @@ export interface StoreSettingsInput {
   cartIdPattern: string;
   cartItemParam: string;
   cartCheckoutBaseUrl: string;
+  defaultView: "images" | "diagram" | "table";
 }
 
 /** Writes the editor's "Store settings" modal fields into the meta table. */
@@ -148,6 +154,7 @@ export function updateStoreSettings(db: Database, input: StoreSettingsInput): vo
   stmt.run(["cart_id_pattern", input.cartIdPattern]);
   stmt.run(["cart_item_param", input.cartItemParam]);
   stmt.run(["cart_checkout_base_url", input.cartCheckoutBaseUrl]);
+  stmt.run(["default_view", input.defaultView]);
   stmt.free();
 }
 

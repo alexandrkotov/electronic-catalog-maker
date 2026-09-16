@@ -227,6 +227,9 @@ let storeSettingsCartMode: "accumulate" | "instant" = "accumulate";
 let storeSettingsCartIdPattern = DEFAULT_CART_ID_PATTERN;
 let storeSettingsCartItemParam = DEFAULT_CART_ITEM_PARAM;
 let storeSettingsCartCheckoutBaseUrl = DEFAULT_CART_CHECKOUT_BASE_URL;
+// Which single panel a fresh open of this catalog starts on, below the
+// mobile-tab breakpoint — see CatalogMeta.defaultView.
+let storeSettingsDefaultView: "images" | "diagram" | "table" = "images";
 
 // "Can't find a collaboration server" dialog — shown when
 // actionStartCollaboration()'s auto-detect (see detectLocalCollabServer)
@@ -781,6 +784,7 @@ function actionOpenStoreSettings() {
   storeSettingsCartIdPattern = meta.cartIdPattern;
   storeSettingsCartItemParam = meta.cartItemParam;
   storeSettingsCartCheckoutBaseUrl = meta.cartCheckoutBaseUrl;
+  storeSettingsDefaultView = meta.defaultView;
   storeSettingsOpen = true;
   render();
 }
@@ -799,6 +803,7 @@ function actionSubmitStoreSettings() {
     cartIdPattern: storeSettingsCartIdPattern.trim() || DEFAULT_CART_ID_PATTERN,
     cartItemParam: storeSettingsCartItemParam.trim() || DEFAULT_CART_ITEM_PARAM,
     cartCheckoutBaseUrl: storeSettingsCartCheckoutBaseUrl.trim() || DEFAULT_CART_CHECKOUT_BASE_URL,
+    defaultView: storeSettingsDefaultView,
   });
   storeSettingsOpen = false;
   setStatus("Updated store settings.");
@@ -2857,6 +2862,22 @@ function renderStoreSettingsDialog(): string {
           <p class="hint">${hintText}</p>
         </details>`
         }
+        <div class="field">
+          <label>Default view (on a narrow screen/embed)</label>
+          <label class="radio-option">
+            <input type="radio" name="default-view" value="images" ${storeSettingsDefaultView === "images" ? "checked" : ""} />
+            Images — same as before this setting existed
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="default-view" value="diagram" ${storeSettingsDefaultView === "diagram" ? "checked" : ""} />
+            Diagram — skip straight to the clickable image
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="default-view" value="table" ${storeSettingsDefaultView === "table" ? "checked" : ""} />
+            Table — skip straight to the data table
+          </label>
+          <p class="hint">Only visible below the mobile-tab breakpoint (an embed in a narrow container, or an actual phone) — above it, Images/Diagram/Table already all show at once.</p>
+        </div>
         <div class="confirm-actions">
           <button id="store-settings-cancel">Cancel</button>
           <button id="store-settings-submit">Save</button>
@@ -3362,6 +3383,11 @@ function wireEvents(links: CatalogLink[]) {
   document.querySelectorAll<HTMLInputElement>('input[name="cart-mode"]').forEach((radio) => {
     radio.addEventListener("change", () => {
       if (radio.checked) storeSettingsCartMode = radio.value as "accumulate" | "instant";
+    });
+  });
+  document.querySelectorAll<HTMLInputElement>('input[name="default-view"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      if (radio.checked) storeSettingsDefaultView = radio.value as "images" | "diagram" | "table";
     });
   });
   const cartIdPatternInput = document.getElementById("cart-id-pattern-input") as HTMLInputElement | null;

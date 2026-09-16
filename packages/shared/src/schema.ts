@@ -109,4 +109,6 @@ export const CATALOG_SCHEMA_META_DEFAULTS: Record<string, string> = {
   cart_id_pattern: DEFAULT_CART_ID_PATTERN,
   cart_item_param: DEFAULT_CART_ITEM_PARAM,
   cart_checkout_base_url: DEFAULT_CART_CHECKOUT_BASE_URL,
+  // "images" | "diagram" | "table" — see CatalogMeta.defaultView for what this controls.
+  default_view: "images",
 };

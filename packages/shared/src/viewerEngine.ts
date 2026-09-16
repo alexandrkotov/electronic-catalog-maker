@@ -244,7 +244,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // Set from the catalog's own meta (catalog_mode/store_url/cart_mode/
   // cart_id_pattern/..., edited in the editor's "Store settings" dialog)
   // each time a catalog loads — see openBytes(). "education" is a purely
-  // cosmetic relabel (see cartIcon/cartLabel/cartNoun/buyLabel below) — Buy,
+  // cosmetic relabel (see cartIcon/cartLabel/cartNoun/addLabel/directOpenLabel below) — Buy,
   // Cart, and PDF QR checkout codes all keep working exactly as in
   // "commercial", just under different on-screen names for an audience with
   // nothing to actually buy.
@@ -341,8 +341,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // separately — sharing one localStorage key across instances is fine
   // (same as theme.ts already does), but the in-memory width has to be
   // each instance's own.
-  let imagesPanelWidth = loadPanelWidth("ecm-viewer-images-width", 220);
-  let tablePanelWidth = loadPanelWidth("ecm-viewer-table-width", 380);
+  let imagesPanelWidth = loadPanelWidth("ecm-viewer-images-width", defaultPanelWidth(0.2, 220));
+  let tablePanelWidth = loadPanelWidth("ecm-viewer-table-width", defaultPanelWidth(0.3, 380));
   let colWidths = loadColWidths();
   applyPanelWidths(); // before the first render — avoids a flash of the default width
 
@@ -354,6 +354,22 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       // localStorage unavailable (privacy mode, etc.) — fall back to the default.
     }
     return fallback;
+  }
+
+  /**
+   * The very first time this widget opens (nothing saved in localStorage
+   * yet), size a side panel as a fraction of the widget's own current
+   * width instead of a fixed px guess — so images/table/diagram land
+   * roughly 20%/30%/50% of the widget regardless of whether it's a full
+   * browser tab or a ~900px embed, rather than a fixed-px default that's
+   * cramped in a narrow embed and lost in a wide one. Once the person
+   * drags a divider, their own px choice persists exactly as before —
+   * this only shapes the untouched default.
+   */
+  function defaultPanelWidth(fraction: number, pxFallback: number): number {
+    const total = container.clientWidth;
+    if (!total) return pxFallback; // not laid out yet (e.g. a still-hidden host) — best-effort fallback
+    return Math.min(PANEL_WIDTH_LIMITS.max, Math.max(PANEL_WIDTH_LIMITS.min, Math.round(total * fraction)));
   }
 
   // Applied as CSS custom properties directly on `container` (not
@@ -664,7 +680,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     activeImageId = listImages(db)[0]?.id ?? null;
     selectedLinkId = null;
     zoom = 1;
-    mobileTab = "images"; // fresh catalog — start from the image list, same as opening one the first time
+    // Fresh catalog: start on the catalog's own defaultView (see CatalogMeta
+    // — "images" unless the author picked otherwise in Store settings).
+    // Only visible below the mobile-tab breakpoint (embeds in a narrow
+    // container, or an actual phone) — a single-image catalog especially
+    // benefits from skipping straight to "diagram", since the image list
+    // is then just a pointless extra tap before the actual content.
+    mobileTab = loadedMeta.defaultView === "diagram" ? "stage" : loadedMeta.defaultView === "table" ? "table" : "images";
     tableAutoScrolledForBuy = false; // this catalog's table hasn't had its first-display Buy-reveal scroll yet
     remoteDialogOpen = false;
     openedFileHandle = handle;
@@ -1582,7 +1604,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                     <strong>${escapeHtml(r.name || r.url)}</strong>${r.sku ? ` · ${escapeHtml(r.sku)}` : ""}<br>
                     <span class="hint">${escapeHtml(imageNameById.get(r.imageId) ?? "")}</span>
                   </span>
-                  ${buyUrl ? `<a class="cart-open-btn" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer">${catalogMode === "education" ? "View" : "Open"}</a>` : ""}
+                  ${buyUrl ? `<a class="cart-open-btn" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer">${directOpenLabel()}</a>` : ""}
                   <button type="button" class="cart-remove-btn" data-remove-url="${escapeHtml(r.url)}" title="Remove from ${cartNoun()}">✕</button>
                 </li>`;
                   })
@@ -1619,9 +1641,25 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function cartNoun(): string {
     return catalogMode === "education" ? "your collection" : "cart";
   }
-  function buyLabel(inCart: boolean): string {
-    if (catalogMode === "education") return inCart ? "Added ✓" : "Learn more";
-    return inCart ? "In cart ✓" : "Buy";
+  /**
+   * The table row's Buy/Learn-more control when cartMode is "accumulate" —
+   * a toggle that adds to the cart/collection, not a navigate, so it reads
+   * as "add", not "go" (unlike directOpenLabel below). Splitting this from
+   * directOpenLabel is what lets the two same-catalogMode buttons say
+   * different things depending on whether clicking one takes you anywhere.
+   */
+  function addLabel(inCart: boolean): string {
+    if (catalogMode === "education") return inCart ? "Added ✓" : "Add to collection";
+    return inCart ? "In cart ✓" : "Add to cart";
+  }
+  /**
+   * The label for any control that actually opens buy_url right away — the
+   * table row's Buy/Learn-more link under cartMode "instant", and each
+   * Cart/Collection panel row's own open link (same destination as the
+   * table's instant link, just reached from the review panel instead).
+   */
+  function directOpenLabel(): string {
+    return catalogMode === "education" ? "Learn more" : "Buy";
   }
   function skuLabel(): string {
     return catalogMode === "education" ? "Code" : "SKU";
@@ -1659,11 +1697,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       const inCart = cartItems.has(r.url);
       // No title/native tooltip here — it stacked with the cell's own hover
       // popover (.cell-text) into an unreadable double-tooltip mess, and the
-      // button's own label (buyLabel()) already says what it does.
-      buyControl = `<button type="button" class="buy-btn ${inCart ? "in-cart" : ""}" data-cart-url="${escapeHtml(r.url)}">${buyLabel(inCart)}</button>`;
+      // button's own label (addLabel()) already says what it does.
+      buyControl = `<button type="button" class="buy-btn ${inCart ? "in-cart" : ""}" data-cart-url="${escapeHtml(r.url)}">${addLabel(inCart)}</button>`;
     } else if (buyUrl) {
       // "instant" mode: no cart/collection at all — every link opens straight away.
-      buyControl = `<a class="buy-btn" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer" title="${buyLabel(false)}">${buyLabel(false)}</a>`;
+      buyControl = `<a class="buy-btn" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer" title="${directOpenLabel()}">${directOpenLabel()}</a>`;
     }
     // Buy gets its own column (not appended after Extra's text) — sitting
     // right after variable-length extra text made its on-screen position
