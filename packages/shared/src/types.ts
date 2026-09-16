@@ -45,6 +45,16 @@ export interface CatalogMeta {
   catalogName: string;
   createdBy: string;
   createdAt: string;
+  /**
+   * "commercial" (default): the viewer's Buy/Cart UI is labeled "Buy" and
+   * "Cart" (🛒). "education": purely cosmetic relabel to "Learn more" and
+   * "Collection" (📚) — for a catalog with nothing to actually sell (e.g. a
+   * school's visual-aid catalog) whose Buy links point somewhere other than
+   * a checkout. Every behavior stays identical either way: cart accumulation,
+   * checkout links, and PDF QR codes all keep working exactly as under
+   * "commercial" — see viewerEngine.ts cartIcon/cartLabel/cartNoun/buyLabel.
+   */
+  catalogMode: "commercial" | "education";
   /** Free-form, for the catalog author's own reference — not parsed or validated. */
   storeUrl: string;
   /**

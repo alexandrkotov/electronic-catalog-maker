@@ -239,11 +239,17 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // actionRemoveFromCart/actionClearCart) — none of which was possible
   // before this, short of re-finding each hotspot to toggle it off again.
   let cartOpen = false;
-  // Set from the catalog's own meta (store_url/cart_mode/cart_id_pattern/...,
-  // edited in the editor's "Store settings" dialog) each time a catalog
-  // loads — see openBytes(). "instant" turns every Buy button into the old
-  // single-item instant-navigate link, even for rows that could otherwise be
-  // combined into a cart (see rowHtml/parseCartItemId).
+  // Set from the catalog's own meta (catalog_mode/store_url/cart_mode/
+  // cart_id_pattern/..., edited in the editor's "Store settings" dialog)
+  // each time a catalog loads — see openBytes(). "education" is a purely
+  // cosmetic relabel (see cartIcon/cartLabel/cartNoun/buyLabel below) — Buy,
+  // Cart, and PDF QR checkout codes all keep working exactly as in
+  // "commercial", just under different on-screen names for an audience with
+  // nothing to actually buy.
+  let catalogMode: "commercial" | "education" = "commercial";
+  // "instant" turns every Buy button into the old single-item
+  // instant-navigate link, even for rows that could otherwise be combined
+  // into a cart (see rowHtml/parseCartItemId).
   let cartMode: "accumulate" | "instant" = "accumulate";
   let cartIdPattern = DEFAULT_CART_ID_PATTERN;
   let cartItemParam = DEFAULT_CART_ITEM_PARAM;
@@ -641,6 +647,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       statusMessage = `Opened catalog "${meta.catalogName}".`;
     }
     const loadedMeta = readMeta(db);
+    catalogMode = loadedMeta.catalogMode;
     cartMode = loadedMeta.cartMode;
     cartIdPattern = loadedMeta.cartIdPattern;
     cartItemParam = loadedMeta.cartItemParam;
@@ -1141,7 +1148,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                  <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
                  ${updateAddressBar ? `<button id="btn-share-view" ${db && !isLoopbackHostname(location.hostname) ? "" : "disabled"} title="${escapeHtml(shareViewButtonTitle())}">Share view…</button>` : ""}
                  ${exportPdf ? `<button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="Export this catalog as a printable A4 PDF — a QR code next to each item that has a Buy link">${exportPdfBusy ? "Exporting PDF…" : "Export PDF…"}</button>` : ""}
-                 ${cartMode === "accumulate" ? `<button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="Review, edit, or check out everything added to cart">🛒 Cart (${cartItems.size})</button>` : ""}
+                 ${cartMode === "accumulate" ? `<button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="Review, edit, or check out everything added to ${cartNoun()}">${cartIcon()} ${cartLabel()} (${cartItems.size})</button>` : ""}
                  <span class="spacer"></span>
                  <button id="btn-theme" title="Toggle light/dark theme">${currentTheme(themeTarget) === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
                  <span class="hint">${escapeHtml(statusMessage)}</span>
@@ -1463,7 +1470,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         <div class="cart-items">
           ${
             rows.length === 0
-              ? `<p class="hint">Cart is empty.</p>`
+              ? `<p class="hint">${cartLabel()} is empty.</p>`
               : `<ul>${rows
                   .map(
                     (r) => `
@@ -1472,15 +1479,15 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                     <strong>${escapeHtml(r.name || r.url)}</strong>${r.sku ? ` · ${escapeHtml(r.sku)}` : ""}<br>
                     <span class="hint">${escapeHtml(imageNameById.get(r.imageId) ?? "")}</span>
                   </span>
-                  <button type="button" class="cart-remove-btn" data-remove-url="${escapeHtml(r.url)}" title="Remove from cart">✕</button>
+                  <button type="button" class="cart-remove-btn" data-remove-url="${escapeHtml(r.url)}" title="Remove from ${cartNoun()}">✕</button>
                 </li>`,
                   )
                   .join("")}</ul>`
           }
         </div>
         <div class="cart-panel-actions">
-          <button type="button" id="cart-clear" ${rows.length === 0 ? "disabled" : ""}>Clear cart</button>
-          <button type="button" id="cart-checkout" ${rows.length === 0 ? "disabled" : ""}>Checkout (${rows.length})</button>
+          <button type="button" id="cart-clear" ${rows.length === 0 ? "disabled" : ""}>Clear ${cartLabel().toLowerCase()}</button>
+          <button type="button" id="cart-checkout" ${rows.length === 0 ? "disabled" : ""}>${catalogMode === "education" ? "Open all" : "Checkout"} (${rows.length})</button>
         </div>
       </div>
     `;
@@ -1494,6 +1501,23 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (l.url === selectedUrl) classes.push("selected");
     if (l.id === selectedLinkId) classes.push("current");
     return `<div class="${classes.join(" ")}" data-id="${l.id}" data-url="${escapeHtml(l.url)}" style="top:${l.top}px;left:${l.left}px;font-size:${l.fontSize}px" title="${escapeHtml(l.url)}">${escapeHtml(l.name)}</div>`;
+  }
+
+  // catalog_mode's only effect (see CatalogMeta.catalogMode) — swaps every
+  // commerce-flavored label/icon in the cart UI for an education-flavored
+  // one, with identical behavior underneath either way.
+  function cartIcon(): string {
+    return catalogMode === "education" ? "📚" : "🛒";
+  }
+  function cartLabel(): string {
+    return catalogMode === "education" ? "Collection" : "Cart";
+  }
+  function cartNoun(): string {
+    return catalogMode === "education" ? "your collection" : "cart";
+  }
+  function buyLabel(inCart: boolean): string {
+    if (catalogMode === "education") return inCart ? "Added ✓" : "Learn more";
+    return inCart ? "In cart ✓" : "Buy";
   }
 
   // Small dot button rendered inside a table cell's hover popover — copies
@@ -1529,11 +1553,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       const inCart = cartItems.has(r.url);
       // No title/native tooltip here — it stacked with the cell's own hover
       // popover (.cell-text) into an unreadable double-tooltip mess, and the
-      // button's own label ("Buy" / "In cart ✓") already says what it does.
-      buyControl = `<button type="button" class="buy-btn ${inCart ? "in-cart" : ""}" data-cart-url="${escapeHtml(r.url)}">${inCart ? "In cart ✓" : "Buy"}</button>`;
+      // button's own label (buyLabel()) already says what it does.
+      buyControl = `<button type="button" class="buy-btn ${inCart ? "in-cart" : ""}" data-cart-url="${escapeHtml(r.url)}">${buyLabel(inCart)}</button>`;
     } else if (buyUrl) {
       // Some other/unrecognized store link — can't be combined into the cart, so it's still an instant single-item link.
-      buyControl = `<a class="buy-btn" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer" title="Buy this item">Buy</a>`;
+      buyControl = `<a class="buy-btn" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer" title="${buyLabel(false)}">${buyLabel(false)}</a>`;
     }
     // Buy gets its own column (not appended after Extra's text) — sitting
     // right after variable-length extra text made its on-screen position
