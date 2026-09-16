@@ -119,6 +119,7 @@ export function readMeta(db: Database): CatalogMeta {
     // Both keys are simply absent in a catalog saved before this setting
     // existed — no ALTER TABLE migration needed, `meta` is already a plain
     // key/value table, so a missing key just falls back to the default here.
+    catalogMode: kv.get("catalog_mode") === "education" ? "education" : "commercial",
     storeUrl: kv.get("store_url") ?? "",
     cartMode: kv.get("cart_mode") === "instant" ? "instant" : "accumulate",
     cartIdPattern: kv.get("cart_id_pattern") ?? DEFAULT_CART_ID_PATTERN,
@@ -128,6 +129,7 @@ export function readMeta(db: Database): CatalogMeta {
 }
 
 export interface StoreSettingsInput {
+  catalogMode: "commercial" | "education";
   storeUrl: string;
   cartMode: "accumulate" | "instant";
   cartIdPattern: string;
@@ -140,6 +142,7 @@ export function updateStoreSettings(db: Database, input: StoreSettingsInput): vo
   const stmt = db.prepare(
     "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
   );
+  stmt.run(["catalog_mode", input.catalogMode]);
   stmt.run(["store_url", input.storeUrl]);
   stmt.run(["cart_mode", input.cartMode]);
   stmt.run(["cart_id_pattern", input.cartIdPattern]);

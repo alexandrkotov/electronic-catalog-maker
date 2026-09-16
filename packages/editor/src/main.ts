@@ -210,11 +210,15 @@ let remoteError: string | null = null;
 let searchOpen = false;
 let searchQuery = "";
 let searchField: SearchField = "all";
-// "Store settings" dialog state — edits the catalog's store_url/cart_mode
-// meta (see db.ts updateStoreSettings), which the viewer reads to decide how
-// its Buy button behaves. Opened fresh from the catalog's current meta each
-// time (not kept live in sync with it), same lifecycle as the remote dialog.
+// "Store settings" dialog state — edits the catalog's catalog_mode/store_url/
+// cart_mode meta (see db.ts updateStoreSettings), which the viewer reads to
+// decide how its Buy button behaves and, for catalogMode, which labels/icon
+// it shows for Buy/Cart (see viewerEngine.ts cartIcon/cartLabel/buyLabel —
+// catalogMode changes no behavior, only on-screen wording). Opened fresh
+// from the catalog's current meta each time (not kept live in sync with it),
+// same lifecycle as the remote dialog.
 let storeSettingsOpen = false;
+let storeSettingsCatalogMode: "commercial" | "education" = "commercial";
 let storeSettingsUrlValue = "";
 let storeSettingsCartMode: "accumulate" | "instant" = "accumulate";
 // "Advanced" cart-URL recipe fields — how a combined checkout URL is built
@@ -771,6 +775,7 @@ async function actionSubmitRemoteDialog() {
 function actionOpenStoreSettings() {
   if (!db) return;
   const meta = readMeta(db);
+  storeSettingsCatalogMode = meta.catalogMode;
   storeSettingsUrlValue = meta.storeUrl;
   storeSettingsCartMode = meta.cartMode;
   storeSettingsCartIdPattern = meta.cartIdPattern;
@@ -788,6 +793,7 @@ function actionCancelStoreSettings() {
 function actionSubmitStoreSettings() {
   if (!db) return;
   applyAndBroadcast("updateStoreSettings", updateStoreSettings, {
+    catalogMode: storeSettingsCatalogMode,
     storeUrl: storeSettingsUrlValue.trim(),
     cartMode: storeSettingsCartMode,
     cartIdPattern: storeSettingsCartIdPattern.trim() || DEFAULT_CART_ID_PATTERN,
@@ -2778,10 +2784,22 @@ function renderStoreSettingsDialog(): string {
     storeSettingsCartIdPattern === DEFAULT_CART_ID_PATTERN &&
     storeSettingsCartItemParam === DEFAULT_CART_ITEM_PARAM &&
     storeSettingsCartCheckoutBaseUrl === DEFAULT_CART_CHECKOUT_BASE_URL;
+  const isEducation = storeSettingsCatalogMode === "education";
   return `
     <div class="confirm-overlay">
       <div class="confirm-box">
         <h2>Store settings</h2>
+        <div class="field">
+          <label>Catalog type</label>
+          <label class="radio-option">
+            <input type="radio" name="catalog-mode" value="commercial" ${!isEducation ? "checked" : ""} />
+            Commercial — labeled "Buy" / "Cart", as a store catalog
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="catalog-mode" value="education" ${isEducation ? "checked" : ""} />
+            Education — same buttons relabeled "Learn more" / "Collection" (📚), nothing else changes
+          </label>
+        </div>
         <div class="field">
           <label for="store-url-input">Store URL (for your own reference)</label>
           <input type="text" id="store-url-input" value="${escapeHtml(storeSettingsUrlValue)}" placeholder="https://payhip.com/YourStore" />
@@ -3297,6 +3315,11 @@ function wireEvents(links: CatalogLink[]) {
   }
   document.getElementById("store-settings-cancel")?.addEventListener("click", actionCancelStoreSettings);
   document.getElementById("store-settings-submit")?.addEventListener("click", actionSubmitStoreSettings);
+  document.querySelectorAll<HTMLInputElement>('input[name="catalog-mode"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      if (radio.checked) storeSettingsCatalogMode = radio.value as "commercial" | "education";
+    });
+  });
   const storeUrlInput = document.getElementById("store-url-input") as HTMLInputElement | null;
   storeUrlInput?.addEventListener("input", () => {
     storeSettingsUrlValue = storeUrlInput.value;
