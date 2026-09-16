@@ -11,7 +11,7 @@
   /* Light-only, deliberately — see landing/index.html's own note on this. */
   body {
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    max-width: 760px;
+    max-width: 960px;
     margin: 3rem auto 4rem;
     padding: 0 1.5rem;
     line-height: 1.5;
@@ -39,26 +39,36 @@
   }
   .brand h1 {
     margin: 0;
-    font-size: 1.5rem;
+    font-size: 1.6rem;
   }
   p.tagline {
-    color: #666;
-    margin: 0.4rem 0 0;
-    font-size: 1.05rem;
+    color: #444;
+    margin: 0.5rem 0 0;
+    font-size: 1.15rem;
+    max-width: 40rem;
   }
   .points {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 1rem;
-    margin: 2rem 0;
+    margin: 2.25rem 0;
+  }
+  @media (min-width: 820px) {
+    .points { grid-template-columns: repeat(4, 1fr); }
   }
   @media (max-width: 640px) {
     .points { grid-template-columns: 1fr; }
   }
   .points > div {
-    border: 1px solid #d0d5dd;
-    border-radius: 8px;
-    padding: 1rem 1.1rem;
+    background: #f6f8fe;
+    border: 1px solid #dbe3fb;
+    border-radius: 10px;
+    padding: 1.1rem 1.15rem;
+  }
+  .points .point-icon {
+    font-size: 1.4rem;
+    line-height: 1;
+    margin-bottom: 0.5rem;
   }
   .points h3 {
     margin: 0 0 0.35rem;
@@ -139,33 +149,37 @@
 
   <div class="brand">
     <img src="icon-192.png" alt="" width="32" height="32" />
-    <h1>ECM for Schools</h1>
+    <h1>ECM for Schools 🎓</h1>
   </div>
   <p class="tagline">
-    Turn any diagram into a click-around class project — no accounts, no cloud, no subscription.
+    Got a diagram? In a few minutes it's a click-around class project — no accounts to create, no cloud to trust, nothing to pay for.
   </p>
 
   <div class="points">
     <div>
+      <div class="point-icon">🔒</div>
       <h3>No accounts, no student data</h3>
       <p>A catalog is just a file on your own device. There's no cloud database behind it — nothing to sign up for, and nothing to breach or leak.</p>
     </div>
     <div>
+      <div class="point-icon">👥</div>
       <h3>Real-time group projects</h3>
       <p>A whole class can label one diagram together, live, on the same file at once — using the free, optional collaboration server.</p>
     </div>
     <div>
+      <div class="point-icon">📅</div>
       <h3>Still works next year</h3>
       <p>A file saved in September opens exactly the same in June — no renewal, no expiring account, no breaking update to worry about.</p>
     </div>
     <div>
+      <div class="point-icon">💸</div>
       <h3>Free apps, no subscription</h3>
       <p>The same Editor and Viewer everyone else uses — just switched to "Education" mode, which relabels Buy/Cart into Learn more/Collection.</p>
     </div>
   </div>
 
   <div class="demo-section">
-    <h2>Try it — an animal cell, ready to click around</h2>
+    <h2>🧫 Try it — an animal cell, ready to click around</h2>
     <p class="hint">
       This demo catalog has "Education" mode switched on: notice the toolbar says
       "📚 Collection" instead of "🛒 Cart", and each part says "Learn more" instead of "Buy" —
@@ -179,7 +193,7 @@
   </div>
 
   <div class="cta">
-    <h2>Build your own</h2>
+    <h2>✏️ Build your own</h2>
     <p>Drop in a diagram — a cell, an engine, a map, a machine — place a few hotspots, and it's a class project. Works offline, keeps working after the bell rings on the last day of school.</p>
     <a class="btn" href="editor/">Open the Editor →</a>
     <a class="btn secondary" href="./">See the full app →</a>
