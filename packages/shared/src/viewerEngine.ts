@@ -212,17 +212,19 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   let searchOpen = false;
   let searchQuery = "";
   let searchField: SearchField = "all";
-  // Multi-item cart for rows whose extra.buy_url matches the catalog's own
-  // cart_id_pattern (see schema.ts DEFAULT_CART_ID_PATTERN and CatalogMeta;
-  // defaults describe Payhip's own URL scheme, but any store built on
-  // repeated per-item query parameters can be described the same way via
-  // the editor's Store settings dialog) — such links can be combined into
-  // one multi-item checkout URL (buildCartCheckoutUrl), so the Buy button on
-  // those rows adds to this cart instead of navigating immediately; a
-  // toolbar button opens the combined checkout for everything in it. Rows
-  // with some other/unrecognized buy_url fall back to the old
-  // instant-navigate behavior (see rowHtml/parseCartItemId), and cart_mode
-  // "instant" opts every row out of this regardless of whether it matches.
+  // Multi-item cart for every row with a buy_url, under cart_mode
+  // "accumulate" — the Buy/Learn-more button adds to this cart instead of
+  // navigating immediately, and a toolbar button reviews/opens everything in
+  // it at once (see actionOpenCart). Rows whose buy_url matches the
+  // catalog's own cart_id_pattern (see schema.ts DEFAULT_CART_ID_PATTERN and
+  // CatalogMeta; defaults describe Payhip's own URL scheme, but any store
+  // built on repeated per-item query parameters can be described the same
+  // way via the editor's Store settings dialog) are combinable — their ids
+  // collapse into ONE checkout URL (buildCartCheckoutUrl). Everything else
+  // (e.g. a school catalog's plain Wikipedia links, with nothing to combine
+  // them into) opens individually instead — still added to the cart for
+  // review, just not merged. cart_mode "instant" opts every row out of the
+  // cart entirely, back to the old single-item instant-navigate link.
   // Persisted to localStorage per catalog (see cartStorageKey/
   // loadPersistedCart/savePersistedCart in cart.ts) so a cart survives
   // closing the tab/app entirely — the point being someone can add parts
@@ -848,17 +850,114 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     render();
   }
 
-  /** Opens one combined checkout for every cart item, then leaves the cart as-is (mirrors the single-item Buy button, which never cleared itself either) — just closes the review panel, since the review is done. */
+  /**
+   * The Collection panel's one bulk action — "Checkout" under "commercial"
+   * (actionOpenCart), "Print list" under "education" (actionPrintCollection).
+   * They don't share one implementation because they don't share one goal:
+   * a real store cart genuinely wants everything opened/paid for at once, a
+   * school reference list just wants a keepable artifact — see
+   * actionPrintCollection's own doc comment for why "open every tab at
+   * once" turned out to be the wrong shape for that second case.
+   */
+  function actionCartPrimaryAction() {
+    if (catalogMode === "education") actionPrintCollection();
+    else actionOpenCart();
+  }
+
+  /**
+   * "Checkout" for every cart item, then leaves the cart as-is (mirrors the
+   * single-item Buy button, which never cleared itself either) — just
+   * closes the review panel, since the review is done.
+   *
+   * Cart items split into two groups: a `buy_url` matching cartIdPattern
+   * (a real store's SKU-style link, e.g. Payhip) is combinable — every such
+   * id across the cart collapses into ONE checkout URL via
+   * buildCartCheckoutUrl. A `buy_url` that doesn't match (some other/
+   * unrecognized store link) opens individually, one window.open per item,
+   * instead of being silently dropped — rare for a real store cart (they
+   * normally share one pattern), so unlike actionPrintCollection's crowd of
+   * reference links, a popup blocker swallowing all but the first of these
+   * is an edge case worth tolerating rather than designing the whole
+   * checkout flow around.
+   */
   function actionOpenCart() {
     if (!db || cartItems.size === 0) return;
-    const ids = listAllRows(db)
-      .filter((r) => cartItems.has(r.url))
-      .map((r) => parseCartItemId(typeof r.extra.buy_url === "string" ? r.extra.buy_url : "", cartIdPattern))
-      .filter((id): id is string => id !== null);
-    if (ids.length === 0) return;
-    window.open(buildCartCheckoutUrl(ids, cartItemParam, cartCheckoutBaseUrl), "_blank", "noopener,noreferrer");
+    const combinableIds: string[] = [];
+    const directUrls: string[] = [];
+    for (const r of listAllRows(db)) {
+      if (!cartItems.has(r.url)) continue;
+      const buyUrl = typeof r.extra.buy_url === "string" ? r.extra.buy_url : "";
+      if (!buyUrl) continue;
+      const id = parseCartItemId(buyUrl, cartIdPattern);
+      if (id !== null) combinableIds.push(id);
+      else directUrls.push(buyUrl);
+    }
+    if (combinableIds.length === 0 && directUrls.length === 0) return;
+    if (combinableIds.length > 0) {
+      window.open(buildCartCheckoutUrl(combinableIds, cartItemParam, cartCheckoutBaseUrl), "_blank", "noopener,noreferrer");
+    }
+    for (const url of directUrls) window.open(url, "_blank", "noopener,noreferrer");
     cartOpen = false;
     render();
+  }
+
+  /**
+   * "Print list" for every Collection item — a printable sheet with each
+   * item's name and its own link, plus a scannable QR code, instead of
+   * trying to open every item's tab at once. Batch-opening N tabs from one
+   * click is exactly the kind of thing browsers' popup blockers exist to
+   * stop — reliably only the first (sometimes none) actually opens, worse
+   * yet on a school-managed Chromebook with stricter popup policy. A sheet
+   * a class can print, hand out, or scan links from with a phone has no
+   * such ceiling, and doubles as a worksheet. Opens in a new tab rather
+   * than replacing the viewer, and leaves the Collection untouched — this
+   * is a printable copy, not a checkout.
+   */
+  function actionPrintCollection() {
+    if (!db || cartItems.size === 0) return;
+    const rows = listAllRows(db).filter((r) => cartItems.has(r.url));
+    const catalogTitle = readMeta(db).catalogName || "Catalog";
+    const items = rows
+      .map((r) => {
+        const buyUrl = typeof r.extra.buy_url === "string" ? r.extra.buy_url : "";
+        return `
+          <li>
+            <div class="item-text">
+              <strong>${escapeHtml(r.name || r.url)}</strong>
+              ${buyUrl ? `<a href="${escapeHtml(buyUrl)}">${escapeHtml(buyUrl)}</a>` : `<span>(no link)</span>`}
+            </div>
+            ${buyUrl ? `<div class="item-qr">${renderQrCodeSvg(buyUrl)}</div>` : ""}
+          </li>`;
+      })
+      .join("");
+    const html = `<!doctype html>
+<html><head><meta charset="UTF-8" /><title>${escapeHtml(catalogTitle)} — ${escapeHtml(cartLabel())}</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.3rem; margin: 0 0 1.5rem; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.9rem 0; border-bottom: 1px solid #ddd; }
+  .item-text { min-width: 0; }
+  .item-text strong { display: block; font-size: 1rem; }
+  .item-text a { font-size: 0.8rem; color: #2563eb; word-break: break-all; }
+  .item-text span { font-size: 0.8rem; color: #888; }
+  .item-qr { flex: none; width: 72px; height: 72px; }
+  @media print { body { margin: 0.5rem auto; } }
+</style>
+</head><body>
+<h1>${escapeHtml(catalogTitle)} — ${escapeHtml(cartLabel())}</h1>
+<ul>${items}</ul>
+</body></html>`;
+    // No "noopener" here (unlike every other window.open in this file) —
+    // this tab's whole content is our own trusted HTML string, written in
+    // via document.write right below, which needs a scriptable (non-
+    // opener-severed) window reference to work at all.
+    const w = window.open("", "_blank");
+    if (!w) return; // a single new-tab open still needs the user's popup permission once
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
   }
 
   /** Clicking a search result: unlike actionSelectRowByUrl, this may switch images first. */
@@ -1205,7 +1304,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                    <colgroup>${colWidths.map((w) => `<col style="width:${w}px">`).join("")}</colgroup>
                    <thead><tr>
                      <th>Name<span class="col-resize-handle" data-col="0"></span></th>
-                     <th>SKU<span class="col-resize-handle" data-col="1"></span></th>
+                     <th>${skuLabel()}<span class="col-resize-handle" data-col="1"></span></th>
                      <th>Description<span class="col-resize-handle" data-col="2"></span></th>
                      <th>Extra<span class="col-resize-handle" data-col="3"></span></th>
                      <th><span class="col-resize-handle" data-col="4"></span></th>
@@ -1410,7 +1509,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           <select id="search-field">
             <option value="all" ${searchField === "all" ? "selected" : ""}>All fields</option>
             <option value="name" ${searchField === "name" ? "selected" : ""}>Name</option>
-            <option value="sku" ${searchField === "sku" ? "selected" : ""}>SKU</option>
+            <option value="sku" ${searchField === "sku" ? "selected" : ""}>${skuLabel()}</option>
             <option value="description" ${searchField === "description" ? "selected" : ""}>Description</option>
             ${extraKeys
               .map(
@@ -1475,22 +1574,24 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
             rows.length === 0
               ? `<p class="hint">${cartLabel()} is empty.</p>`
               : `<ul>${rows
-                  .map(
-                    (r) => `
+                  .map((r) => {
+                    const buyUrl = typeof r.extra.buy_url === "string" ? r.extra.buy_url : "";
+                    return `
                 <li data-url="${escapeHtml(r.url)}">
                   <span class="cart-item-info">
                     <strong>${escapeHtml(r.name || r.url)}</strong>${r.sku ? ` · ${escapeHtml(r.sku)}` : ""}<br>
                     <span class="hint">${escapeHtml(imageNameById.get(r.imageId) ?? "")}</span>
                   </span>
+                  ${buyUrl ? `<a class="cart-open-btn" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer">${catalogMode === "education" ? "View" : "Open"}</a>` : ""}
                   <button type="button" class="cart-remove-btn" data-remove-url="${escapeHtml(r.url)}" title="Remove from ${cartNoun()}">✕</button>
-                </li>`,
-                  )
+                </li>`;
+                  })
                   .join("")}</ul>`
           }
         </div>
         <div class="cart-panel-actions">
           <button type="button" id="cart-clear" ${rows.length === 0 ? "disabled" : ""}>Clear ${cartLabel().toLowerCase()}</button>
-          <button type="button" id="cart-checkout" ${rows.length === 0 ? "disabled" : ""}>${catalogMode === "education" ? "Open all" : "Checkout"} (${rows.length})</button>
+          <button type="button" id="cart-checkout" ${rows.length === 0 ? "disabled" : ""}>${catalogMode === "education" ? "Print list" : "Checkout"} (${rows.length})</button>
         </div>
       </div>
     `;
@@ -1522,6 +1623,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (catalogMode === "education") return inCart ? "Added ✓" : "Learn more";
     return inCart ? "In cart ✓" : "Buy";
   }
+  function skuLabel(): string {
+    return catalogMode === "education" ? "Code" : "SKU";
+  }
 
   // Small dot button rendered inside a table cell's hover popover — copies
   // the cell's full (untruncated) value. `text` is already HTML-escaped by
@@ -1536,7 +1640,6 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function rowHtml(r: CatalogRow, selectedUrl: string | null): string {
     const selected = r.url === selectedUrl ? "selected" : "";
     const buyUrl = typeof r.extra.buy_url === "string" && r.extra.buy_url ? r.extra.buy_url : null;
-    const cartId = buyUrl && cartMode === "accumulate" ? parseCartItemId(buyUrl, cartIdPattern) : null;
     const extra = Object.entries(r.extra)
       .filter(([k]) => k !== "buy_url")
       .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(String(v))}`)
@@ -1552,14 +1655,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // cells, nothing there worth copying.
     const cell = (column: string, text: string) => `<td><span class="cell-text">${text}${copyCellBtn(r.url, column, text)}</span></td>`;
     let buyControl = "";
-    if (cartId) {
+    if (buyUrl && cartMode === "accumulate") {
       const inCart = cartItems.has(r.url);
       // No title/native tooltip here — it stacked with the cell's own hover
       // popover (.cell-text) into an unreadable double-tooltip mess, and the
       // button's own label (buyLabel()) already says what it does.
       buyControl = `<button type="button" class="buy-btn ${inCart ? "in-cart" : ""}" data-cart-url="${escapeHtml(r.url)}">${buyLabel(inCart)}</button>`;
     } else if (buyUrl) {
-      // Some other/unrecognized store link — can't be combined into the cart, so it's still an instant single-item link.
+      // "instant" mode: no cart/collection at all — every link opens straight away.
       buyControl = `<a class="buy-btn" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer" title="${buyLabel(false)}">${buyLabel(false)}</a>`;
     }
     // Buy gets its own column (not appended after Extra's text) — sitting
@@ -1716,7 +1819,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       });
     });
     root.getElementById("cart-clear")?.addEventListener("click", actionClearCart);
-    root.getElementById("cart-checkout")?.addEventListener("click", actionOpenCart);
+    root.getElementById("cart-checkout")?.addEventListener("click", actionCartPrimaryAction);
 
     root.getElementById("divider-images")?.addEventListener("mousedown", (evt) => startPanelResize(evt as MouseEvent, "images"));
     root.getElementById("divider-table")?.addEventListener("mousedown", (evt) => startPanelResize(evt as MouseEvent, "table"));
