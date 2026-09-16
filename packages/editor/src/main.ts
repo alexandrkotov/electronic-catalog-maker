@@ -2785,6 +2785,23 @@ function renderStoreSettingsDialog(): string {
     storeSettingsCartItemParam === DEFAULT_CART_ITEM_PARAM &&
     storeSettingsCartCheckoutBaseUrl === DEFAULT_CART_CHECKOUT_BASE_URL;
   const isEducation = storeSettingsCatalogMode === "education";
+  // Mirrors viewerEngine.ts's cartLabel/buyLabel — the whole dialog talks
+  // about "Buy"/"cart"/"checkout" because that's what the underlying
+  // mechanism (extra.buy_url, combining several into one link) literally
+  // is, but under "Education" those words read as an odd mismatch next to
+  // "Learn more"/"Collection" above. Keep the mechanism identical, just
+  // relabel every string here the same way the viewer's own UI does.
+  const behaviorLabel = isEducation ? "Collection behavior" : "Buy button behavior";
+  const accumulateLabel = isEducation
+    ? "Add to collection, open everything at once"
+    : "Add to cart, checkout for everything at once";
+  const instantLabel = isEducation ? "Open each item's own link right away" : "Go straight to payment for each item";
+  const advancedSummary = isEducation
+    ? "Advanced: how to combine items into one link (defaults work for Payhip)"
+    : "Advanced: how to combine items into one cart (defaults work for Payhip)";
+  const itemParamLabel = isEducation ? "Per-item link parameter (use {id})" : "Per-item cart parameter (use {id})";
+  const baseUrlLabel = isEducation ? "Combined link base URL" : "Cart checkout base URL";
+  const hintText = `A row's buy_url is only combinable if it matches the Item ID pattern above. Its captured id is substituted into the per-item parameter (once per item, joined with "&"), then appended to the base URL. Anything that doesn't match always opens individually, regardless of the ${isEducation ? "behavior" : "Buy button behavior"} above.`;
   return `
     <div class="confirm-overlay">
       <div class="confirm-box">
@@ -2805,31 +2822,31 @@ function renderStoreSettingsDialog(): string {
           <input type="text" id="store-url-input" value="${escapeHtml(storeSettingsUrlValue)}" placeholder="https://payhip.com/YourStore" />
         </div>
         <div class="field">
-          <label>Buy button behavior</label>
+          <label>${behaviorLabel}</label>
           <label class="radio-option">
             <input type="radio" name="cart-mode" value="accumulate" ${storeSettingsCartMode === "accumulate" ? "checked" : ""} />
-            Add to cart, checkout for everything at once
+            ${accumulateLabel}
           </label>
           <label class="radio-option">
             <input type="radio" name="cart-mode" value="instant" ${storeSettingsCartMode === "instant" ? "checked" : ""} />
-            Go straight to payment for each item
+            ${instantLabel}
           </label>
         </div>
         <details class="cart-recipe" ${usingDefaultRecipe ? "" : "open"}>
-          <summary>Advanced: how to combine items into one cart (defaults work for Payhip)</summary>
+          <summary>${advancedSummary}</summary>
           <div class="field">
             <label for="cart-id-pattern-input">Item ID pattern (regex, one capture group)</label>
             <input type="text" id="cart-id-pattern-input" value="${escapeHtml(storeSettingsCartIdPattern)}" />
           </div>
           <div class="field">
-            <label for="cart-item-param-input">Per-item cart parameter (use {id})</label>
+            <label for="cart-item-param-input">${itemParamLabel}</label>
             <input type="text" id="cart-item-param-input" value="${escapeHtml(storeSettingsCartItemParam)}" />
           </div>
           <div class="field">
-            <label for="cart-base-url-input">Cart checkout base URL</label>
+            <label for="cart-base-url-input">${baseUrlLabel}</label>
             <input type="text" id="cart-base-url-input" value="${escapeHtml(storeSettingsCartCheckoutBaseUrl)}" />
           </div>
-          <p class="hint">A row's buy_url is only combinable if it matches the Item ID pattern above. Its captured id is substituted into the per-item parameter (once per item, joined with "&"), then appended to the base URL. Anything that doesn't match always opens individually, regardless of the Buy button behavior above.</p>
+          <p class="hint">${hintText}</p>
         </details>
         <div class="confirm-actions">
           <button id="store-settings-cancel">Cancel</button>
@@ -3317,7 +3334,9 @@ function wireEvents(links: CatalogLink[]) {
   document.getElementById("store-settings-submit")?.addEventListener("click", actionSubmitStoreSettings);
   document.querySelectorAll<HTMLInputElement>('input[name="catalog-mode"]').forEach((radio) => {
     radio.addEventListener("change", () => {
-      if (radio.checked) storeSettingsCatalogMode = radio.value as "commercial" | "education";
+      if (!radio.checked) return;
+      storeSettingsCatalogMode = radio.value as "commercial" | "education";
+      render(); // re-labels the fields below (see renderStoreSettingsDialog)
     });
   });
   const storeUrlInput = document.getElementById("store-url-input") as HTMLInputElement | null;
