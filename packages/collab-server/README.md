@@ -326,6 +326,13 @@ against the live `https://*.trycloudflare.com` address (not loopback), then
 a clean stop through the status page's own `/shutdown` endpoint — full
 protocol round-trip, not just "a tunnel connected."
 
+The release workflow's `build-deb` job wraps that same `linux-x64` binary
+in a `.deb` (bin + a `.desktop` launcher + the icon, no systemd unit) so
+ChromeOS's Crostini container — Debian-based — can install it with a
+double-click in the Files app instead of the terminal chmod+x/run dance
+the raw binary needs. It's still a manually-launched app, not an
+auto-starting daemon, same as every other platform build.
+
 `--windows-hide-console` (see the compile script) runs the Windows build
 with no console window at all — confirmed by inspecting the compiled
 binary directly (`file` reports "PE32+ ... (GUI)" instead of "(console)"),
