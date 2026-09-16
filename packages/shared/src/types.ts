@@ -73,6 +73,17 @@ export interface CatalogMeta {
   cartIdPattern: string;
   cartItemParam: string;
   cartCheckoutBaseUrl: string;
+  /**
+   * Which single panel a fresh catalog opens on, below the mobile-tab
+   * breakpoint (an embed in a narrow container, or an actual phone — above
+   * that breakpoint all three panels show at once, so this has no visual
+   * effect there). "images" (default): the image list, same as before this
+   * setting existed. "diagram"/"table": jump straight past the image list
+   * into the diagram or data table — useful for a single-image catalog
+   * where the image list is just an extra tap before the actual content
+   * (see viewerEngine.ts openBytes' mobileTab reset).
+   */
+  defaultView: "images" | "diagram" | "table";
 }
 
 /**
