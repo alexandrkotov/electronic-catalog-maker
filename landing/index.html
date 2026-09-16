@@ -330,12 +330,17 @@
     // the landing page alone doesn't mean someone actually used the tool.
     //
     // `?start=year` is required, not cosmetic: GoatCounter's TOTAL.json
-    // with *no* date-range params hits a server-side cache entry that gets
-    // stuck forever (verified directly — it sat frozen at the same count
-    // for days while `?start=year` returned live, growing numbers for the
-    // exact same site). "year" is effectively "all time" for now since the
+    // with *no* date-range params once hit a server-side cache entry that
+    // got stuck forever. "year" is effectively "all time" for now since the
     // site is under a year old; revisit if that ever stops being true.
-    fetch("https://ecatm.goatcounter.com/counter/TOTAL.json?start=year")
+    //
+    // A cache-busting `_` param is *also* required: the CDN in front of
+    // TOTAL.json can get stuck on ANY specific full URL, not just the
+    // no-date-range one — confirmed live when this exact `?start=year` URL
+    // itself later froze at a stale count for hours while the no-param
+    // variant was fresh. Appending the current time makes every request a
+    // guaranteed cache miss, so neither variant can freeze again.
+    fetch(`https://ecatm.goatcounter.com/counter/TOTAL.json?start=year&_=${Date.now()}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data) return;
