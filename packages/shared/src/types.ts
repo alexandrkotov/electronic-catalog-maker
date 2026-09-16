@@ -58,13 +58,15 @@ export interface CatalogMeta {
   /** Free-form, for the catalog author's own reference — not parsed or validated. */
   storeUrl: string;
   /**
-   * How the viewer's Buy button behaves for rows whose extra.buy_url can be
+   * How the viewer's Buy button behaves for any row with an extra.buy_url —
+   * "accumulate" (default): Buy adds to a shared cart, and a toolbar button
+   * reviews/opens everything in it at once. Rows whose buy_url can be
    * combined into one multi-item checkout (currently: Payhip direct-checkout
-   * links) — "accumulate" (default): Buy adds to a shared cart, a toolbar
-   * button opens one combined checkout. "instant": Buy always opens that
-   * row's own buy_url right away, same as any other/unrecognized store link,
-   * and never turns into a green "In cart" state. Rows whose buy_url can't be
-   * combined always behave as instant, regardless of this setting.
+   * links) collapse into a single combined checkout URL; everything else
+   * (e.g. a school catalog's plain reference links) opens individually
+   * instead, one per item — still added to the cart for review, just not
+   * merged. "instant": Buy always opens that row's own buy_url right away,
+   * and never turns into a green "In cart"/"Added" state.
    */
   cartMode: "accumulate" | "instant";
   /** See schema.ts DEFAULT_CART_ID_PATTERN for what these three describe. */

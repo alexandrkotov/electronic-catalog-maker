@@ -6,8 +6,9 @@ import type { CatalogMeta, CatalogRow } from "./types.js";
  * so several rows can be combined into one multi-item checkout — see
  * buildCartCheckoutUrl. Returns null for anything that doesn't match (a
  * different/unrecognized store, no buy_url at all, or a malformed saved
- * pattern), which is the signal for that row to fall back to a single-item
- * instant-navigate Buy button instead.
+ * pattern) — under cart_mode "accumulate" that row still goes into the
+ * cart, it just opens on its own instead of being merged (see
+ * actionOpenCart in viewerEngine.ts).
  */
 export function parseCartItemId(buyUrl: string, cartIdPattern: string): string | null {
   let re: RegExp;

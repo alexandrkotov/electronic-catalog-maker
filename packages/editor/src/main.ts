@@ -2796,12 +2796,17 @@ function renderStoreSettingsDialog(): string {
     ? "Add to collection, open everything at once"
     : "Add to cart, checkout for everything at once";
   const instantLabel = isEducation ? "Open each item's own link right away" : "Go straight to payment for each item";
-  const advancedSummary = isEducation
-    ? "Advanced: how to combine items into one link (defaults work for Payhip)"
-    : "Advanced: how to combine items into one cart (defaults work for Payhip)";
-  const itemParamLabel = isEducation ? "Per-item link parameter (use {id})" : "Per-item cart parameter (use {id})";
-  const baseUrlLabel = isEducation ? "Combined link base URL" : "Cart checkout base URL";
-  const hintText = `A row's buy_url is only combinable if it matches the Item ID pattern above. Its captured id is substituted into the per-item parameter (once per item, joined with "&"), then appended to the base URL. Anything that doesn't match always opens individually, regardless of the ${isEducation ? "behavior" : "Buy button behavior"} above.`;
+  // The regex/param/base-url "recipe" only exists to combine several ids
+  // into one store's checkout URL (Payhip-style) — a commercial-only
+  // concept. A school catalog's buy_urls are plain reference links with
+  // nothing to combine them into, so this whole section would just be
+  // confusing advanced config for a mechanism Education mode never uses
+  // (see actionPrintCollection/actionOpenCart in viewerEngine.ts: every
+  // Education-mode link opens/prints on its own regardless of this recipe).
+  const advancedSummary = "Advanced: how to combine items into one cart (defaults work for Payhip)";
+  const itemParamLabel = "Per-item cart parameter (use {id})";
+  const baseUrlLabel = "Cart checkout base URL";
+  const hintText = `A row's buy_url is only combinable if it matches the Item ID pattern above. Its captured id is substituted into the per-item parameter (once per item, joined with "&"), then appended to the base URL. Anything that doesn't match still joins the cart above, it just opens on its own instead of merging into that combined link.`;
   return `
     <div class="confirm-overlay">
       <div class="confirm-box">
@@ -2832,7 +2837,10 @@ function renderStoreSettingsDialog(): string {
             ${instantLabel}
           </label>
         </div>
-        <details class="cart-recipe" ${usingDefaultRecipe ? "" : "open"}>
+        ${
+          isEducation
+            ? ""
+            : `<details class="cart-recipe" ${usingDefaultRecipe ? "" : "open"}>
           <summary>${advancedSummary}</summary>
           <div class="field">
             <label for="cart-id-pattern-input">Item ID pattern (regex, one capture group)</label>
@@ -2847,7 +2855,8 @@ function renderStoreSettingsDialog(): string {
             <input type="text" id="cart-base-url-input" value="${escapeHtml(storeSettingsCartCheckoutBaseUrl)}" />
           </div>
           <p class="hint">${hintText}</p>
-        </details>
+        </details>`
+        }
         <div class="confirm-actions">
           <button id="store-settings-cancel">Cancel</button>
           <button id="store-settings-submit">Save</button>
@@ -2976,6 +2985,13 @@ function renderCollabShareDialog(): string {
   `;
 }
 
+// Same cosmetic-only relabel as the viewer's skuLabel() — SKU reads as
+// commerce jargon in a classroom catalog, so Education mode calls it "Code"
+// instead. The underlying `sku` column/field is unchanged either way.
+function skuLabel(): string {
+  return db && readMeta(db).catalogMode === "education" ? "Code" : "SKU";
+}
+
 function renderSearchPanel(): string {
   if (!db) return "";
   const extraKeys = collectExtraKeys(listAllRows(db));
@@ -2986,7 +3002,7 @@ function renderSearchPanel(): string {
         <select id="search-field">
           <option value="all" ${searchField === "all" ? "selected" : ""}>All fields</option>
           <option value="name" ${searchField === "name" ? "selected" : ""}>Name</option>
-          <option value="sku" ${searchField === "sku" ? "selected" : ""}>SKU</option>
+          <option value="sku" ${searchField === "sku" ? "selected" : ""}>${skuLabel()}</option>
           <option value="description" ${searchField === "description" ? "selected" : ""}>Description</option>
           ${extraKeys
             .map(
@@ -3129,7 +3145,7 @@ function renderRowForm(availableLinks: CatalogLink[]): string {
                  <select name="url">${availableLinks.map((l) => `<option value="${escapeHtml(l.url)}">${escapeHtml(l.url)} (${escapeHtml(l.name)})</option>`).join("")}</select>
                </div>
                <div class="field"><label>Name</label><input name="name" /></div>
-               <div class="field"><label>SKU</label><input name="sku" /></div>
+               <div class="field"><label>${skuLabel()}</label><input name="sku" /></div>
                <div class="field"><label>Description</label><input name="description" /></div>
                ${renderExtraField({})}
                <button type="submit">Add row</button>
@@ -3147,7 +3163,7 @@ function renderEditRowForm(row: CatalogRow | null): string {
       <p class="hint">Address: ${escapeHtml(row.url)} (change the hotspot's address to repoint this row)</p>
       <form id="form-edit-row">
         <div class="field"><label>Name</label><input name="name" value="${escapeHtml(row.name)}" /></div>
-        <div class="field"><label>SKU</label><input name="sku" value="${escapeHtml(row.sku)}" /></div>
+        <div class="field"><label>${skuLabel()}</label><input name="sku" value="${escapeHtml(row.sku)}" /></div>
         <div class="field"><label>Description</label><input name="description" value="${escapeHtml(row.description)}" /></div>
         ${renderExtraField(row.extra)}
         <div style="display:flex; gap:0.5rem; align-items:center">
@@ -3178,7 +3194,7 @@ function renderRowsSection(rows: ReturnType<typeof listRowsForImage>, editingRow
           <thead><tr>
             <th>Address<span class="col-resize-handle" data-table="rows" data-col="0"></span></th>
             <th>Name<span class="col-resize-handle" data-table="rows" data-col="1"></span></th>
-            <th>SKU<span class="col-resize-handle" data-table="rows" data-col="2"></span></th>
+            <th>${skuLabel()}<span class="col-resize-handle" data-table="rows" data-col="2"></span></th>
             <th>Description<span class="col-resize-handle" data-table="rows" data-col="3"></span></th>
             <th>Extra<span class="col-resize-handle" data-table="rows" data-col="4"></span></th>
           </tr></thead>
@@ -3207,7 +3223,7 @@ function renderRowsSection(rows: ReturnType<typeof listRowsForImage>, editingRow
           </tbody>
         </table>
       </div>
-      <p class="hint">Click a row to edit its name, SKU, description or extra characteristics.</p>
+      <p class="hint">Click a row to edit its name, ${skuLabel()}, description or extra characteristics.</p>
     </section>
   `;
 }
