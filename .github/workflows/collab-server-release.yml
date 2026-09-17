@@ -384,21 +384,11 @@ jobs:
             Ubuntu users can instead install from the
             [Snap Store](https://snapcraft.io/ecm-collab-server) (`sudo snap install ecm-collab-server`).
 
-            On a Chromebook,
-            [turn on Linux (Crostini)](https://support.google.com/chromebook/answer/9145439?hl=en)
-            once in Settings, then download the `.deb` file and double-click
-            it in the Files app —
-            ChromeOS offers to install it, and afterward it shows up as
-            "ECM Collaboration Server" in the Linux apps folder of your
-            app launcher.
+            On a Chromebook, [turn on Linux (Crostini)](https://support.google.com/chromebook/answer/9145439?hl=en) once in Settings, then download the `.deb` file and double-click it in the Files app — ChromeOS offers to install it, and afterward it shows up as "ECM Collaboration Server" in the Linux apps folder of your app launcher.
 
-            None of these are code-signed. Windows will show a SmartScreen
-            warning on first run ("More info" → "Run anyway"). The macOS
-            download is a zip (unzipping restores the file's execute
-            permission, which a direct download can't carry) — after
-            unzipping, macOS will refuse to run it at all ("is damaged and
-            can't be opened") because it's fully unsigned; open Terminal in
-            the folder you unzipped it to and run:
+            None of these are code-signed. Windows will show a SmartScreen warning on first run ("More info" → "Run anyway").
+
+            The macOS download is a zip (unzipping restores the file's execute permission, which a direct download can't carry) — after unzipping, macOS will refuse to run it at all ("is damaged and can't be opened") because it's fully unsigned; open Terminal in the folder you unzipped it to and run:
             `xattr -d com.apple.quarantine ecm-collab-server-macos-*  &&
             chmod +x ecm-collab-server-macos-* && ./ecm-collab-server-macos-*`
             (replace the `*` with your actual filename) — also requires
