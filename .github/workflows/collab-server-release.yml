@@ -384,8 +384,10 @@ jobs:
             Ubuntu users can instead install from the
             [Snap Store](https://snapcraft.io/ecm-collab-server) (`sudo snap install ecm-collab-server`).
 
-            On a Chromebook, turn on Linux (Crostini) once in Settings, then
-            download the `.deb` file and double-click it in the Files app —
+            On a Chromebook,
+            [turn on Linux (Crostini)](https://support.google.com/chromebook/answer/9145439?hl=en)
+            once in Settings, then download the `.deb` file and double-click
+            it in the Files app —
             ChromeOS offers to install it, and afterward it shows up as
             "ECM Collaboration Server" in the Linux apps folder of your
             app launcher.
