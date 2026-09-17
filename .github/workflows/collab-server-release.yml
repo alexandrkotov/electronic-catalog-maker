@@ -240,6 +240,64 @@ jobs:
           path: ecm-collab-server-amd64.deb
           if-no-files-found: error
 
+  # There's no "real hardware" wrinkle here the way there is for macOS
+  # (that one exists purely because Apple's license restricts virtualizing
+  # macOS to Apple hardware) — ubuntu-latest already *is* a genuine amd64
+  # Debian/Ubuntu machine, and GitHub has no ChromeOS/Crostini runner image
+  # to test on regardless. What's worth verifying instead is that the
+  # package itself behaves correctly under dpkg: installs to the paths the
+  # .desktop file expects, the extracted binary actually runs and serves
+  # the same /status.json contract as every other build, and it uninstalls
+  # cleanly — the same mechanism Crostini's package manager uses.
+  smoke-test-deb:
+    name: Smoke-test the .deb (install, run, remove)
+    needs: [build-deb]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ecm-collab-server-amd64.deb
+          path: dist
+
+      - name: Install via dpkg
+        run: sudo dpkg -i dist/ecm-collab-server-amd64.deb
+
+      - name: Confirm the files landed where the .desktop entry expects
+        run: |
+          test -x /usr/bin/ecm-collab-server
+          test -f /usr/share/applications/ecm-collab-server.desktop
+          test -f /usr/share/pixmaps/ecm-collab-server.png
+          grep -q '^Exec=/usr/bin/ecm-collab-server$' /usr/share/applications/ecm-collab-server.desktop
+
+      - name: Run it and confirm the status endpoint answers
+        run: |
+          ecm-collab-server &
+          SERVER_PID=$!
+          ok=false
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:8787/status.json -o status.json 2>/dev/null; then
+              ok=true
+              break
+            fi
+            sleep 1
+          done
+          echo "--- /status.json ---"
+          cat status.json 2>/dev/null || echo "(no response)"
+          if [ "$ok" != true ] || ! grep -q '"port"' status.json; then
+            echo "The server never answered /status.json with the expected shape" >&2
+            kill "$SERVER_PID" 2>/dev/null || true
+            exit 1
+          fi
+          curl -fsS -X POST http://localhost:8787/shutdown || true
+          wait "$SERVER_PID" 2>/dev/null || true
+          echo "Smoke test passed: installed via dpkg, started, served /status.json, shut down cleanly."
+
+      - name: Remove cleanly via dpkg
+        run: |
+          sudo dpkg -r ecm-collab-server
+          test ! -e /usr/bin/ecm-collab-server
+          test ! -e /usr/share/applications/ecm-collab-server.desktop
+
   publish-snap:
     name: Build + publish Snap (Snap Store / Ubuntu App Center)
     if: ${{ github.event.inputs.publish_snap == 'true' }}
@@ -261,7 +319,7 @@ jobs:
 
   github-release:
     name: Update the collab-server-latest GitHub Release
-    needs: [build-linux, build-windows, smoke-test-macos-arm64, build-macos-x64, build-deb]
+    needs: [build-linux, build-windows, smoke-test-macos-arm64, build-macos-x64, smoke-test-deb]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -354,7 +412,7 @@ jobs:
 
   gitlab-binaries:
     name: Back up binaries to GitLab (disaster recovery, not linked from the site)
-    needs: [build-linux, build-windows, smoke-test-macos-arm64, build-macos-x64, build-deb]
+    needs: [build-linux, build-windows, smoke-test-macos-arm64, build-macos-x64, smoke-test-deb]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v8
