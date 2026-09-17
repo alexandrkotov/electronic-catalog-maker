@@ -389,10 +389,8 @@ jobs:
             None of these are code-signed. Windows will show a SmartScreen warning on first run ("More info" → "Run anyway").
 
             The macOS download is a zip (unzipping restores the file's execute permission, which a direct download can't carry) — after unzipping, macOS will refuse to run it at all ("is damaged and can't be opened") because it's fully unsigned; open Terminal in the folder you unzipped it to and run:
-            `xattr -d com.apple.quarantine ecm-collab-server-macos-*  &&
-            chmod +x ecm-collab-server-macos-* && ./ecm-collab-server-macos-*`
-            (replace the `*` with your actual filename) — also requires
-            **macOS 13 (Ventura) or later**.
+            `xattr -d com.apple.quarantine ecm-collab-server-macos-* && chmod +x ecm-collab-server-macos-* && ./ecm-collab-server-macos-*`
+            (replace the `*` with your actual filename) — also requires **macOS 13 (Ventura) or later**.
 
             See [packages/collab-server](https://github.com/alexandrkotov/electronic-catalog-maker/tree/main/packages/collab-server) for details.
           files: |
