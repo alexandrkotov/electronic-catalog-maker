@@ -157,82 +157,24 @@
     min-width: 44px; min-height: 44px;
   }
   @media (max-width: 700px) { .card-row, .use-cases, .apps-row { grid-template-columns: 1fr; } }
-  .compare {
+  .benefits {
     margin: 0 0 2rem;
     padding: 1.25rem;
     border: 1px solid var(--border);
     border-radius: 8px;
   }
-  .compare h2 {
-    font-size: 1.1rem;
-    margin: 0 0 0.75rem;
+  .benefits h2 { font-size: 1.1rem; margin: 0 0 0.9rem; }
+  .benefits ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem 2rem;
   }
-  .compare table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.85rem;
-  }
-  .compare th,
-  .compare td {
-    text-align: left;
-    padding: 0.5rem 0.45rem;
-    border-bottom: 1px solid var(--border-soft);
-    vertical-align: top;
-  }
-  /* Last row's divider would just double up with the card's own border
-     right below it — drop it. */
-  .compare tr:last-child th,
-  .compare tr:last-child td {
-    border-bottom: none;
-  }
-  /* Row label column stays narrow — sized for short labels like "Pricing"/
-     "Storage", not the one long label in the last (exempted) row, so the
-     two comparison columns get the width they need to stay on one line. */
-  .compare th:first-child,
-  .compare td:first-child {
-    width: 11em;
-  }  .compare th {
-    color: var(--muted);
-    font-weight: 600;
-  }
-  .compare td:first-child {
-    color: var(--muted);
-  }
-  /* Plain-text comparison values (Pricing/Storage/Internet/Checkout) —
-     softened from the page's default near-black body text, which read as
-     jarringly dark next to the gray labels/headers around it. */
-  .compare td:not(:first-child):not(.yes):not(.no) {
-    color: var(--text-2);
-  }
-  /* Every row's comparison cells stay on one line above ~700px — reads
-     tidier than ragged per-cell wrapping — except the one row long enough
-     that it can't reasonably fit on one line at this width (`.compare
-     tr.wrap`). Below ~700px there isn't room for this (the viewport is
-     narrower than the page's own max-width, so the table has much less
-     space to work with), so every row reverts to normal wrapping instead
-     of overflowing the card. */
-  @media (min-width: 700px) {
-    .compare th,
-    .compare td {
-      white-space: nowrap;
-    }
-    .compare tr.wrap th,
-    .compare tr.wrap td {
-      white-space: normal;
-    }
-  }
-  .compare td.yes,
-  .compare td.no {
-    text-align: center;
-    font-weight: 700;
-    font-size: 1rem;
-  }
-  .compare td.yes {
-    color: var(--yes);
-  }
-  .compare td.no {
-    color: var(--no);
-  }
+  .benefits li { font-size: 0.9rem; color: var(--text-2); }
+  .benefits li strong { display: block; color: var(--text); margin-bottom: 0.15rem; }
+  @media (max-width: 700px) { .benefits ul { grid-template-columns: 1fr; } }
   footer {
     margin-top: 1.5rem;
     font-size: 0.85rem;
@@ -316,46 +258,38 @@
       </div>
     </div>
 
-  <div class="compare">
-    <h2>How this is different</h2>
-    <table>
-      <tr>
-        <th></th>
-        <th>Typical catalog tools</th>
-        <th>Electronic Catalog Maker</th>
-      </tr>
-      <tr>
-        <td>Pricing</td>
-        <td>Cloud subscription</td>
-        <td>Free apps, no subscription</td>
-      </tr>
-      <tr>
-        <td>Storage</td>
-        <td>Their cloud servers</td>
-        <td>Local <code>.ecatm</code> file (SQLite)</td>
-      </tr>
-      <tr>
-        <td>Internet</td>
-        <td>Required</td>
-        <td>Works offline after your first visit</td>
-      </tr>
-      <tr>
-        <td>Checkout</td>
-        <td>Built into their platform</td>
-        <td>Your own store — no lock-in</td>
-      </tr>
-      <tr>
-        <td>Grid-style catalogs</td>
-        <td class="yes">✓</td>
-        <td class="yes">✓</td>
-      </tr>
-      <tr class="wrap">
-        <td>Diagrams: parts, machinery, furniture</td>
-        <td class="no">✗</td>
-        <td class="yes">✓</td>
-      </tr>
-    </table>
-  </div>
+  <section class="benefits" aria-labelledby="benefits-h">
+    <h2 id="benefits-h">Built around your catalog files</h2>
+    <ul>
+      <li>
+        <strong>Free, no subscription</strong>
+        The apps are free and open source (MIT). No accounts, no plans.
+      </li>
+      <li>
+        <strong>Your catalog is one file</strong>
+        Images, hotspots and data live together in a single <code>.ecatm</code> file on your
+        device. It goes nowhere unless you share it.
+      </li>
+      <li>
+        <strong>Photos and diagrams</strong>
+        Put hotspots on any image — a furniture photograph, a parts diagram, an anatomy chart.
+      </li>
+      <li>
+        <strong>Links to your own store</strong>
+        Point items at any online store you already use. There's no marketplace or checkout of
+        ours in between.
+      </li>
+      <li>
+        <strong>Works offline after your first visit</strong>
+        After one visit the apps are cached in your browser, so they keep working without a connection.
+      </li>
+      <li>
+        <strong>Live editing, only if you want it</strong>
+        Editing together needs the optional, self-hosted Collaboration Server. Everything else
+        works without it.
+      </li>
+    </ul>
+  </section>
 
     <dialog class="collab" id="collab" aria-labelledby="collab-h">
       <button type="button" class="close" aria-label="Close">×</button>
@@ -439,35 +373,6 @@
       }
       buttons.forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.cat); }); });
       show("auto-spare-parts");
-    })();
-  </script>
-  <script>
-    // Center each ✓/✗ under the *text* of its column header. The headers are
-    // left-aligned and the columns are much wider than their titles, so plain
-    // cell-centering leaves the marks far to the right of the header text.
-    // Without JS the marks simply stay centered in their cells.
-    (function () {
-      function textWidth(el) {
-        var r = document.createRange();
-        r.selectNodeContents(el);
-        return r.getBoundingClientRect().width;
-      }
-      function place() {
-        var table = document.querySelector(".compare table");
-        if (!table) return;
-        var heads = table.rows[0].cells;
-        table.querySelectorAll("td.yes, td.no").forEach(function (td) {
-          td.style.textAlign = "left";
-          td.style.paddingLeft = "";
-          var th = heads[td.cellIndex];
-          var pad = parseFloat(getComputedStyle(td).paddingLeft);
-          var offset = (textWidth(th) - textWidth(td)) / 2;
-          td.style.paddingLeft = pad + Math.max(offset, 0) + "px";
-        });
-      }
-      place();
-      window.addEventListener("resize", place);
-      if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
     })();
   </script>
   <script>
