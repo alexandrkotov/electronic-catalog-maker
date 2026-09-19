@@ -6,6 +6,7 @@ import {
   appLocaleCandidates,
   mountViewer,
   pickLocale,
+  saveLocale,
   setUpPwa,
   type Database,
   type PdfExportOptions,
@@ -59,6 +60,10 @@ document.documentElement.lang = locale;
 mountViewer({
   container: document.getElementById("app")!,
   locale,
+  onLocaleChange: (chosen) => {
+    saveLocale(chosen);
+    document.documentElement.lang = chosen;
+  },
   mode: "full",
   initialSrc: params.get("src") ?? undefined,
   initialImageId: Number.isFinite(initialImageId) ? initialImageId : undefined,

@@ -19,6 +19,7 @@
   "toolbar.exportPdf": "Export PDF…",
   "toolbar.exportPdf.busy": "Exporting PDF…",
   "toolbar.exportPdf.tip": "Export this catalog as a printable A4 PDF — a QR code next to each item that has a Buy link",
+  "toolbar.language.tip": "Language",
   "toolbar.theme.tip": "Toggle light/dark theme",
   "theme.light": "☀️ Light",
   "theme.dark": "🌙 Dark",

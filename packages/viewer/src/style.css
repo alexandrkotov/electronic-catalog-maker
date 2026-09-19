@@ -798,6 +798,7 @@ button:disabled {
   color: var(--text);
 }
 
+#lang-select,
 .search-controls select {
   padding: 0.35rem 0.5rem;
   border: 1px solid var(--border);
