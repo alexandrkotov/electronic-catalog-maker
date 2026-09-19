@@ -27,6 +27,8 @@ import {
   detectLocalCollabServerViaBridge,
 } from "./collabClient.js";
 import { renderQrCodeSvg } from "./qrcode.js";
+import { createTranslator, matchLocale, type MessageParams, type Translate } from "./i18n.js";
+import { VIEWER_LOCALES, viewerMessages } from "./locales/viewer/index.js";
 import { buildCartCheckoutUrl, cartStorageKey, catalogHasAnyBuyUrl, loadPersistedCart, parseCartItemId, savePersistedCart } from "./cart.js";
 import { DEFAULT_PDF_EXPORT_OPTIONS, type DiagramPageMode, type PdfExportOptions, type QrPlacement } from "./pdfExportOptions.js";
 import type { CatalogImage, CatalogLink, CatalogRow } from "./types.js";
@@ -71,11 +73,11 @@ interface EcmFileSystemFileHandle {
  */
 const DEMO_CATALOGS = [
   {
-    label: "Auto parts",
+    labelKey: "demo.autoParts",
     url: "https://tapalog.com/demo/auto-spare-parts.ecatm",
   },
   {
-    label: "Furniture",
+    labelKey: "demo.furniture",
     url: "https://tapalog.com/demo/furniture.ecatm",
   },
 ];
@@ -190,6 +192,13 @@ export interface MountViewerOptions {
    * actionExportPdf) — the caller just forwards them to exportCatalogPdf.
    */
   exportPdf?: (db: Database, options: PdfExportOptions) => Promise<Uint8Array>;
+  /**
+   * UI language (BCP 47 tag, e.g. "ru"). The caller resolves it with
+   * pickLocale() using whichever priority chain fits its surface (saved
+   * choice for the standalone app; attribute → host page → browser for the
+   * embed); anything not in VIEWER_LOCALES falls back to English.
+   */
+  locale?: string;
 }
 
 export interface ViewerController {
@@ -280,11 +289,32 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // Set from the catalog's own meta (catalog_mode/store_url/cart_mode/
   // cart_id_pattern/..., edited in the editor's "Store settings" dialog)
   // each time a catalog loads — see openBytes(). "education" is a purely
-  // cosmetic relabel (see cartIcon/cartLabel/cartNoun/addLabel/directOpenLabel below) — Buy,
+  // cosmetic relabel (see cartIcon/cartLabel/addLabel/directOpenLabel below) — Buy,
   // Cart, and PDF QR checkout codes all keep working exactly as in
   // "commercial", just under different on-screen names for an audience with
   // nothing to actually buy.
   let catalogMode: "commercial" | "education" = "commercial";
+  // catalogMode picks the wording ("Cart" vs "Collection", ...) through
+  // `key@education` overrides in the dictionary, so the translator is per mode.
+  const locale = matchLocale(options.locale, VIEWER_LOCALES) ?? "en";
+  const translators = new Map<string, Translate>();
+  function t(key: string, params?: MessageParams): string {
+    let translate = translators.get(catalogMode);
+    if (!translate) {
+      translate = createTranslator({
+        messages: viewerMessages[locale] ?? {},
+        locale,
+        fallback: viewerMessages.en,
+        mode: catalogMode === "education" ? "education" : undefined,
+      });
+      translators.set(catalogMode, translate);
+    }
+    return translate(key, params);
+  }
+  /** t() for text/attribute positions inside the HTML templates below. */
+  function te(key: string, params?: MessageParams): string {
+    return escapeHtml(t(key, params));
+  }
   // "instant" turns every Buy button into the old single-item
   // instant-navigate link, even for rows that could otherwise be combined
   // into a cart (see rowHtml/parseCartItemId).
@@ -598,7 +628,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   }
 
   async function boot() {
-    container.innerHTML = `<p style="padding:1rem">Loading SQLite (sql.js)…</p>`;
+    container.innerHTML = `<p style="padding:1rem">${escapeHtml(t("boot.loading"))}</p>`;
     SQL = await initSqlite(options.wasmUrl);
 
     if (options.initialSrc) {
@@ -677,7 +707,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       return null;
     } catch (err) {
       const message = (err as Error).message;
-      statusMessage = `Could not load "${url}": ${message}`;
+      statusMessage = t("status.loadFailed", { url, message });
       render();
       return message;
     }
@@ -745,7 +775,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         const bytes = new Uint8Array(await file.arrayBuffer());
         await openBytes(bytes, baseName(file.name), openedFileHandle);
       } catch (err) {
-        statusMessage = `Could not refresh "${openedFileHandle.name}": ${(err as Error).message}`;
+        statusMessage = t("status.refreshFailed", { name: openedFileHandle.name, message: (err as Error).message });
       }
     }
     refreshing = false;
@@ -768,23 +798,27 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    */
   async function openBytes(
     bytes: Uint8Array,
-    sourceName = "Legacy catalog",
+    sourceName = t("legacy.sourceName"),
     handle: EcmFileSystemFileHandle | null,
   ) {
     const kind = detectFileKind(SQL, bytes);
     if (kind === "legacy-sch") {
-      statusMessage = "Converting legacy .sch catalog… this can take a moment for large files.";
+      statusMessage = t("status.converting");
       render();
       // Yield one tick so the status message above actually paints before the
       // (synchronous, potentially slow for a big catalog) conversion work runs.
       await new Promise((resolve) => setTimeout(resolve, 0));
       const result = await importSchCatalog(SQL, bytes, sourceName);
       db = result.db;
-      statusMessage = `Converted legacy catalog "${sourceName}" (${result.imageCount} image${result.imageCount === 1 ? "" : "s"}${result.skippedDiagrams ? `, ${result.skippedDiagrams} skipped` : ""}).`;
+      statusMessage = t(result.skippedDiagrams ? "status.convertedSkipped" : "status.converted", {
+        name: sourceName,
+        count: result.imageCount,
+        skipped: result.skippedDiagrams,
+      });
     } else {
       db = openCatalog(SQL, bytes);
       const meta = readMeta(db);
-      statusMessage = `Opened catalog "${meta.catalogName}".`;
+      statusMessage = t("status.opened", { name: meta.catalogName });
     }
     const loadedMeta = readMeta(db);
     catalogMode = loadedMeta.catalogMode;
@@ -836,7 +870,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     try {
       await openBytes(bytes, baseName(file.name), null);
     } catch (err) {
-      statusMessage = `Could not open file: ${(err as Error).message}`;
+      statusMessage = t("status.openFailed", { message: (err as Error).message });
       render();
     }
   }
@@ -855,7 +889,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         const [handle] = await showOpenFilePicker({
           types: [
             {
-              description: "Electronic catalog",
+              description: t("filePicker.description"),
               accept: { "application/x-sqlite3": [`.${CATALOG_FILE_EXTENSION}`, ".sch"] },
             },
           ],
@@ -866,7 +900,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         await openBytes(bytes, baseName(file.name), handle);
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
-          statusMessage = `Could not open file: ${(err as Error).message}`;
+          statusMessage = t("status.openFailed", { message: (err as Error).message });
           render();
         }
       }
@@ -1071,7 +1105,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function actionPrintCollection() {
     if (!db || cartItems.size === 0) return;
     const rows = listAllRows(db).filter((r) => cartItems.has(r.url));
-    const catalogTitle = readMeta(db).catalogName || "Catalog";
+    const catalogTitle = readMeta(db).catalogName || t("catalog.untitled");
     const items = rows
       .map((r) => {
         const buyUrl = typeof r.extra.buy_url === "string" ? r.extra.buy_url : "";
@@ -1079,14 +1113,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           <li>
             <div class="item-text">
               <strong>${escapeHtml(r.name || r.url)}</strong>
-              ${buyUrl ? `<a href="${escapeHtml(buyUrl)}">${escapeHtml(buyUrl)}</a>` : `<span>(no link)</span>`}
+              ${buyUrl ? `<a href="${escapeHtml(buyUrl)}">${escapeHtml(buyUrl)}</a>` : `<span>${escapeHtml(t("print.noLink"))}</span>`}
             </div>
             ${buyUrl ? `<div class="item-qr">${renderQrCodeSvg(buyUrl)}</div>` : ""}
           </li>`;
       })
       .join("");
     const html = `<!doctype html>
-<html><head><meta charset="UTF-8" /><title>${escapeHtml(catalogTitle)} — ${escapeHtml(cartLabel())}</title>
+<html lang="${locale}"><head><meta charset="UTF-8" /><title>${escapeHtml(t("print.heading", { catalog: catalogTitle }))}</title>
 <style>
   body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
   h1 { font-size: 1.3rem; margin: 0 0 1.5rem; }
@@ -1100,7 +1134,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   @media print { body { margin: 0.5rem auto; } }
 </style>
 </head><body>
-<h1>${escapeHtml(catalogTitle)} — ${escapeHtml(cartLabel())}</h1>
+<h1>${escapeHtml(t("print.heading", { catalog: catalogTitle }))}</h1>
 <ul>${items}</ul>
 </body></html>`;
     // No "noopener" here (unlike every other window.open in this file) —
@@ -1162,7 +1196,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       a.click();
       URL.revokeObjectURL(a.href);
     } catch (err) {
-      statusMessage = `PDF export failed: ${err instanceof Error ? err.message : String(err)}`;
+      statusMessage = t("pdf.failed", { message: err instanceof Error ? err.message : String(err) });
     } finally {
       exportPdfBusy = false;
       render();
@@ -1172,9 +1206,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   /** Tooltip for the toolbar's "Share view…" button — explains the one case it's disabled for, or what it does the rest of the time. */
   function shareViewButtonTitle(): string {
     if (isLoopbackHostname(location.hostname)) {
-      return "This page's own address is local-only (localhost) — a link here can't be reached from another device. Open it via a real network address, or a deployed copy, to share.";
+      return t("toolbar.share.tipLocal");
     }
-    return "Share exactly what's on screen right now — a QR code + link to this image/hotspot. It's a snapshot, not a live feed.";
+    return t("toolbar.share.tip");
   }
 
   /**
@@ -1226,8 +1260,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       try {
         const detected = (await detectLocalCollabServer()) ?? (await detectLocalCollabServerViaBridge(COLLAB_AUTO_DETECT_BASE_PORT));
         if (!detected) {
-          shareViewError =
-            "Could not find a local sharing server running on this computer. Download and run ecm-collab-server (see the project's README), then try again.";
+          shareViewError = t("share.noServer");
           shareViewBusy = false;
           render();
           return;
@@ -1429,17 +1462,17 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         ${
           mode === "full"
             ? `<div class="toolbar">
-                 <h1>Electronic Catalog — Viewer</h1>
-                 <button id="btn-open">Open catalog…</button>
+                 <h1>${te("toolbar.title")}</h1>
+                 <button id="btn-open">${te("toolbar.open")}</button>
                  <input type="file" id="file-open" accept=".${CATALOG_FILE_EXTENSION},.sch" style="display:none" />
-                 <button id="btn-open-remote" title="Open a catalog hosted at a URL">Open remote catalog…</button>
-                 <button id="btn-refresh" ${currentSrcUrl || openedFileHandle ? "" : "disabled"} title="Re-read the catalog from its source (URL or local file) — see changes someone else just saved">${refreshing ? "Refreshing…" : "Refresh"}</button>
-                 <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
-                 ${updateAddressBar ? `<button id="btn-share-view" ${db && !isLoopbackHostname(location.hostname) ? "" : "disabled"} title="${escapeHtml(shareViewButtonTitle())}">Share view…</button>` : ""}
-                 ${exportPdf ? `<button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="Export this catalog as a printable A4 PDF — a QR code next to each item that has a Buy link">${exportPdfBusy ? "Exporting PDF…" : "Export PDF…"}</button>` : ""}
-                 ${cartMode === "accumulate" ? `<button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="Review, edit, or check out everything added to ${cartNoun()}">${cartIcon()} ${cartLabel()} (${cartItems.size})</button>` : ""}
+                 <button id="btn-open-remote" title="${te("toolbar.openRemote.tip")}">${te("toolbar.openRemote")}</button>
+                 <button id="btn-refresh" ${currentSrcUrl || openedFileHandle ? "" : "disabled"} title="${te("toolbar.refresh.tip")}">${refreshing ? te("toolbar.refreshing") : te("toolbar.refresh")}</button>
+                 <button id="btn-search" ${db ? "" : "disabled"} title="${te("toolbar.search.tip")}">${te("toolbar.search")}</button>
+                 ${updateAddressBar ? `<button id="btn-share-view" ${db && !isLoopbackHostname(location.hostname) ? "" : "disabled"} title="${escapeHtml(shareViewButtonTitle())}">${te("toolbar.share")}</button>` : ""}
+                 ${exportPdf ? `<button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="${te("toolbar.exportPdf.tip")}">${exportPdfBusy ? te("toolbar.exportPdf.busy") : te("toolbar.exportPdf")}</button>` : ""}
+                 ${cartMode === "accumulate" ? `<button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="${te("cart.tip")}">${cartIcon()} ${cartLabel()} (${cartItems.size})</button>` : ""}
                  <span class="spacer"></span>
-                 <button id="btn-theme" title="Toggle light/dark theme">${currentTheme(themeTarget) === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
+                 <button id="btn-theme" title="${te("toolbar.theme.tip")}">${currentTheme(themeTarget) === "dark" ? te("theme.light") : te("theme.dark")}</button>
                  <span class="hint">${escapeHtml(statusMessage)}</span>
                  ${searchOpen ? renderSearchPanel() : ""}
                  ${cartOpen ? renderCartPanel() : ""}
@@ -1451,24 +1484,27 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           showcase
             ? ""
             : `<div class="mobile-tabs">
-          <button type="button" class="mobile-tab-btn ${mobileTab === "images" ? "active" : ""}" data-tab="images">Images</button>
-          <button type="button" class="mobile-tab-btn ${mobileTab === "stage" ? "active" : ""}" data-tab="stage">Diagram</button>
-          <button type="button" class="mobile-tab-btn ${mobileTab === "table" ? "active" : ""}" data-tab="table">Table</button>
+          <button type="button" class="mobile-tab-btn ${mobileTab === "images" ? "active" : ""}" data-tab="images">${te("tab.images")}</button>
+          <button type="button" class="mobile-tab-btn ${mobileTab === "stage" ? "active" : ""}" data-tab="stage">${te("tab.diagram")}</button>
+          <button type="button" class="mobile-tab-btn ${mobileTab === "table" ? "active" : ""}" data-tab="table">${te("tab.table")}</button>
         </div>
 
         <div class="panel-images">
           ${
             images.length === 0
               ? mode === "lite"
-                ? `<p class="hint">${escapeHtml(statusMessage || "Loading…")}</p>`
-                : `<p class="hint">Open a .${CATALOG_FILE_EXTENSION} catalog file, or try a demo catalog: ${DEMO_CATALOGS.map(
-                    (d, i) => `<a href="#" class="open-demo-link" data-demo="${i}">${escapeHtml(d.label)}</a>`,
-                  ).join(", ")}.</p>`
+                ? `<p class="hint">${escapeHtml(statusMessage || t("images.loading"))}</p>`
+                : `<p class="hint">${t("images.empty", {
+                    ext: CATALOG_FILE_EXTENSION,
+                    demos: DEMO_CATALOGS.map(
+                      (d, i) => `<a href="#" class="open-demo-link" data-demo="${i}">${te(d.labelKey)}</a>`,
+                    ).join(t("list.separator")),
+                  })}</p>`
               : renderImageList(images)
           }
         </div>
 
-        <div class="panel-divider" id="divider-images" title="Drag to resize"></div>`
+        <div class="panel-divider" id="divider-images" title="${te("divider.tip")}"></div>`
         }
 
         <div class="stage">
@@ -1498,7 +1534,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                      <img id="stage-img" src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
                      ${links.map((l, i) => hotspotHtml(l, selectedUrl, selectedLinkId, i === 0)).join("")}
                    </div>`
-                : `<p class="hint" style="padding:2rem">No image selected.</p>`
+                : `<p class="hint" style="padding:2rem">${te("stage.noImage")}</p>`
             }
           </div>
           ${!showcase && activeImage ? renderZoomControls() : ""}
@@ -1508,7 +1544,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         ${
           showcase
             ? renderShowcaseDetails(rows.find((r) => r.url === selectedUrl) ?? null, links)
-            : `<div class="panel-divider" id="divider-table" title="Drag to resize"></div>
+            : `<div class="panel-divider" id="divider-table" title="${te("divider.tip")}"></div>
 
         <div class="table-panel">
           ${
@@ -1516,10 +1552,10 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
               ? `<table data-col-key="rows" style="width:${colTableTotalWidth()}px">
                    <colgroup>${colWidths.map((w) => `<col style="width:${w}px">`).join("")}</colgroup>
                    <thead><tr>
-                     <th>Name<span class="col-resize-handle" data-col="0"></span></th>
+                     <th>${te("column.name")}<span class="col-resize-handle" data-col="0"></span></th>
                      <th>${skuLabel()}<span class="col-resize-handle" data-col="1"></span></th>
-                     <th>Description<span class="col-resize-handle" data-col="2"></span></th>
-                     <th>Extra<span class="col-resize-handle" data-col="3"></span></th>
+                     <th>${te("column.description")}<span class="col-resize-handle" data-col="2"></span></th>
+                     <th>${te("column.extra")}<span class="col-resize-handle" data-col="3"></span></th>
                      <th><span class="col-resize-handle" data-col="4"></span></th>
                    </tr></thead>
                    <tbody>${rows.map((r) => rowHtml(r, selectedUrl)).join("")}</tbody>
@@ -1533,19 +1569,19 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           mode === "full" && remoteDialogOpen
             ? `<div class="open-overlay" id="open-overlay">
                  <div class="open-box">
-                   <h2>Open remote catalog</h2>
+                   <h2>${te("remote.title")}</h2>
                    <div class="field">
-                     <label for="open-url-input">URL to a .${CATALOG_FILE_EXTENSION} file</label>
-                     <input type="text" id="open-url-input" value="${escapeHtml(remoteUrlValue)}" placeholder="https://example.com/catalog.${CATALOG_FILE_EXTENSION}" ${remoteLoading ? "disabled" : ""} />
+                     <label for="open-url-input">${te("remote.urlLabel", { ext: CATALOG_FILE_EXTENSION })}</label>
+                     <input type="text" id="open-url-input" value="${escapeHtml(remoteUrlValue)}" placeholder="${te("remote.placeholder", { ext: CATALOG_FILE_EXTENSION })}" ${remoteLoading ? "disabled" : ""} />
                    </div>
                    ${
                      remoteError
                        ? `<p class="error">${escapeHtml(remoteError)}</p>`
-                       : `<p class="hint">The file's host must allow cross-origin requests (CORS), or loading will fail.</p>`
+                       : `<p class="hint">${te("remote.cors")}</p>`
                    }
                    <div class="open-actions">
-                     <button id="open-url-cancel" ${remoteLoading ? "disabled" : ""}>Cancel</button>
-                     <button id="open-url-submit" ${remoteLoading || !remoteUrlValue.trim() ? "disabled" : ""}>${remoteLoading ? "Opening…" : "Open"}</button>
+                     <button id="open-url-cancel" ${remoteLoading ? "disabled" : ""}>${te("action.cancel")}</button>
+                     <button id="open-url-submit" ${remoteLoading || !remoteUrlValue.trim() ? "disabled" : ""}>${remoteLoading ? te("remote.opening") : te("remote.open")}</button>
                    </div>
                  </div>
                </div>`
@@ -1631,7 +1667,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const spaced = base.replace(/_/g, " ").trim();
     const label = spaced ? spaced.charAt(0).toUpperCase() + spaced.slice(1) : key;
     let text: string;
-    if (typeof value === "boolean") text = value ? "Yes" : "No";
+    if (typeof value === "boolean") text = value ? t("value.yes") : t("value.no");
     else if (unit === "usd") text = `$${value}`;
     else if (unit === "eur") text = `€${value}`;
     else if (unit === "gbp") text = `£${value}`;
@@ -1643,7 +1679,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   /** Showcase mode: a picker for switching diagrams when the catalog has several. */
   function renderShowcaseImagePicker(images: CatalogImage[]): string {
     if (images.length < 2) return "";
-    return `<select id="showcase-image" aria-label="Image">
+    return `<select id="showcase-image" aria-label="${te("picker.image")}">
       ${images.map((img) => `<option value="${img.id}" ${img.id === activeImageId ? "selected" : ""}>${escapeHtml(img.name)}</option>`).join("")}
     </select>`;
   }
@@ -1669,8 +1705,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    */
   function renderShowcaseDetails(row: CatalogRow | null, imageLinks: { id: number; url: string }[]): string {
     if (!row) {
-      return `<section class="showcase-details" role="region" aria-label="Selected item details" aria-live="polite">
-        <p class="hint">Select a marker on the image to see its details.</p>
+      return `<section class="showcase-details" role="region" aria-label="${te("showcase.region")}" aria-live="polite">
+        <p class="hint">${te("showcase.hint")}</p>
       </section>`;
     }
     const buyUrl = typeof row.extra.buy_url === "string" && row.extra.buy_url ? row.extra.buy_url : null;
@@ -1684,9 +1720,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const at = items.findIndex((l) => l.url === row.url);
     const nav =
       items.length > 1 && at >= 0
-        ? `<div class="showcase-nav"><button type="button" id="btn-showcase-prev" aria-label="Previous item">‹</button><span>${at + 1} of ${items.length}</span><button type="button" id="btn-showcase-next" aria-label="Next item">›</button></div>`
+        ? `<div class="showcase-nav"><button type="button" id="btn-showcase-prev" aria-label="${te("showcase.prev")}">‹</button><span>${te("nav.position", { index: at + 1, total: items.length })}</span><button type="button" id="btn-showcase-next" aria-label="${te("showcase.next")}">›</button></div>`
         : "";
-    return `<section class="showcase-details" role="region" aria-label="Selected item details" aria-live="polite">
+    return `<section class="showcase-details" role="region" aria-label="${te("showcase.region")}" aria-live="polite">
       ${nav}
       <h2>${escapeHtml(row.name)}</h2>
       ${row.sku ? `<p class="showcase-sku">${skuLabel()} ${escapeHtml(row.sku)}</p>` : ""}
@@ -1708,10 +1744,10 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function renderZoomControls(): string {
     return `
       <div class="zoom-controls">
-        <button id="btn-zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
+        <button id="btn-zoom-out" title="${te("zoom.out")}" aria-label="${te("zoom.out")}">−</button>
         <span class="zoom-pct">${Math.round(zoom * 100)}%</span>
-        <button id="btn-zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
-        <button id="btn-zoom-reset" title="${mode === "showcase" ? "Fit the whole image" : "Reset zoom"}">${mode === "showcase" ? "Fit" : "Reset"}</button>
+        <button id="btn-zoom-in" title="${te("zoom.in")}" aria-label="${te("zoom.in")}">+</button>
+        <button id="btn-zoom-reset" title="${mode === "showcase" ? te("zoom.fit.tip") : te("zoom.reset.tip")}">${mode === "showcase" ? te("zoom.fit") : te("zoom.reset")}</button>
       </div>
     `;
   }
@@ -1719,9 +1755,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function renderInstanceNav(index: number, total: number): string {
     return `
       <div class="instance-nav">
-        <button id="btn-instance-prev" title="Previous occurrence of this part">‹</button>
-        <span>${index + 1} of ${total}</span>
-        <button id="btn-instance-next" title="Next occurrence of this part">›</button>
+        <button id="btn-instance-prev" title="${te("instance.prev")}">‹</button>
+        <span>${te("nav.position", { index: index + 1, total })}</span>
+        <button id="btn-instance-next" title="${te("instance.next")}">›</button>
       </div>
     `;
   }
@@ -1733,33 +1769,33 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     return `
       <div class="open-overlay share-view-overlay">
         <div class="open-box share-view-box">
-          <h2>Share view</h2>
+          <h2>${te("share.title")}</h2>
           ${
             shareViewBusy
-              ? `<p class="hint">Looking for a local sharing server and uploading this catalog…</p>`
+              ? `<p class="hint">${te("share.busy")}</p>`
               : shareViewError
                 ? `<p class="error">${escapeHtml(shareViewError)}</p>
                    <div class="open-actions">
-                     <button type="button" id="share-view-retry">Try again</button>
-                     <button type="button" id="share-view-close">Close</button>
+                     <button type="button" id="share-view-retry">${te("share.retry")}</button>
+                     <button type="button" id="share-view-close">${te("action.close")}</button>
                    </div>`
                 : link
-                  ? `<p>Anyone with this link — or who scans this code — sees exactly what's on screen right now, this image and this hotspot. It's a snapshot, not a live feed: it won't update as you keep browsing here.</p>
+                  ? `<p>${te("share.explain")}</p>
                      ${
                        shareRoomId
-                         ? `<p class="hint">This link only works while your computer and its sharing server stay on — use "Stop sharing" below when you're done, or it'll just stop working on its own once either does.</p>`
+                         ? `<p class="hint">${te("share.explainRoom")}</p>`
                          : ""
                      }
                      <div class="share-view-qr">${renderQrCodeSvg(link)}</div>
                      <div class="field">
-                       <label for="share-view-link-input">Link</label>
+                       <label for="share-view-link-input">${te("share.linkLabel")}</label>
                        <textarea id="share-view-link-input" readonly rows="4">${escapeHtml(link)}</textarea>
                      </div>
                      <div class="open-actions">
-                       <span class="hint share-view-copy-feedback">${shareViewCopyFeedback ? "Copied!" : ""}</span>
-                       <button type="button" id="share-view-copy">Copy link</button>
-                       ${shareRoomId ? `<button type="button" id="share-view-stop">Stop sharing</button>` : ""}
-                       <button type="button" id="share-view-close">Close</button>
+                       <span class="hint share-view-copy-feedback">${shareViewCopyFeedback ? te("share.copied") : ""}</span>
+                       <button type="button" id="share-view-copy">${te("share.copy")}</button>
+                       ${shareRoomId ? `<button type="button" id="share-view-stop">${te("share.stop")}</button>` : ""}
+                       <button type="button" id="share-view-close">${te("action.close")}</button>
                      </div>`
                   : ""
           }
@@ -1775,43 +1811,43 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     return `
       <div class="open-overlay">
         <div class="open-box pdf-options-box">
-          <h2>Export PDF</h2>
+          <h2>${te("pdf.title")}</h2>
           <div class="field">
-            <label>QR code placement on diagrams</label>
+            <label>${te("pdf.qr.legend")}</label>
             <label class="radio-option">
               <input type="radio" name="pdf-qr-placement" value="table" ${pdfQrPlacement === "table" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
-              In the table only
+              ${te("pdf.qr.table")}
             </label>
             <label class="radio-option">
               <input type="radio" name="pdf-qr-placement" value="image" ${pdfQrPlacement === "image" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
-              On the diagram only
+              ${te("pdf.qr.image")}
             </label>
             <label class="radio-option">
               <input type="radio" name="pdf-qr-placement" value="both" ${pdfQrPlacement === "both" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
-              Both
+              ${te("pdf.qr.both")}
             </label>
             <p class="hint">
               ${
                 hasBuyUrl
-                  ? "A tile catalog's own on-corner QR is unaffected either way."
-                  : "This catalog has no items linked to an online store, so there's nothing to put a QR code on."
+                  ? te("pdf.qr.hint")
+                  : te("pdf.qr.hintNoStore")
               }
             </p>
           </div>
           <div class="field">
-            <label>Diagram page size</label>
+            <label>${te("pdf.size.legend")}</label>
             <label class="radio-option">
               <input type="radio" name="pdf-diagram-page-mode" value="fit" ${pdfDiagramPageMode === "fit" ? "checked" : ""} />
-              Fit to one page
+              ${te("pdf.size.fit")}
             </label>
             <label class="radio-option">
               <input type="radio" name="pdf-diagram-page-mode" value="real-size" ${pdfDiagramPageMode === "real-size" ? "checked" : ""} />
-              Real size, split across sheets
+              ${te("pdf.size.real")}
             </label>
           </div>
           <div class="open-actions">
-            <button type="button" id="pdf-options-cancel">Cancel</button>
-            <button type="button" id="pdf-options-submit">Export</button>
+            <button type="button" id="pdf-options-cancel">${te("action.cancel")}</button>
+            <button type="button" id="pdf-options-submit">${te("pdf.submit")}</button>
           </div>
         </div>
       </div>
@@ -1824,16 +1860,16 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     return `
       <div class="search-panel" id="search-panel">
         <div class="search-controls">
-          <input type="text" id="search-input" value="${escapeHtml(searchQuery)}" placeholder="Search every row…" />
+          <input type="text" id="search-input" value="${escapeHtml(searchQuery)}" placeholder="${te("search.placeholder")}" />
           <select id="search-field">
-            <option value="all" ${searchField === "all" ? "selected" : ""}>All fields</option>
-            <option value="name" ${searchField === "name" ? "selected" : ""}>Name</option>
+            <option value="all" ${searchField === "all" ? "selected" : ""}>${te("search.allFields")}</option>
+            <option value="name" ${searchField === "name" ? "selected" : ""}>${te("column.name")}</option>
             <option value="sku" ${searchField === "sku" ? "selected" : ""}>${skuLabel()}</option>
-            <option value="description" ${searchField === "description" ? "selected" : ""}>Description</option>
+            <option value="description" ${searchField === "description" ? "selected" : ""}>${te("column.description")}</option>
             ${extraKeys
               .map(
                 (k) =>
-                  `<option value="extra:${escapeHtml(k)}" ${searchField === `extra:${k}` ? "selected" : ""}>Extra: ${escapeHtml(k)}</option>`,
+                  `<option value="extra:${escapeHtml(k)}" ${searchField === `extra:${k}` ? "selected" : ""}>${te("search.extraField", { key: k })}</option>`,
               )
               .join("")}
           </select>
@@ -1845,9 +1881,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   function renderSearchResultsList(): string {
     if (!db) return "";
-    if (!searchQuery.trim()) return `<p class="hint">Type to search across every image's table.</p>`;
+    if (!searchQuery.trim()) return `<p class="hint">${te("search.hint")}</p>`;
     const results = searchRows(listAllRows(db), searchQuery, searchField).slice(0, 30);
-    if (results.length === 0) return `<p class="hint">No matches.</p>`;
+    if (results.length === 0) return `<p class="hint">${te("search.none")}</p>`;
     const imageNameById = new Map(listImages(db).map((i) => [i.id, i.name]));
     return `<ul>${results
       .map(
@@ -1891,7 +1927,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         <div class="cart-items">
           ${
             rows.length === 0
-              ? `<p class="hint">${cartLabel()} is empty.</p>`
+              ? `<p class="hint">${te("cart.empty")}</p>`
               : `<ul>${rows
                   .map((r) => {
                     const buyUrl = typeof r.extra.buy_url === "string" ? r.extra.buy_url : "";
@@ -1902,15 +1938,15 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                     <span class="hint">${escapeHtml(imageNameById.get(r.imageId) ?? "")}</span>
                   </span>
                   ${buyUrl ? `<a class="cart-open-btn" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer">${directOpenLabel()}</a>` : ""}
-                  <button type="button" class="cart-remove-btn" data-remove-url="${escapeHtml(r.url)}" title="Remove from ${cartNoun()}">✕</button>
+                  <button type="button" class="cart-remove-btn" data-remove-url="${escapeHtml(r.url)}" title="${te("cart.remove.tip")}">✕</button>
                 </li>`;
                   })
                   .join("")}</ul>`
           }
         </div>
         <div class="cart-panel-actions">
-          <button type="button" id="cart-clear" ${rows.length === 0 ? "disabled" : ""}>Clear ${cartLabel().toLowerCase()}</button>
-          <button type="button" id="cart-checkout" ${rows.length === 0 ? "disabled" : ""}>${catalogMode === "education" ? "Print list" : "Checkout"} (${rows.length})</button>
+          <button type="button" id="cart-clear" ${rows.length === 0 ? "disabled" : ""}>${te("cart.clear")}</button>
+          <button type="button" id="cart-checkout" ${rows.length === 0 ? "disabled" : ""}>${te("cart.checkout")} (${rows.length})</button>
         </div>
       </div>
     `;
@@ -1931,7 +1967,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const tabbable = l.id === selectedLinkId || (selectedLinkId === null && isFirst);
     const a11y =
       mode === "showcase"
-        ? ` role="button" tabindex="${tabbable ? 0 : -1}" aria-label="${escapeHtml(l.name)} — show details" aria-pressed="${l.id === selectedLinkId}"`
+        ? ` role="button" tabindex="${tabbable ? 0 : -1}" aria-label="${te("hotspot.aria", { name: l.name })}" aria-pressed="${l.id === selectedLinkId}"`
         : "";
     const title = mode === "showcase" ? "" : ` title="${escapeHtml(l.url)}"`;
     return `<div class="${classes.join(" ")}" data-id="${l.id}" data-url="${escapeHtml(l.url)}"${a11y} style="top:${l.top}px;left:${l.left}px;font-size:${l.fontSize}px"${title}>${escapeHtml(l.name)}</div>`;
@@ -1944,10 +1980,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     return catalogMode === "education" ? "📚" : "🛒";
   }
   function cartLabel(): string {
-    return catalogMode === "education" ? "Collection" : "Cart";
-  }
-  function cartNoun(): string {
-    return catalogMode === "education" ? "your collection" : "cart";
+    return t("cart.label");
   }
   /**
    * The table row's Buy/Learn-more control when cartMode is "accumulate" —
@@ -1957,8 +1990,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    * different things depending on whether clicking one takes you anywhere.
    */
   function addLabel(inCart: boolean): string {
-    if (catalogMode === "education") return inCart ? "Added ✓" : "Add to collection";
-    return inCart ? "In cart ✓" : "Add to cart";
+    return t(inCart ? "buy.inCart" : "buy.add");
   }
   /**
    * The label for any control that actually opens buy_url right away — the
@@ -1967,10 +1999,10 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    * table's instant link, just reached from the review panel instead).
    */
   function directOpenLabel(): string {
-    return catalogMode === "education" ? "Learn more" : "Buy";
+    return t("buy.open");
   }
   function skuLabel(): string {
-    return catalogMode === "education" ? "Code" : "SKU";
+    return t("column.sku");
   }
 
   // Small dot button rendered inside a table cell's hover popover — copies
@@ -1980,7 +2012,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function copyCellBtn(url: string, column: string, text: string): string {
     if (!text) return "";
     const copied = copiedCell?.url === url && copiedCell?.column === column;
-    return `<button type="button" class="copy-cell-btn ${copied ? "copied" : ""}" data-copy-url="${escapeHtml(url)}" data-copy-column="${escapeHtml(column)}" aria-label="${copied ? "Copied" : "Copy value"}"></button>`;
+    return `<button type="button" class="copy-cell-btn ${copied ? "copied" : ""}" data-copy-url="${escapeHtml(url)}" data-copy-column="${escapeHtml(column)}" aria-label="${copied ? te("copy.done") : te("copy.value")}"></button>`;
   }
 
   function rowHtml(r: CatalogRow, selectedUrl: string | null): string {

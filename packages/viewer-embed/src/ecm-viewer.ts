@@ -1,5 +1,5 @@
 import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
-import { mountViewer, type ViewerController } from "@ecm/shared";
+import { VIEWER_LOCALES, embedLocaleCandidates, mountViewer, pickLocale, type ViewerController } from "@ecm/shared";
 // Reused as-is rather than copied — a second hand-maintained stylesheet
 // would inevitably drift from the real one. `:root` (targets a page's
 // <html>) doesn't mean anything inside a shadow tree; `:host` is the
@@ -54,6 +54,9 @@ const HOST_DEFAULTS_CSS = `
  *   different catalog from there) or "showcase" (for marketing pages: no
  *   toolbar/table/image list — the image is fitted whole and the selected
  *   hotspot's item shows as a compact details card).
+ * - `lang` — UI language (e.g. "ru"). Falls back to the host page's
+ *   `<html lang>`, then the visitor's browser language, then English. A
+ *   language saved in the standalone apps is deliberately ignored here.
  * - `initial-image` / `initial-link` — ids of the image and hotspot to show
  *   selected once `src` has loaded (silently ignored if they don't exist).
  * - `compact-zoom` — showcase mode, narrow layout only: open each image at
@@ -88,6 +91,7 @@ class EcmViewerElement extends HTMLElement {
       container: mount,
       root: shadow,
       mode,
+      locale: pickLocale(embedLocaleCandidates(this.getAttribute("lang")), VIEWER_LOCALES),
       initialSrc: this.getAttribute("src") ?? undefined,
       initialImageId: intAttr("initial-image"),
       initialLinkId: intAttr("initial-link"),

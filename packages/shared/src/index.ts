@@ -3,6 +3,7 @@ export * from "./schema.js";
 export * from "./db.js";
 export * from "./theme.js";
 export * from "./i18n.js";
+export { VIEWER_LOCALES } from "./locales/viewer/index.js";
 export * from "./search.js";
 export * from "./images.js";
 export * from "./legacySch.js";
