@@ -9,6 +9,7 @@
     "dev:embed": "pnpm --filter @ecm/viewer-embed dev",
     "dev:collab-server": "pnpm --filter @ecm/collab-server dev",
     "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "generate:site": "bun scripts/generate-site.ts"
   }
 }

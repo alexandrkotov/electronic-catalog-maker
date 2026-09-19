@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{@lang}}">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <script>
   // Page language + the few strings the page scripts need (from the dictionary's js.* keys).
-  var LANG = "en";
-  var T = {"themeLight":"☀️ Light","themeDark":"🌙 Dark","demoLoadFailed":"The live demo couldn’t load. Use “Open full demo” below.","visits.one":"\u003cstrong>{n}\u003c/strong> visit to this site so far.","visits.other":"\u003cstrong>{n}\u003c/strong> visits to this site so far."};
+  var LANG = "{{@lang}}";
+  var T = {{@messages}};
 </script>
 <script>
   // Apply the saved (or OS-preferred) theme before first paint — no light flash.
@@ -21,14 +21,11 @@
     document.documentElement.dataset.theme = t;
   })();
 </script>
-<link rel="alternate" hreflang="en" href="https://tapalog.com/" />
-<link rel="alternate" hreflang="ru" href="https://tapalog.com/ru/" />
-<link rel="alternate" hreflang="x-default" href="https://tapalog.com/" />
-<link rel="canonical" href="https://tapalog.com/" />
-<title>Electronic Catalog Maker — Interactive Image Catalogs</title>
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
-<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png" />
-<link rel="apple-touch-icon" href="icon-192.png" />
+{{@alternates}}
+<title>{{index.title}}</title>
+<link rel="icon" type="image/png" sizes="32x32" href="{{@base}}favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="{{@base}}favicon-16.png" />
+<link rel="apple-touch-icon" href="{{@base}}icon-192.png" />
 <style>
   .lang-switch { font-size: 0.9rem; color: var(--muted); text-decoration: none; padding: 0.35rem 0.6rem; min-height: 40px; display: inline-flex; align-items: center; }
   .lang-switch:hover { color: var(--link); text-decoration: underline; }
@@ -214,124 +211,124 @@
 </style>
 <body>
   <div class="brand">
-    <img src="icon-192.png" alt="" width="32" height="32" />
+    <img src="{{@base}}icon-192.png" alt="" width="32" height="32" />
     Electronic Catalog Maker <span>tapalog.com</span>
-    <span class="top-actions"><a class="lang-switch" href="ru/" hreflang="ru" lang="ru">Русский</a><button type="button" class="theme-toggle" id="theme-toggle"></button></span>
+    <span class="top-actions">{{@switch}}<button type="button" class="theme-toggle" id="theme-toggle"></button></span>
   </div>
 
   <header class="hero">
-    <h1>Turn any image into an interactive catalog.</h1>
-    <p>Add clickable hotspots to photos and diagrams. Attach product details, part numbers, and links — all in one catalog file.</p>
+    <h1>{{index.hero.title}}</h1>
+    <p>{{index.hero.text}}</p>
     <div class="cta">
-      <a class="btn primary" href="#demo">Explore a demo</a>
-      <a class="btn secondary" href="editor/">Create a catalog</a>
+      <a class="btn primary" href="#demo">{{index.hero.cta.demo}}</a>
+      <a class="btn secondary" href="{{@base}}editor/">{{index.hero.cta.create}}</a>
     </div>
   </header>
 
   <main>
     <section class="demo" id="demo" aria-labelledby="demo-h">
-      <h2 id="demo-h">See how it works</h2>
-      <p class="intro">Select a marker or use the arrows to explore item details. Use Fit to see the whole image.</p>
-      <div class="tabs" role="group" aria-label="Example catalog">
-        <button type="button" data-cat="auto-spare-parts" aria-pressed="true">Auto parts</button>
-        <button type="button" data-cat="furniture" aria-pressed="false">Furniture</button>
+      <h2 id="demo-h">{{index.demo.title}}</h2>
+      <p class="intro">{{index.demo.intro}}</p>
+      <div class="tabs" role="group" aria-label="{{index.demo.tabsLabel}}">
+        <button type="button" data-cat="auto-spare-parts" aria-pressed="true">{{index.demo.tabs.autoParts}}</button>
+        <button type="button" data-cat="furniture" aria-pressed="false">{{index.demo.tabs.furniture}}</button>
       </div>
       <div class="frame" id="frame"></div>
       <p class="demo-links">
-        <a id="open-full" href="viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Open full demo</a>
-        <a id="edit-this" href="editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Edit this example</a>
+        <a id="open-full" href="{{@base}}viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">{{index.demo.openFull}}</a>
+        <a id="edit-this" href="{{@base}}editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">{{index.demo.editThis}}</a>
       </p>
-      <p class="demo-note">Buy opens our demo store checkout, where every item costs $0.</p>
-      <p class="steps-line"><strong>Build your own:</strong> add an image → mark the details with hotspots → save the catalog file and open it in Viewer.</p>
-      <noscript><p>The live demo needs JavaScript — use “Open full demo” above.</p></noscript>
+      <p class="demo-note">{{index.demo.note}}</p>
+      <p class="steps-line">{{index.demo.steps}}</p>
+      <noscript><p>{{index.demo.noscript}}</p></noscript>
     </section>
 
-    <h2>Who it's for</h2>
+    <h2>{{index.who.title}}</h2>
     <div class="card-row use-cases">
-      <div class="card"><h3>Parts and equipment</h3><p>Connect items in a diagram with part numbers and descriptions.</p></div>
-      <div class="card"><h3>Furniture and products</h3><p>Add details to objects or components in a photograph.</p></div>
-      <div class="card"><h3>Teaching and learning</h3><p>Explorable diagrams for lessons and class projects — no student accounts, no cloud. <a href="schools.html">See the schools page →</a></p></div>
+      <div class="card"><h3>{{index.who.parts.title}}</h3><p>{{index.who.parts.text}}</p></div>
+      <div class="card"><h3>{{index.who.furniture.title}}</h3><p>{{index.who.furniture.text}}</p></div>
+      <div class="card"><h3>{{index.who.teaching.title}}</h3><p>{{index.who.teaching.text}}</p></div>
     </div>
 
-    <h2>The apps</h2>
+    <h2>{{index.apps.title}}</h2>
     <div class="card-row apps-row">
       <div class="card">
-        <h2><a href="editor/">Editor →</a></h2>
-        <p>Build a catalog: place hotspots on an image, attach data to each.</p>
-        <p><a href="https://apps.microsoft.com/detail/9p4zk48txrln?hl=en-US&amp;gl=US">Get it on Microsoft Store</a></p>
+        <h2><a href="{{@base}}editor/">{{index.apps.editor.title}}</a></h2>
+        <p>{{index.apps.editor.text}}</p>
+        <p><a href="{url_msEditor}">{{index.apps.editor.store}}</a></p>
       </div>
       <div class="card">
-        <h2><a href="viewer/">Viewer →</a></h2>
-        <p>Open a catalog file and click around it.</p>
-        <p><a href="https://apps.microsoft.com/detail/9nb4shzt8fd1?hl=en-US&amp;gl=US">Get it on Microsoft Store</a></p>
+        <h2><a href="{{@base}}viewer/">{{index.apps.viewer.title}}</a></h2>
+        <p>{{index.apps.viewer.text}}</p>
+        <p><a href="{url_msViewer}">{{index.apps.viewer.store}}</a></p>
       </div>
       <div class="card">
-        <h2>Collaboration Server</h2>
-        <p>Optional, self-hosted: edit a catalog live with someone else.</p>
+        <h2>{{index.apps.collab.title}}</h2>
+        <p>{{index.apps.collab.text}}</p>
         <ul class="links">
-          <li><a href="https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=en-US&amp;gl=US">Microsoft Store (Windows)</a></li>
-          <li><a href="https://snapcraft.io/ecm-collab-server">Snap Store (Linux)</a></li>
-          <li><a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest" id="collab-other">Other downloads (macOS, Chromebook, direct)</a></li>
+          <li><a href="{url_msCollab}">{{index.apps.collab.win}}</a></li>
+          <li><a href="{url_snap}">{{index.apps.collab.linux}}</a></li>
+          <li><a href="{url_releasePage}" id="collab-other">{{index.apps.collab.more}}</a></li>
         </ul>
       </div>
     </div>
 
   <section class="benefits" aria-labelledby="benefits-h">
-    <h2 id="benefits-h">Built around your catalog files</h2>
+    <h2 id="benefits-h">{{index.benefits.title}}</h2>
     <ul>
       <li>
-        <strong>Free, no subscription</strong>
-        The apps are free and open source (MIT). No accounts, no plans.
+        <strong>{{index.benefits.free.title}}</strong>
+        {{index.benefits.free.text}}
       </li>
       <li>
-        <strong>Your catalog is one file</strong>
-        Images, hotspots and data live together in a single <code>.ecatm</code> file on your device. It goes nowhere unless you share it.
+        <strong>{{index.benefits.file.title}}</strong>
+        {{index.benefits.file.text}}
       </li>
       <li>
-        <strong>Photos and diagrams</strong>
-        Put hotspots on any image — a furniture photograph, a parts diagram, an anatomy chart.
+        <strong>{{index.benefits.photos.title}}</strong>
+        {{index.benefits.photos.text}}
       </li>
       <li>
-        <strong>Links to your own store</strong>
-        Point items at any online store you already use. There's no marketplace or checkout of ours in between.
+        <strong>{{index.benefits.store.title}}</strong>
+        {{index.benefits.store.text}}
       </li>
       <li>
-        <strong>Works offline after your first visit</strong>
-        After one visit the apps are cached in your browser, so they keep working without a connection.
+        <strong>{{index.benefits.offline.title}}</strong>
+        {{index.benefits.offline.text}}
       </li>
       <li>
-        <strong>Live editing, only if you want it</strong>
-        Editing together needs the optional, self-hosted Collaboration Server. Everything else works without it.
+        <strong>{{index.benefits.live.title}}</strong>
+        {{index.benefits.live.text}}
       </li>
     </ul>
   </section>
 
     <dialog class="collab" id="collab" aria-labelledby="collab-h">
-      <button type="button" class="close" aria-label="Close">×</button>
-      <h2 id="collab-h">Collaboration Server downloads</h2>
-      <p>Run the Collaboration Server yourself to edit a catalog live with other people. You don't need it to create or view a catalog on your own.</p>      <p>
-        <strong>Windows:</strong> <a href="https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=en-US&amp;gl=US">Get it on Microsoft Store</a> (or <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-windows-x64.exe">direct download</a>, .exe file)
+      <button type="button" class="close" aria-label="{{index.dialog.close}}">×</button>
+      <h2 id="collab-h">{{index.dialog.title}}</h2>
+      <p>{{index.dialog.intro}}</p>      <p>
+        {{index.dialog.windows}}
       </p>
       <p>
-        <strong>Linux:</strong> <a href="https://snapcraft.io/ecm-collab-server">Get it on Snap Store</a> (Ubuntu App Center, or <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-linux-x64">direct download</a> for other distros)
+        {{index.dialog.linux}}
       </p>
       <p>
-        <strong>macOS:</strong> (requires macOS 13+) <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-macos-arm64.zip">direct download</a> (Apple Silicon, or <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-macos-x64.zip">Intel</a>) — unzip, then see the <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">release page</a> for the one-line Terminal command needed on first run
+        {{index.dialog.macos}}
       </p>
       <p>
-        <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-amd64.deb">direct download</a>, .deb file — see the <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">release page</a> for setup
+        {{index.dialog.chromebook}}
       </p>
     </dialog>
   </main>
 
   <footer>
-    <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Source on GitHub</a>
-    — catalogs stay on your disk unless opened from a URL.
-    <div><a href="demo/embed-demo.html">See it embedded on a website →</a></div>
-    <div><a href="privacy.html">Privacy policy</a></div>
+    <a href="{url_github}">{{common.footer.source}}</a>
+    {{common.footer.note}}
+    <div><a href="{{@base}}demo/embed-demo.html">{{index.footer.embed}}</a></div>
+    <div><a href="{{@base}}privacy.html">{{common.footer.privacy}}</a></div>
     <div id="visits"></div>
     <div class="built-by">
-      Built by Alexander Kotov (<a href="https://www.linkedin.com/in/alexkotovwa/">LinkedIn</a> · <a href="https://x.com/kotov_wa">X</a>)
+      {{common.footer.builtBy}}
     </div>
   </footer>
 
@@ -366,8 +363,8 @@
       }
       function show(cat) {
         buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.cat === cat)); });
-        document.getElementById("open-full").href = "viewer/?src=..%2Fdemo%2F" + cat + ".ecatm";
-        document.getElementById("edit-this").href = "editor/?src=..%2Fdemo%2F" + cat + ".ecatm";
+        document.getElementById("open-full").href = "{{@base}}viewer/?src=..%2Fdemo%2F" + cat + ".ecatm";
+        document.getElementById("edit-this").href = "{{@base}}editor/?src=..%2Fdemo%2F" + cat + ".ecatm";
         loadScript(function () {
           frame.textContent = "";
           var el = document.createElement("ecm-viewer");
@@ -380,7 +377,7 @@
           // Phones: a dense diagram fitted whole is an unreadable pile of
           // markers, so open close-up on the selected item (Fit shows it all).
           el.setAttribute("compact-zoom", "0.75");
-          el.setAttribute("src", new URL("demo/" + cat + ".ecatm", location.href).href);
+          el.setAttribute("src", new URL("{{@base}}demo/" + cat + ".ecatm", location.href).href);
           frame.appendChild(el);
         });
       }

@@ -25,6 +25,8 @@ jobs:
       - run: pnpm run build
       - run: pnpm --filter @ecm/collab-server test
       - run: pnpm --filter @ecm/shared test
+      - name: Generated landing pages match their templates and dictionaries
+        run: bun scripts/generate-site.ts --check
 
   # packages/viewer-embed/dist/ecm-viewer.js is committed on purpose (see
   # README "Status") — it's the actual file jsDelivr serves straight from
