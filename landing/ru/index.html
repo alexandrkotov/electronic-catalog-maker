@@ -30,7 +30,7 @@
 <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png" />
 <link rel="apple-touch-icon" href="../icon-192.png" />
 <style>
-  .lang-switch { font-size: 0.9rem; color: var(--muted); text-decoration: none; padding: 0.35rem 0.6rem; min-height: 40px; display: inline-flex; align-items: center; }
+  .lang-switch { font-size: 0.9rem; color: var(--muted); text-decoration: none; padding: 0.35rem 0.6rem; min-height: 40px; display: inline-flex; align-items: center; white-space: nowrap; }
   .lang-switch:hover { color: var(--link); text-decoration: underline; }
   :root {
     color-scheme: light;
@@ -51,7 +51,7 @@
     font: inherit; font-size: 0.9rem; font-weight: 400;
     color: var(--text); background: var(--bg);
     border: 1px solid var(--border); border-radius: 999px;
-    padding: 0.35rem 0.9rem; min-height: 40px; cursor: pointer;
+    padding: 0.35rem 0.9rem; min-height: 40px; cursor: pointer; white-space: nowrap;
   }
 
   /* Light-only, deliberately — no `color-scheme: light dark` (see the
@@ -81,7 +81,7 @@
   .brand h1 {
     margin: 0;
   }
-  @media (max-width: 480px) { .brand span { display: none; } }
+  @media (max-width: 480px) { .brand .brand-domain { display: none; } }
   p.tagline { color: var(--muted); margin-top: 0; }
   .hero { padding: 2.5rem 0 1.5rem; }
   .hero h1 { font-size: clamp(1.9rem, 5vw, 2.8rem); line-height: 1.15; margin: 0 0 0.75rem; }
@@ -215,7 +215,7 @@
 <body>
   <div class="brand">
     <img src="../icon-192.png" alt="" width="32" height="32" />
-    Electronic Catalog Maker <span>tapalog.com</span>
+    Electronic Catalog Maker <span class="brand-domain">tapalog.com</span>
     <span class="top-actions"><a class="lang-switch" href="../" hreflang="en" lang="en">English</a><button type="button" class="theme-toggle" id="theme-toggle"></button></span>
   </div>
 
