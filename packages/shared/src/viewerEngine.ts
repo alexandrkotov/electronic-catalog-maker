@@ -511,6 +511,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     zoom = Math.min(4, Math.max(Math.min(0.25, fitZoom), next));
     userZoomed = true;
     render();
+    // On touch screens the zoomed stage isn't finger-scrollable (see the
+    // pointer:coarse rule in style.css), so keep the selected item in view.
+    if (mode === "showcase") centerSelection();
   }
 
   /** Reset button: 100% normally; "fit the whole image" in showcase mode. */
@@ -539,6 +542,39 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (!w || !h || !scroll.clientWidth || !scroll.clientHeight) return null;
     stageBox = { w: scroll.clientWidth, h: scroll.clientHeight };
     return Math.min(1, scroll.clientWidth / w, scroll.clientHeight / h);
+  }
+
+  // Showcase, stacked (narrow) layout only: the details card grows with its
+  // content, so a page that lets the widget size itself would see everything
+  // below it jump as the selection moves between short and long items. Measure
+  // the tallest card among the items on the current image (not the whole
+  // catalog: one part with a huge "alternates" list would inflate every other
+  // image) once per width and use it as the card's min-height
+  // (--showcase-details-min, read in style.css).
+  let detailsMinKey = "";
+  function applyShowcaseDetailsMinHeight() {
+    if (!db || activeImageId === null) return;
+    const width = container.clientWidth;
+    if (!width || width > 640) return;
+    const onImage = new Set(listLinksForImage(db, activeImageId).map((l) => l.url));
+    const rows = listAllRows(db).filter((r) => onImage.has(r.url));
+    const key = `${Math.round(width)}:${activeImageId}:${rows.length}:${rows[0]?.url ?? ""}`;
+    if (key === detailsMinKey) return;
+    detailsMinKey = key;
+    const probe = document.createElement("div");
+    probe.style.cssText = `position:fixed;left:-9999px;top:0;visibility:hidden;pointer-events:none;width:${width}px;--showcase-details-min:0px`;
+    container.appendChild(probe);
+    let tallest = 0;
+    for (const row of rows) {
+      // Two dummy markers so the prev/next row is included in the measurement.
+      probe.innerHTML = renderShowcaseDetails(row, [
+        { id: 1, url: row.url },
+        { id: 2, url: "\0" },
+      ]);
+      tallest = Math.max(tallest, (probe.firstElementChild as HTMLElement | null)?.offsetHeight ?? 0);
+    }
+    probe.remove();
+    container.style.setProperty("--showcase-details-min", `${tallest}px`);
   }
 
   async function boot() {
@@ -1440,7 +1476,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
             }
           </div>
           ${!showcase && activeImage ? renderZoomControls() : ""}
-          ${instances.length > 1 ? renderInstanceNav(instanceIndex, instances.length) : ""}
+          ${!showcase && instances.length > 1 ? renderInstanceNav(instanceIndex, instances.length) : ""}
         </div>
 
         ${
@@ -1504,6 +1540,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         return;
       }
     }
+
+    if (showcase) applyShowcaseDetailsMinHeight();
 
     if (focusKey) {
       root.querySelector<HTMLElement>(focusKey)?.focus({ preventScroll: true });
@@ -1582,6 +1620,18 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     </select>`;
   }
 
+  /** First marker of each distinct item on an image, in drawing (id) order. */
+  function showcaseItems<T extends { id: number; url: string }>(imageLinks: T[]): T[] {
+    const seen = new Set<string>();
+    const out: T[] = [];
+    for (const l of [...imageLinks].sort((a, b) => a.id - b.id)) {
+      if (seen.has(l.url)) continue;
+      seen.add(l.url);
+      out.push(l);
+    }
+    return out;
+  }
+
   /**
    * Showcase mode's replacement for the table: one card for the selected
    * item. Readable labels/values instead of raw extra keys; the description
@@ -1589,7 +1639,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    * The Buy control is always a plain link — there is no toolbar cart here,
    * so an "add to cart" toggle would lead nowhere.
    */
-  function renderShowcaseDetails(row: CatalogRow | null, imageLinks: { id: number }[]): string {
+  function renderShowcaseDetails(row: CatalogRow | null, imageLinks: { id: number; url: string }[]): string {
     if (!row) {
       return `<section class="showcase-details" role="region" aria-label="Selected item details" aria-live="polite">
         <p class="hint">Select a marker on the image to see its details.</p>
@@ -1598,14 +1648,15 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const buyUrl = typeof row.extra.buy_url === "string" && row.extra.buy_url ? row.extra.buy_url : null;
     const entries = Object.entries(row.extra).filter(([k, v]) => k !== "buy_url" && v !== "" && v !== null && v !== undefined);
     const showDescription = row.description && row.description.trim().toLowerCase() !== row.name.trim().toLowerCase();
-    // Prev/next over every marker on this image: markers can be tiny on a
-    // phone-sized fit of a dense diagram, so tapping one precisely is not the
-    // only way to reach an item.
-    const ordered = [...imageLinks].sort((a, b) => a.id - b.id);
-    const at = ordered.findIndex((l) => l.id === selectedLinkId);
+    // Prev/next over the distinct items on this image (a part drawn several
+    // times counts once — all its markers are highlighted together anyway).
+    // Markers can be tiny on a phone-sized fit of a dense diagram, so tapping
+    // one precisely is not the only way to reach an item.
+    const items = showcaseItems(imageLinks);
+    const at = items.findIndex((l) => l.url === row.url);
     const nav =
-      ordered.length > 1 && at >= 0
-        ? `<div class="showcase-nav"><button type="button" id="btn-showcase-prev" aria-label="Previous item">‹</button><span>${at + 1} of ${ordered.length}</span><button type="button" id="btn-showcase-next" aria-label="Next item">›</button></div>`
+      items.length > 1 && at >= 0
+        ? `<div class="showcase-nav"><button type="button" id="btn-showcase-prev" aria-label="Previous item">‹</button><span>${at + 1} of ${items.length}</span><button type="button" id="btn-showcase-next" aria-label="Next item">›</button></div>`
         : "";
     return `<section class="showcase-details" role="region" aria-label="Selected item details" aria-live="polite">
       ${nav}
@@ -2040,9 +2091,10 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
     const stepShowcase = (dir: 1 | -1) => {
       if (!db || activeImageId === null) return;
-      const ordered = [...listLinksForImage(db, activeImageId)].sort((a, b) => a.id - b.id);
-      const at = ordered.findIndex((l) => l.id === selectedLinkId);
-      const next = ordered[(at + dir + ordered.length) % ordered.length];
+      const items = showcaseItems(listLinksForImage(db, activeImageId));
+      const selectedUrlNow = listLinksForImage(db, activeImageId).find((l) => l.id === selectedLinkId)?.url;
+      const at = items.findIndex((l) => l.url === selectedUrlNow);
+      const next = items[(at + dir + items.length) % items.length];
       if (next) actionSelectHotspot(next.id);
     };
     root.getElementById("btn-showcase-prev")?.addEventListener("click", () => stepShowcase(-1));

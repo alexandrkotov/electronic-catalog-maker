@@ -1111,6 +1111,15 @@ button:disabled {
   overflow: hidden;
 }
 
+/* Touch: a finger-scrollable stage, once zoomed, captures the swipe that
+   should scroll the page (nested scrolling). Keep it non-scrollable; the
+   engine re-centers the zoomed image on the selected item instead. */
+@media (pointer: coarse) {
+  .mode-showcase .stage-scroll {
+    overflow: hidden;
+  }
+}
+
 .mode-showcase .hotspot:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
@@ -1135,6 +1144,10 @@ button:disabled {
     border-left: 0;
     border-top: 1px solid var(--border);
     overflow-y: visible;
+    /* Set by the engine to the tallest card in the catalog, so the widget's
+       height stays constant while the selection changes. */
+    box-sizing: border-box;
+    min-height: var(--showcase-details-min, 0);
   }
 
   .showcase-bar .zoom-pct {
