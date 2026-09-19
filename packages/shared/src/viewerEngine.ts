@@ -28,7 +28,7 @@ import {
 } from "./collabClient.js";
 import { renderQrCodeSvg } from "./qrcode.js";
 import { createTranslator, matchLocale, type MessageParams, type Translate } from "./i18n.js";
-import { VIEWER_LOCALES, viewerMessages } from "./locales/viewer/index.js";
+import { VIEWER_LOCALES, VIEWER_LOCALE_NAMES, viewerMessages } from "./locales/viewer/index.js";
 import { buildCartCheckoutUrl, cartStorageKey, catalogHasAnyBuyUrl, loadPersistedCart, parseCartItemId, savePersistedCart } from "./cart.js";
 import { DEFAULT_PDF_EXPORT_OPTIONS, type DiagramPageMode, type PdfExportOptions, type QrPlacement } from "./pdfExportOptions.js";
 import type { CatalogImage, CatalogLink, CatalogRow } from "./types.js";
@@ -199,6 +199,13 @@ export interface MountViewerOptions {
    * embed); anything not in VIEWER_LOCALES falls back to English.
    */
   locale?: string;
+  /**
+   * Passing this shows a language picker in the "full" toolbar; it is called
+   * with the chosen language after the UI has re-rendered in it. Left to the
+   * host so persisting the choice (and <html lang>) stays a per-surface
+   * decision — the standalone app saves it, an embed must not.
+   */
+  onLocaleChange?: (locale: string) => void;
 }
 
 export interface ViewerController {
@@ -296,10 +303,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   let catalogMode: "commercial" | "education" = "commercial";
   // catalogMode picks the wording ("Cart" vs "Collection", ...) through
   // `key@education` overrides in the dictionary, so the translator is per mode.
-  const locale = matchLocale(options.locale, VIEWER_LOCALES) ?? "en";
+  let locale = matchLocale(options.locale, VIEWER_LOCALES) ?? "en";
   const translators = new Map<string, Translate>();
   function t(key: string, params?: MessageParams): string {
-    let translate = translators.get(catalogMode);
+    const cacheKey = `${locale}|${catalogMode}`;
+    let translate = translators.get(cacheKey);
     if (!translate) {
       translate = createTranslator({
         messages: viewerMessages[locale] ?? {},
@@ -307,7 +315,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         fallback: viewerMessages.en,
         mode: catalogMode === "education" ? "education" : undefined,
       });
-      translators.set(catalogMode, translate);
+      translators.set(cacheKey, translate);
     }
     return translate(key, params);
   }
@@ -1445,7 +1453,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // A wholesale innerHTML rebuild drops keyboard focus; in showcase mode
     // (keyboard-operable hotspots, a picker, zoom buttons) remember what was
     // focused and put it back afterwards — see the restore below.
-    const focusedEl = showcase ? (root.activeElement as HTMLElement | null) : null;
+    const activeEl = root.activeElement as HTMLElement | null;
+    const focusedEl = showcase || activeEl?.id === "lang-select" ? activeEl : null;
     const focusKey = focusedEl?.id
       ? `#${focusedEl.id}`
       : focusedEl?.dataset?.id && focusedEl.classList.contains("hotspot")
@@ -1472,6 +1481,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                  ${exportPdf ? `<button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="${te("toolbar.exportPdf.tip")}">${exportPdfBusy ? te("toolbar.exportPdf.busy") : te("toolbar.exportPdf")}</button>` : ""}
                  ${cartMode === "accumulate" ? `<button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="${te("cart.tip")}">${cartIcon()} ${cartLabel()} (${cartItems.size})</button>` : ""}
                  <span class="spacer"></span>
+                 ${
+                   options.onLocaleChange
+                     ? `<select id="lang-select" title="${te("toolbar.language.tip")}" aria-label="${te("toolbar.language.tip")}">${VIEWER_LOCALES.map(
+                         (l) => `<option value="${l}" ${l === locale ? "selected" : ""}>${escapeHtml(VIEWER_LOCALE_NAMES[l] ?? l)}</option>`,
+                       ).join("")}</select>`
+                     : ""
+                 }
                  <button id="btn-theme" title="${te("toolbar.theme.tip")}">${currentTheme(themeTarget) === "dark" ? te("theme.light") : te("theme.dark")}</button>
                  <span class="hint">${escapeHtml(statusMessage)}</span>
                  ${searchOpen ? renderSearchPanel() : ""}
@@ -2056,6 +2072,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // Only present in "full" mode, same as #btn-open below — never actually
     // null when the listeners it's used in can fire.
     const fileOpen = root.getElementById("file-open") as HTMLInputElement;
+    root.getElementById("lang-select")?.addEventListener("change", (evt) => {
+      const chosen = matchLocale((evt.target as HTMLSelectElement).value, VIEWER_LOCALES);
+      if (!chosen || chosen === locale) return;
+      locale = chosen;
+      statusMessage = ""; // was worded in the previous language; the state it described is still visible on screen
+      render();
+      options.onLocaleChange?.(chosen);
+    });
     root.getElementById("btn-theme")?.addEventListener("click", () => {
       toggleTheme(themeTarget);
       render();

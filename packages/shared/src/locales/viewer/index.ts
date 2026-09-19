@@ -10,4 +10,7 @@ import ru from "./ru.json";
  */
 export const VIEWER_LOCALES = ["en", "ru"] as const;
 
+/** Each language's own name for itself — shown in the language picker, never translated. */
+export const VIEWER_LOCALE_NAMES: Record<string, string> = { en: "English", ru: "Русский" };
+
 export const viewerMessages: Record<string, Messages> = { en, ru };

@@ -19,6 +19,7 @@
   "toolbar.exportPdf": "Экспорт в PDF…",
   "toolbar.exportPdf.busy": "Экспорт в PDF…",
   "toolbar.exportPdf.tip": "Экспортировать каталог в печатный PDF формата A4 — рядом с каждой позицией, у которой есть ссылка «Купить», будет QR-код",
+  "toolbar.language.tip": "Язык",
   "toolbar.theme.tip": "Переключить светлую/тёмную тему",
   "theme.light": "☀️ Светлая",
   "theme.dark": "🌙 Тёмная",
