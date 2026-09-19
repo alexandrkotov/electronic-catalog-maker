@@ -2200,11 +2200,12 @@ function parseExtraField(extraText: string): Record<string, string> | null {
 }
 
 /** One key/value row inside an Extra field's pairs UI — used both for the initial render and to rebuild rows after switching back from "Edit as JSON…". */
+// `value` is typed string but a catalog's extra JSON can hold numbers/booleans (e.g. the demo's `price_usd: 0`, `in_stock: true`) — hence String() below.
 function extraPairRowHtml(key: string, value: string): string {
   return `
     <div class="extra-pair">
       <input type="text" class="extra-key" list="extra-key-options" placeholder="${te("extra.key")}" value="${escapeHtml(key)}" />
-      <input type="text" class="extra-value" placeholder="${te("extra.value")}" value="${escapeHtml(value)}" />
+      <input type="text" class="extra-value" placeholder="${te("extra.value")}" value="${escapeHtml(String(value))}" />
       <button type="button" class="btn-remove-pair" title="${te("extra.remove")}" aria-label="${te("extra.remove")}">×</button>
     </div>`;
 }
