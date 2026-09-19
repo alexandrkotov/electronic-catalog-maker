@@ -8,6 +8,7 @@ import {
   pickLocale,
   saveLocale,
   setUpPwa,
+  viewerTranslator,
   type Database,
   type PdfExportOptions,
 } from "@ecm/shared";
@@ -55,14 +56,19 @@ async function exportPdf(db: Database, options: PdfExportOptions): Promise<Uint8
 // Saved choice → browser language → English. The standalone app owns the
 // whole page, so it also sets <html lang> for screen readers and hyphenation.
 const locale = pickLocale(appLocaleCandidates(VIEWER_LOCALES), VIEWER_LOCALES);
-document.documentElement.lang = locale;
+// <html lang> and the tab title live in the static page, outside mountViewer.
+function applyPageLocale(l: string) {
+  document.documentElement.lang = l;
+  document.title = viewerTranslator(l)("toolbar.title");
+}
+applyPageLocale(locale);
 
 mountViewer({
   container: document.getElementById("app")!,
   locale,
   onLocaleChange: (chosen) => {
     saveLocale(chosen);
-    document.documentElement.lang = chosen;
+    applyPageLocale(chosen);
   },
   mode: "full",
   initialSrc: params.get("src") ?? undefined,
