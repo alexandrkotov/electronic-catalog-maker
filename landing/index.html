@@ -118,7 +118,11 @@
 
   
   @media (max-width: 700px) {
-    .frame { height: 480px; }
+    /* Let the demo grow with the selected item's details (the viewer's
+       stacked layout keeps the image at a fixed height) instead of scrolling
+       inside a short card. */
+    .frame { height: auto; }
+    .frame ecm-viewer { height: auto; }
     .btn { flex: 1 1 100%; text-align: center; }
   }
   @media (prefers-reduced-motion: no-preference) {
@@ -215,7 +219,7 @@
   <main>
     <section class="demo" id="demo" aria-labelledby="demo-h">
       <h2 id="demo-h">See how it works</h2>
-      <p class="intro">Select a marked part of the image to explore its details.</p>
+      <p class="intro">Select a marker or use the arrows to explore item details.</p>
       <div class="tabs" role="group" aria-label="Example catalog">
         <button type="button" data-cat="auto-spare-parts" aria-pressed="true">Auto parts</button>
         <button type="button" data-cat="furniture" aria-pressed="false">Furniture</button>

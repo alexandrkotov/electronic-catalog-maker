@@ -991,6 +991,9 @@ button:disabled {
   grid-template-columns: minmax(0, 1fr) minmax(220px, 34%);
   grid-template-rows: minmax(0, 1fr);
   grid-template-areas: "stage details";
+  /* A host that sizes itself to its content (the stacked layout below) must
+     not collapse this grid's single 1fr row. */
+  min-height: 480px;
 }
 
 .showcase-details {
@@ -1116,15 +1119,22 @@ button:disabled {
 @container ecm-viewer (max-width: 640px) {
   .ecm-viewer-app.mode-showcase {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) minmax(0, 42%);
+    /* Fixed-height stage (its bar + fitted image), then a details card that
+       grows with its content — the host page scrolls, not the card, so there
+       is no scroll region nested inside the page. The embedding page must let
+       the host's height be `auto` for this to show in full. */
+    grid-template-rows: 360px auto;
     grid-template-areas:
       "stage"
       "details";
+    height: auto;
+    min-height: 0;
   }
 
   .mode-showcase .showcase-details {
     border-left: 0;
     border-top: 1px solid var(--border);
+    overflow-y: visible;
   }
 
   .showcase-bar .zoom-pct {
