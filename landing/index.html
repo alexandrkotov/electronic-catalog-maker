@@ -3,23 +3,58 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Electronic Catalog Maker</title>
+<script>
+  // Apply the saved (or OS-preferred) theme before first paint — no light flash.
+  // Same key/values as the Editor and Viewer (packages/shared/src/theme.ts),
+  // so one choice carries across the whole site.
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("ecm-theme"); } catch (e) {}
+    if (t !== "light" && t !== "dark") {
+      t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
+<title>Electronic Catalog Maker — new layout prototype</title>
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png" />
 <link rel="apple-touch-icon" href="icon-192.png" />
 <style>
+  :root {
+    color-scheme: light;
+    --bg: #fff; --text: #1a1a1a; --text-2: #444; --muted: #666; --faint: #888;
+    --border: #d0d5dd; --border-soft: #eee; --frame-bg: #f8fafc;
+    --link: #2563eb; --yes: #16a34a; --no: #dc2626;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #14161b; --text: #e5e7eb; --text-2: #c4c9d2; --muted: #9aa1ac; --faint: #7d8590;
+    --border: #3a3f4b; --border-soft: #2a2e37; --frame-bg: #1c1f26;
+    --link: #60a5fa; --yes: #4ade80; --no: #f87171;
+  }
+  a { color: var(--link); }
+  .brand a, footer a { color: inherit; }
+  .theme-toggle {
+    margin-left: auto;
+    font: inherit; font-size: 0.9rem; font-weight: 400;
+    color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 0.35rem 0.9rem; min-height: 40px; cursor: pointer;
+  }
+
   /* Light-only, deliberately — no `color-scheme: light dark` (see the
      editor/viewer's own style.css for why: without every element paired
      with explicit colors, browser dark-mode heuristics repaint things
      unpredictably). This page is tiny and static; not worth a real theme. */
   body {
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    max-width: 640px;
+    max-width: 960px;
     margin: 4rem auto;
     padding: 0 1.5rem;
     line-height: 1.5;
-    color: #1a1a1a;
-    background: #fff;
+    color: var(--text);
+    background: var(--bg);
   }
   h1 { margin-bottom: 0.25rem; }
   .brand {
@@ -35,75 +70,97 @@
   .brand h1 {
     margin: 0;
   }
-  p.tagline { color: #666; margin-top: 0; }
-  .apps {
-    display: flex;
-    gap: 1rem;
-    margin: 2rem 0;
-    flex-wrap: wrap;
-  }
-  .apps > a,
-  .apps > div {
-    flex: 1;
-    min-width: 200px;
-    display: block;
-    padding: 1.25rem;
-    border: 1px solid #d0d5dd;
+  p.tagline { color: var(--muted); margin-top: 0; }
+  .hero { padding: 2.5rem 0 1.5rem; }
+  .hero h1 { font-size: clamp(1.9rem, 5vw, 2.8rem); line-height: 1.15; margin: 0 0 0.75rem; }
+  .hero p { font-size: 1.15rem; color: var(--text-2); margin: 0 0 1.5rem; max-width: 40rem; }
+  .cta { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+  .btn {
+    display: inline-block;
+    padding: 0.7rem 1.25rem;
     border-radius: 8px;
+    border: 1px solid var(--link);
+    font-weight: 600;
     text-decoration: none;
-    color: inherit;
+    min-height: 44px;
   }
-  .apps > a:hover {
-    border-color: #2563eb;
+  .btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .btn.secondary { background: var(--bg); color: var(--link); }
+
+  .demo { margin: 1.5rem 0 2.5rem; }
+  .demo h2 { margin: 0 0 0.25rem; }
+  .demo .intro { margin: 0 0 0.75rem; color: var(--text-2); }
+  .tabs { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+  .tabs button {
+    color: var(--text);
+    font: inherit;
+    padding: 0.4rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg);
+    cursor: pointer;
+    min-height: 40px;
   }
-  .apps > div p a {
-    color: #2563eb;
-    text-decoration: underline;
-  }
-  .demos {
-    margin: 0 0 2rem;
-    font-size: 0.9rem;
-    color: #666;
-  }
-  .demos p {
-    margin: 0 0 0.4rem;
-  }
-  .demos ul {
-    margin: 0;
-    padding-left: 1.25rem;
-  }
-  .demos li {
-    margin: 0.2rem 0;
-  }
-  .demos a {
-    color: #2563eb;
-  }
-  .demos ul ul {
-    padding-left: 1.25rem;
-    margin: 0.2rem 0 0;
-  }
-  .schools-teaser {
-    margin: 0 0 2rem;
-    padding: 1.25rem;
-    border: 1px solid #d0d5dd;
+  .tabs button[aria-pressed="true"] { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .frame {
+    border: 1px solid var(--border);
     border-radius: 8px;
+    overflow: hidden;
+    height: 560px;
+    background: var(--frame-bg);
   }
-  .schools-teaser h2 {
-    font-size: 1.1rem;
-    margin: 0 0 0.4rem;
+  .frame ecm-viewer { display: block; width: 100%; height: 100%; }
+  .demo-links { margin: 0.6rem 0 0; font-size: 0.95rem; }
+  .demo-links a + a { margin-left: 1rem; }
+  .steps-line { margin: 1rem 0 0; color: var(--text-2); }
+
+
+  
+  @media (max-width: 700px) {
+    .frame { height: 480px; }
+    .btn { flex: 1 1 100%; text-align: center; }
   }
-  .schools-teaser p {
-    margin: 0;
-    font-size: 0.9rem;
-    color: #555;
+  @media (prefers-reduced-motion: no-preference) {
+    .btn { transition: background 0.15s; }
   }
-  .schools-teaser a {
-    color: #2563eb;
+
+  * { box-sizing: border-box; }
+  a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+  .card-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 0 0 2rem; }
+  .use-cases, .apps-row { grid-template-columns: repeat(3, 1fr); }
+  .card { padding: 1.25rem; border: 1px solid var(--border); border-radius: 8px; }
+  .card h2, .card h3 { margin: 0 0 0.4rem; font-size: 1.1rem; }
+  .card p { margin: 0 0 0.4rem; font-size: 0.9rem; color: var(--text-2); }
+  .card p:last-child { margin-bottom: 0; }
+  .card h2 a { color: inherit; text-decoration: none; }
+  .card h2 a:hover { text-decoration: underline; }
+  section > h2.section-h { margin: 2rem 0 0.75rem; }
+  .card .links { list-style: none; margin: 0; padding: 0; font-size: 0.9rem; }
+  .card .links li { margin: 0 0 0.35rem; }
+  dialog.collab {
+    width: min(640px, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    background: var(--bg);
   }
+  dialog.collab::backdrop { background: rgba(0, 0, 0, 0.45); }
+  dialog.collab h2 { margin: 0 2rem 0.5rem 0; font-size: 1.15rem; }
+  dialog.collab p { font-size: 0.9rem; color: var(--text-2); margin: 0.6rem 0 0; }
+  dialog.collab .close {
+    position: absolute; top: 0.6rem; right: 0.75rem;
+    font: inherit; font-size: 1.4rem; line-height: 1;
+    background: none; border: 0; cursor: pointer; color: var(--text-2);
+    min-width: 44px; min-height: 44px;
+  }
+  @media (max-width: 700px) { .card-row, .use-cases, .apps-row { grid-template-columns: 1fr; } }
   .compare {
     margin: 0 0 2rem;
     padding: 1.25rem;
-    border: 1px solid #d0d5dd;
+    border: 1px solid var(--border);
     border-radius: 8px;
   }
   .compare h2 {
@@ -119,7 +176,7 @@
   .compare td {
     text-align: left;
     padding: 0.5rem 0.45rem;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--border-soft);
     vertical-align: top;
   }
   /* Last row's divider would just double up with the card's own border
@@ -134,27 +191,26 @@
   .compare th:first-child,
   .compare td:first-child {
     width: 11em;
-  }
-  .compare th {
-    color: #666;
+  }  .compare th {
+    color: var(--muted);
     font-weight: 600;
   }
   .compare td:first-child {
-    color: #666;
+    color: var(--muted);
   }
   /* Plain-text comparison values (Pricing/Storage/Internet/Checkout) —
      softened from the page's default near-black body text, which read as
      jarringly dark next to the gray labels/headers around it. */
   .compare td:not(:first-child):not(.yes):not(.no) {
-    color: #333;
+    color: var(--text-2);
   }
   /* Every row's comparison cells stay on one line above ~700px — reads
      tidier than ragged per-cell wrapping — except the one row long enough
      that it can't reasonably fit on one line at this width (`.compare
-     tr.wrap`). Below ~700px there isn't room for this (the page's own
-     640px max-width no longer applies, so the table has much less space
-     to work with), so every row reverts to normal wrapping instead of
-     overflowing the card. */
+     tr.wrap`). Below ~700px there isn't room for this (the viewport is
+     narrower than the page's own max-width, so the table has much less
+     space to work with), so every row reverts to normal wrapping instead
+     of overflowing the card. */
   @media (min-width: 700px) {
     .compare th,
     .compare td {
@@ -172,31 +228,15 @@
     font-size: 1rem;
   }
   .compare td.yes {
-    color: #16a34a;
+    color: var(--yes);
   }
   .compare td.no {
-    color: #dc2626;
-  }
-  .apps h2 {
-    margin: 0 0 0.4rem;
-    font-size: 1.1rem;
-  }
-  .apps h2 a {
-    color: inherit;
-    text-decoration: none;
-  }
-  .apps h2 a:hover {
-    text-decoration: underline;
-  }
-  .apps p {
-    margin: 0;
-    font-size: 0.9rem;
-    color: #666;
+    color: var(--no);
   }
   footer {
     margin-top: 1.5rem;
     font-size: 0.85rem;
-    color: #888;
+    color: var(--faint);
   }
   footer a {
     color: inherit;
@@ -204,98 +244,77 @@
   #visits {
     margin-top: 1rem;
     font-size: 0.85rem;
-    color: #666;
+    color: var(--muted);
   }
   #visits strong {
-    color: #1a1a1a;
+    color: var(--text);
   }
   .built-by {
     margin-top: 0.6rem;
   }
 </style>
-</head>
 <body>
   <div class="brand">
     <img src="icon-192.png" alt="" width="32" height="32" />
-    <h1>Electronic Catalog Maker</h1>
-  </div>
-  <p class="tagline">
-    Build and view interactive image-hotspot catalogs — no backend, no install.
-  </p>
-
-  <div class="apps">
-    <div>
-      <h2><a href="editor/">Editor →</a></h2>
-      <p>Build a catalog: place hotspots on an image, attach data to each.</p>
-      <p><a href="https://apps.microsoft.com/detail/9p4zk48txrln?hl=en-US&amp;gl=US">Get it on Microsoft Store</a></p>
-    </div>
-    <div>
-      <h2><a href="viewer/">Viewer →</a></h2>
-      <p>Open a catalog file and click around it.</p>
-      <p><a href="https://apps.microsoft.com/detail/9nb4shzt8fd1?hl=en-US&amp;gl=US">Get it on Microsoft Store</a></p>
-    </div>
-    <div>
-      <h2>Collaboration Server</h2>
-      <p>Optional, self-hosted: run this to edit a catalog live with someone else.</p>
-      <p>
-        <strong>Windows:</strong>
-        <a href="https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=en-US&amp;gl=US">Get it on Microsoft Store</a>
-        (or
-        <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-windows-x64.exe">direct download</a>, .exe file)
-      </p>
-      <p>
-        <strong>Linux:</strong>
-        <a href="https://snapcraft.io/ecm-collab-server">Get it on Snap Store</a>
-        (Ubuntu App Center, or
-        <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-linux-x64">direct download</a>
-        for other distros)
-      </p>
-      <p>
-        <strong>macOS:</strong> (requires macOS 13+)
-        <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-macos-arm64.zip">direct download</a>
-        (Apple Silicon, or
-        <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-macos-x64.zip">Intel</a>)
-        — unzip, then see the
-        <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">release page</a>
-        for the one-line Terminal command needed on first run
-      </p>
-      <p>
-        <strong>Chromebook (Linux/Crostini):</strong>
-        <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-amd64.deb">direct download</a>, .deb file
-        — see the
-        <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">release page</a>
-        for setup
-      </p>
-    </div>
+    Electronic Catalog Maker <span>tapalog.com</span>
+    <button type="button" class="theme-toggle" id="theme-toggle"></button>
   </div>
 
-  <div class="demos">
-    <p>No catalog file yet? Try a demo catalog:</p>
-    <ul>
-      <li>
-        <strong>Auto parts</strong> — an anonymized catalog of exploded-view truck-part diagrams
-        <ul>
-          <li><a href="viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Open in Viewer</a></li>
-          <li><a href="editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Open in Editor</a></li>
+  <header class="hero">
+    <h1>Turn any image into an interactive catalog.</h1>
+    <p>Add clickable hotspots to photos and diagrams. Attach product details, part numbers, and links — all in one catalog file.</p>
+    <div class="cta">
+      <a class="btn primary" href="#demo">Explore a demo</a>
+      <a class="btn secondary" href="editor/">Create a catalog</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="demo" id="demo" aria-labelledby="demo-h">
+      <h2 id="demo-h">See how it works</h2>
+      <p class="intro">Select a marked part of the image to explore its details.</p>
+      <div class="tabs" role="group" aria-label="Example catalog">
+        <button type="button" data-cat="auto-spare-parts" aria-pressed="true">Auto parts</button>
+        <button type="button" data-cat="furniture" aria-pressed="false">Furniture</button>
+      </div>
+      <div class="frame" id="frame"></div>
+      <p class="demo-links">
+        <a id="open-full" href="viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Open full demo</a>
+        <a id="edit-this" href="editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Edit this example</a>
+      </p>
+      <p class="steps-line"><strong>Build your own:</strong> add an image → mark the details with hotspots → save the catalog file and open it in Viewer.</p>
+      <noscript><p>The live demo needs JavaScript — use “Open full demo” above.</p></noscript>
+    </section>
+
+    <h2>Who it's for</h2>
+    <div class="card-row use-cases">
+      <div class="card"><h3>Parts and equipment</h3><p>Connect items in a diagram with part numbers and descriptions.</p></div>
+      <div class="card"><h3>Furniture and products</h3><p>Add details to objects or components in a photograph.</p></div>
+      <div class="card"><h3>Teaching and learning</h3><p>Explorable diagrams for lessons and class projects — no student accounts, no cloud. <a href="schools.html">See the schools page →</a></p></div>
+    </div>
+
+    <h2>The apps</h2>
+    <div class="card-row apps-row">
+      <div class="card">
+        <h2><a href="editor/">Editor →</a></h2>
+        <p>Build a catalog: place hotspots on an image, attach data to each.</p>
+        <p><a href="https://apps.microsoft.com/detail/9p4zk48txrln?hl=en-US&amp;gl=US">Get it on Microsoft Store</a></p>
+      </div>
+      <div class="card">
+        <h2><a href="viewer/">Viewer →</a></h2>
+        <p>Open a catalog file and click around it.</p>
+        <p><a href="https://apps.microsoft.com/detail/9nb4shzt8fd1?hl=en-US&amp;gl=US">Get it on Microsoft Store</a></p>
+      </div>
+      <div class="card">
+        <h2>Collaboration Server</h2>
+        <p>Optional, self-hosted: edit a catalog live with someone else.</p>
+        <ul class="links">
+          <li><a href="https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=en-US&amp;gl=US">Microsoft Store (Windows)</a></li>
+          <li><a href="https://snapcraft.io/ecm-collab-server">Snap Store (Linux)</a></li>
+          <li><a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest" id="collab-other">Other downloads (macOS, Chromebook, direct)</a></li>
         </ul>
-      </li>
-      <li>
-        <strong>Furniture</strong> — real photos, a smaller catalog to browse
-        <ul>
-          <li><a href="viewer/?src=..%2Fdemo%2Ffurniture.ecatm">Open in Viewer</a></li>
-          <li><a href="editor/?src=..%2Fdemo%2Ffurniture.ecatm">Open in Editor</a></li>
-        </ul>
-      </li>
-    </ul>
-  </div>
-
-  <div class="schools-teaser">
-    <h2>Using this in a classroom?</h2>
-    <p>
-      Visual-aid catalogs for teachers — no student accounts, no cloud, works untouched next
-      year. <a href="schools.html">See the schools page →</a>
-    </p>
-  </div>
+      </div>
+    </div>
 
   <div class="compare">
     <h2>How this is different</h2>
@@ -338,6 +357,41 @@
     </table>
   </div>
 
+    <dialog class="collab" id="collab" aria-labelledby="collab-h">
+      <button type="button" class="close" aria-label="Close">×</button>
+      <h2 id="collab-h">Collaboration Server downloads</h2>
+      <p>Run the Collaboration Server yourself to edit a catalog live with other people. You don't need it to create or view a catalog on your own.</p>      <p>
+        <strong>Windows:</strong>
+        <a href="https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=en-US&amp;gl=US">Get it on Microsoft Store</a>
+        (or
+        <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-windows-x64.exe">direct download</a>, .exe file)
+      </p>
+      <p>
+        <strong>Linux:</strong>
+        <a href="https://snapcraft.io/ecm-collab-server">Get it on Snap Store</a>
+        (Ubuntu App Center, or
+        <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-linux-x64">direct download</a>
+        for other distros)
+      </p>
+      <p>
+        <strong>macOS:</strong> (requires macOS 13+)
+        <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-macos-arm64.zip">direct download</a>
+        (Apple Silicon, or
+        <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-macos-x64.zip">Intel</a>)
+        — unzip, then see the
+        <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">release page</a>
+        for the one-line Terminal command needed on first run
+      </p>
+      <p>
+        <strong>Chromebook (Linux/Crostini):</strong>
+        <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-amd64.deb">direct download</a>, .deb file
+        — see the
+        <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">release page</a>
+        for setup
+      </p>
+    </dialog>
+  </main>
+
   <footer>
     <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Source on GitHub</a>
     — catalogs stay on your disk unless opened from a URL.
@@ -351,6 +405,113 @@
     </div>
   </footer>
 
+  <script>
+    (function () {
+      var frame = document.getElementById("frame");
+      var buttons = document.querySelectorAll(".tabs button");
+      var scriptLoaded = false;
+      var current = "auto-spare-parts";
+      // Phones: the full toolbar eats half the frame, so use the compact widget.
+      var narrow = window.matchMedia("(max-width: 700px)");
+      function loadScript(cb) {
+        if (scriptLoaded) return cb();
+        var s = document.createElement("script");
+        s.src = "https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js";
+        s.onload = function () { scriptLoaded = true; cb(); };
+        s.onerror = function () { frame.textContent = "The live demo couldn’t load. Use “Open full demo” below."; frame.style.padding = "1rem"; };
+        document.head.appendChild(s);
+      }
+      function show(cat) {
+        current = cat;
+        buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.cat === cat)); });
+        document.getElementById("open-full").href = "viewer/?src=..%2Fdemo%2F" + cat + ".ecatm";
+        document.getElementById("edit-this").href = "editor/?src=..%2Fdemo%2F" + cat + ".ecatm";
+        loadScript(function () {
+          frame.textContent = "";
+          var el = document.createElement("ecm-viewer");
+          el.setAttribute("mode", narrow.matches ? "lite" : "full");
+          el.setAttribute("src", new URL("demo/" + cat + ".ecatm", location.href).href);
+          frame.appendChild(el);
+        });
+      }
+      buttons.forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.cat); }); });
+      narrow.addEventListener("change", function () { show(current); });
+      show("auto-spare-parts");
+    })();
+  </script>
+  <script>
+    // Center each ✓/✗ under the *text* of its column header. The headers are
+    // left-aligned and the columns are much wider than their titles, so plain
+    // cell-centering leaves the marks far to the right of the header text.
+    // Without JS the marks simply stay centered in their cells.
+    (function () {
+      function textWidth(el) {
+        var r = document.createRange();
+        r.selectNodeContents(el);
+        return r.getBoundingClientRect().width;
+      }
+      function place() {
+        var table = document.querySelector(".compare table");
+        if (!table) return;
+        var heads = table.rows[0].cells;
+        table.querySelectorAll("td.yes, td.no").forEach(function (td) {
+          td.style.textAlign = "left";
+          td.style.paddingLeft = "";
+          var th = heads[td.cellIndex];
+          var pad = parseFloat(getComputedStyle(td).paddingLeft);
+          var offset = (textWidth(th) - textWidth(td)) / 2;
+          td.style.paddingLeft = pad + Math.max(offset, 0) + "px";
+        });
+      }
+      place();
+      window.addEventListener("resize", place);
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
+    })();
+  </script>
+  <script>
+    // Theme toggle. Also drives the embedded viewer (it lives in a shadow root
+    // and reads its own data-theme), and follows the widget's own Dark/Light
+    // button so the page and the demo never disagree.
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById("theme-toggle");
+      function label() { btn.textContent = root.dataset.theme === "dark" ? "☀️ Light" : "🌙 Dark"; }
+      function widget() { return document.querySelector("ecm-viewer"); }
+      function setTheme(t, store) {
+        root.dataset.theme = t;
+        var w = widget(); if (w && w.dataset.theme !== t) w.dataset.theme = t;
+        if (store) { try { localStorage.setItem("ecm-theme", t); } catch (e) {} }
+        label();
+      }
+      btn.addEventListener("click", function () { setTheme(root.dataset.theme === "dark" ? "light" : "dark", true); });
+      label();
+      // (Re)attach whenever the demo element is created.
+      new MutationObserver(function () {
+        var w = widget();
+        if (!w || w._themeSynced) return;
+        w._themeSynced = true;
+        if (w.dataset.theme !== root.dataset.theme) w.dataset.theme = root.dataset.theme;
+        new MutationObserver(function () {
+          var t = w.dataset.theme;
+          if ((t === "light" || t === "dark") && t !== root.dataset.theme) setTheme(t, false);
+        }).observe(w, { attributes: true, attributeFilter: ["data-theme"] });
+      }).observe(document.getElementById("frame"), { childList: true });
+    })();
+  </script>
+  <script>
+    // "Other downloads" opens the full per-platform list in a dialog. Without
+    // JS the link goes to the GitHub release page, which has the same files.
+    (function () {
+      var dlg = document.getElementById("collab");
+      var link = document.getElementById("collab-other");
+      if (!dlg || !link || typeof dlg.showModal !== "function") return;
+      link.addEventListener("click", function (e) { e.preventDefault(); dlg.showModal(); });
+      dlg.querySelector(".close").addEventListener("click", function () { dlg.close(); });
+      // click on the backdrop (outside the dialog box) closes it
+      dlg.addEventListener("click", function (e) { if (e.target === dlg) dlg.close(); });
+      dlg.addEventListener("close", function () { link.focus(); });
+    })();
+  </script>
   <!-- Privacy-friendly, cookie-free page-view counting (goatcounter.com) —
        tracks this page's own path automatically. -->
   <script data-goatcounter="https://ecatm.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
@@ -391,5 +552,6 @@
         `<strong>${n}</strong> ${n === 1 ? "person has" : "people have"} used this tool so far.`;
     });
   </script>
+</html>
 </body>
 </html>
