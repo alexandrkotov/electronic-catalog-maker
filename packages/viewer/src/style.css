@@ -1105,6 +1105,10 @@ button:disabled {
 
 .mode-showcase .stage-scroll {
   top: 44px;
+  /* Plain backdrop instead of the editor-style transparency checkerboard: a
+     fitted image rarely fills the stage, and the empty margin should read as
+     margin, not as a pattern. */
+  background: var(--bg-panel);
 }
 
 .mode-showcase .stage-scroll.fitted {

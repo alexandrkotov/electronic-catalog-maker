@@ -144,6 +144,14 @@ export interface MountViewerOptions {
   initialImageId?: number;
   initialLinkId?: number;
   /**
+   * Showcase mode, narrow (stacked) layout only: instead of fitting a large
+   * diagram whole — which on a phone shrinks dense hotspots into an
+   * unreadable pile — open each image at this zoom (e.g. 0.75) centered on
+   * the selected item. The Fit button still shows the whole image. Ignored
+   * when the whole-image fit is already larger than this.
+   */
+  compactZoom?: number;
+  /**
    * Whether a successful load — and every image/hotspot selection after it
    * — should sync `?src=&image=&link=` into the browser's address bar, so
    * the resulting page is itself a shareable deep link (see README,
@@ -217,6 +225,10 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   let fitPending = mode === "showcase";
   let userZoomed = false;
   let fitZoom = 1;
+  // Set by the Fit button so the compact close-up (options.compactZoom) is not
+  // re-applied over a deliberate "show me the whole image"; cleared when
+  // another image is opened.
+  let forceWhole = false;
   let resizeObserver: ResizeObserver | null = null;
   // Last measured size of the stage's scroll box (showcase mode) — used to
   // center an image that, once fitted, is smaller than the stage on one axis.
@@ -520,6 +532,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function actionResetZoom() {
     if (mode === "showcase") {
       userZoomed = false;
+      forceWhole = true;
       fitPending = true;
       render();
       return;
@@ -541,16 +554,21 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const h = Number(img.getAttribute("height"));
     if (!w || !h || !scroll.clientWidth || !scroll.clientHeight) return null;
     stageBox = { w: scroll.clientWidth, h: scroll.clientHeight };
-    return Math.min(1, scroll.clientWidth / w, scroll.clientHeight / h);
+    // Keep a margin around the fitted image: markers are counter-scaled to stay
+    // legible (see --marker-scale), so one whose center sits on the image edge
+    // sticks out by up to ~14px and would be cut off by the stage.
+    const pad = 14;
+    return Math.min(1, (scroll.clientWidth - 2 * pad) / w, (scroll.clientHeight - 2 * pad) / h);
   }
 
   // Showcase, stacked (narrow) layout only: the details card grows with its
   // content, so a page that lets the widget size itself would see everything
   // below it jump as the selection moves between short and long items. Measure
-  // the tallest card among the items on the current image (not the whole
-  // catalog: one part with a huge "alternates" list would inflate every other
-  // image) once per width and use it as the card's min-height
-  // (--showcase-details-min, read in style.css).
+  // a tall card (90th percentile) among the items on the current image — not
+  // the maximum, and not the whole catalog: a few parts with a huge
+  // "alternates" list would leave a big empty area under every other card —
+  // once per width, used as the card's min-height (--showcase-details-min,
+  // read in style.css). The rare longer card simply grows past it.
   let detailsMinKey = "";
   function applyShowcaseDetailsMinHeight() {
     if (!db || activeImageId === null) return;
@@ -564,17 +582,19 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const probe = document.createElement("div");
     probe.style.cssText = `position:fixed;left:-9999px;top:0;visibility:hidden;pointer-events:none;width:${width}px;--showcase-details-min:0px`;
     container.appendChild(probe);
-    let tallest = 0;
+    const heights: number[] = [];
     for (const row of rows) {
       // Two dummy markers so the prev/next row is included in the measurement.
       probe.innerHTML = renderShowcaseDetails(row, [
         { id: 1, url: row.url },
         { id: 2, url: "\0" },
       ]);
-      tallest = Math.max(tallest, (probe.firstElementChild as HTMLElement | null)?.offsetHeight ?? 0);
+      heights.push((probe.firstElementChild as HTMLElement | null)?.offsetHeight ?? 0);
     }
     probe.remove();
-    container.style.setProperty("--showcase-details-min", `${tallest}px`);
+    heights.sort((a, b) => a - b);
+    const tall = heights[Math.max(0, Math.ceil(heights.length * 0.9) - 1)] ?? 0;
+    container.style.setProperty("--showcase-details-min", `${tall}px`);
   }
 
   async function boot() {
@@ -866,6 +886,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     }
     zoom = 1;
     userZoomed = false;
+    forceWhole = false;
     fitPending = mode === "showcase";
     mobileTab = "stage"; // no-op above the mobile breakpoint — see mobileTab's declaration
     syncAddressBar();
@@ -1289,7 +1310,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     render();
   }
 
-  function centerSelection() {
+  /** Showcase's narrow layout (the same 640px container query as style.css). */
+  function isStackedShowcase(): boolean {
+    return mode === "showcase" && container.clientWidth > 0 && container.clientWidth <= 640;
+  }
+
+  function centerSelection(instant = false) {
     if (mode === "showcase") {
       // scrollIntoView would also scroll the host *page* to bring the widget
       // into view — wrong for a demo embedded mid-page (and on load). Only
@@ -1302,7 +1328,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         scroll.scrollTo({
           left: parseFloat(el.style.left) * zoom - scroll.clientWidth / 2,
           top: parseFloat(el.style.top) * zoom - scroll.clientHeight / 2,
-          behavior: "smooth",
+          behavior: instant ? "auto" : "smooth",
         });
       }
       return;
@@ -1535,8 +1561,10 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       if (fit !== null) {
         fitPending = false;
         fitZoom = fit;
-        zoom = fit;
-        render(); // second pass with the fitted zoom; restores focus and wires events itself
+        const compact = !forceWhole && options.compactZoom && isStackedShowcase() && options.compactZoom > fit;
+        zoom = compact ? Math.min(4, options.compactZoom as number) : fit;
+        render(); // second pass with the chosen zoom; restores focus and wires events itself
+        if (compact) centerSelection(true);
         return;
       }
     }

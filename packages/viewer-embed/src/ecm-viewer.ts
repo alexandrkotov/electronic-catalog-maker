@@ -56,6 +56,9 @@ const HOST_DEFAULTS_CSS = `
  *   hotspot's item shows as a compact details card).
  * - `initial-image` / `initial-link` — ids of the image and hotspot to show
  *   selected once `src` has loaded (silently ignored if they don't exist).
+ * - `compact-zoom` — showcase mode, narrow layout only: open each image at
+ *   this zoom (e.g. "0.75") centered on the selected item instead of fitting
+ *   it whole; the Fit button still shows the whole image.
  */
 class EcmViewerElement extends HTMLElement {
   private controller: ViewerController | null = null;
@@ -73,6 +76,10 @@ class EcmViewerElement extends HTMLElement {
 
     const modeAttr = this.getAttribute("mode");
     const mode = modeAttr === "full" || modeAttr === "showcase" ? modeAttr : "lite";
+    const floatAttr = (name: string): number | undefined => {
+      const n = Number.parseFloat(this.getAttribute(name) ?? "");
+      return Number.isFinite(n) && n > 0 ? n : undefined;
+    };
     const intAttr = (name: string): number | undefined => {
       const n = Number.parseInt(this.getAttribute(name) ?? "", 10);
       return Number.isNaN(n) ? undefined : n;
@@ -84,6 +91,7 @@ class EcmViewerElement extends HTMLElement {
       initialSrc: this.getAttribute("src") ?? undefined,
       initialImageId: intAttr("initial-image"),
       initialLinkId: intAttr("initial-link"),
+      compactZoom: floatAttr("compact-zoom"),
       // Never rewrite the *embedding* page's address bar.
       updateAddressBar: false,
       // Apply data-theme to this element itself (the shadow host), never
