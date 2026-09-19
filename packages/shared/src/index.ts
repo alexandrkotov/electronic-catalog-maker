@@ -2,6 +2,7 @@ export * from "./types.js";
 export * from "./schema.js";
 export * from "./db.js";
 export * from "./theme.js";
+export * from "./i18n.js";
 export * from "./search.js";
 export * from "./images.js";
 export * from "./legacySch.js";
