@@ -222,7 +222,7 @@
   </div>
 
   <div class="demo-section">
-    <h2>🧫 Попробуйте — животная клетка, по которой можно кликать</h2>
+    <h2>🧫 Попробуйте — клетка животного, по которой можно кликать</h2>
     <p class="hint">
       В этом демо-каталоге включён режим «Учебный»: на панели инструментов вместо «🛒 Корзина» написано «📚 Коллекция», а у каждой части вместо «Купить» — «Подробнее». Приложение и формат файла те же, просто подписи изменены для класса.
     </p>
@@ -234,8 +234,8 @@
   </div>
 
   <div class="cta">
-    <h2>✏️ Сделайте свой</h2>
-    <p>Возьмите схему — клетку, двигатель, карту, механизм — поставьте несколько точек, и получится проект для класса. Работает без сети после первого визита и продолжит работать и после последнего звонка в конце учебного года.</p>
+    <h2>✏️ Сделайте свой проект</h2>
+    <p>Возьмите схему — клетку, двигатель, карту, механизм — поставьте несколько точек, и получится проект для класса. Работает без сети после первого запуска на компьютере, планшете или телефоне и продолжит работать и после последнего звонка в конце учебного года.</p>
     <a class="btn" href="../editor/">Открыть Редактор →</a>
     <a class="btn secondary" href="./">Посмотреть приложение целиком →</a>
   </div>
@@ -246,7 +246,23 @@
     <div><a href="../privacy.html">Политика конфиденциальности (на английском)</a></div>
   </footer>
 
-  <script src="https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js"></script>
+  <script>
+    // jsDelivr serves the @main bundle with max-age=7 days, so a returning
+    // visitor's browser could pair this page with an old cached bundle (an
+    // English-only widget on a translated page, say). Revalidate first — an
+    // unchanged bundle costs one tiny 304 — then load it; offline or blocked,
+    // fall through to whatever is cached. Same approach as the landing page.
+    (function () {
+      var BUNDLE = "https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js";
+      function inject() {
+        var s = document.createElement("script");
+        s.src = BUNDLE;
+        document.head.appendChild(s);
+      }
+      if (window.fetch) fetch(BUNDLE, { cache: "no-cache" }).then(inject, inject);
+      else inject();
+    })();
+  </script>
   <script>
     // Theme toggle (same behavior as the landing page). If an embedded viewer
     // is on the page it follows the toggle, and the page follows its own button.
