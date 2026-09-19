@@ -20,7 +20,7 @@ on:
 jobs:
   mirror:
     name: Push mirror to GitLab
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.repository == 'alexandrkotov/electronic-catalog-maker'
     steps:
       # Deliberately not actions/checkout — a normal checkout only creates
