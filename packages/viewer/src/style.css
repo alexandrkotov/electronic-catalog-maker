@@ -1060,8 +1060,14 @@ button:disabled {
 }
 
 .showcase-buy {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin-top: 1rem;
+  min-height: 44px;
+  padding: 0.5rem 1.6rem;
+  font-size: 0.95rem;
+  border-radius: 8px;
   text-decoration: none;
 }
 
