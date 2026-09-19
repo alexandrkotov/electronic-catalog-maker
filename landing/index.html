@@ -410,9 +410,8 @@
       var frame = document.getElementById("frame");
       var buttons = document.querySelectorAll(".tabs button");
       var scriptLoaded = false;
-      var current = "auto-spare-parts";
-      // Phones: the full toolbar eats half the frame, so use the compact widget.
-      var narrow = window.matchMedia("(max-width: 700px)");
+      // [image id, hotspot id] to show selected on load, per example catalog.
+      var START = { "auto-spare-parts": [83, 5381], "furniture": [1, 1] };
       function loadScript(cb) {
         if (scriptLoaded) return cb();
         var s = document.createElement("script");
@@ -422,20 +421,23 @@
         document.head.appendChild(s);
       }
       function show(cat) {
-        current = cat;
         buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.cat === cat)); });
         document.getElementById("open-full").href = "viewer/?src=..%2Fdemo%2F" + cat + ".ecatm";
         document.getElementById("edit-this").href = "editor/?src=..%2Fdemo%2F" + cat + ".ecatm";
         loadScript(function () {
           frame.textContent = "";
           var el = document.createElement("ecm-viewer");
-          el.setAttribute("mode", narrow.matches ? "lite" : "full");
+          el.setAttribute("mode", "showcase");
+          // A representative item preselected per example, so the details card
+          // is filled from the first paint.
+          var start = START[cat];
+          el.setAttribute("initial-image", start[0]);
+          el.setAttribute("initial-link", start[1]);
           el.setAttribute("src", new URL("demo/" + cat + ".ecatm", location.href).href);
           frame.appendChild(el);
         });
       }
       buttons.forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.cat); }); });
-      narrow.addEventListener("change", function () { show(current); });
       show("auto-spare-parts");
     })();
   </script>
