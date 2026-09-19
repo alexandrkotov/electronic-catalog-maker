@@ -1,4 +1,4 @@
-import type { Messages } from "../../i18n.js";
+import { createTranslator, type Messages, type Translate } from "../../i18n.js";
 import en from "./en.json";
 import ru from "./ru.json";
 
@@ -14,3 +14,8 @@ export const VIEWER_LOCALES = ["en", "ru"] as const;
 export const VIEWER_LOCALE_NAMES: Record<string, string> = { en: "English", ru: "Русский" };
 
 export const viewerMessages: Record<string, Messages> = { en, ru };
+
+/** Translator for chrome outside mountViewer (e.g. the host page's <title>), default wording. */
+export function viewerTranslator(locale: string): Translate {
+  return createTranslator({ messages: viewerMessages[locale] ?? {}, locale, fallback: viewerMessages.en });
+}
