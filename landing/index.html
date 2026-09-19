@@ -16,7 +16,7 @@
     document.documentElement.dataset.theme = t;
   })();
 </script>
-<title>Electronic Catalog Maker — new layout prototype</title>
+<title>Electronic Catalog Maker — Interactive Image Catalogs</title>
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png" />
 <link rel="apple-touch-icon" href="icon-192.png" />
@@ -337,7 +337,7 @@
       <tr>
         <td>Internet</td>
         <td>Required</td>
-        <td>Not required — fully offline</td>
+        <td>Works offline after your first visit</td>
       </tr>
       <tr>
         <td>Checkout</td>
@@ -519,9 +519,14 @@
     // GoatCounter's own embeddable widget is an <iframe> — its serif/purple
     // default styling can't be reached by this page's CSS at all, and it
     // clashed with everything else here. Fetching the plain JSON count and
-    // rendering it as normal text instead — count_unique (people, not raw
-    // hits), summed across landing+editor+viewer ("TOTAL") since visiting
-    // the landing page alone doesn't mean someone actually used the tool.
+    // rendering it as normal text instead. "TOTAL" is the site-wide visitor
+    // count across landing+editor+viewer. GoatCounter's docs say `count` is
+    // the number of visitors (cookie-free, so roughly per-browser-session) and
+    // `count_unique` is a deprecated alias of the same number — so this is
+    // labelled "visits", not "people": one person coming back, or opening
+    // the landing page and then the editor, is counted more than once.
+    // `count` comes back as a formatted string ("1,234"), hence the comma
+    // strip before parsing.
     //
     // GoatCounter's TOTAL.json sits behind a CDN (Fastly/Vinyl-Cache) that
     // can get permanently stuck on either the no-date-range URL or the
@@ -544,14 +549,13 @@
     ).then((results) => {
       const counts = results
         .filter(Boolean)
-        .map((data) => parseInt(data.count_unique, 10))
+        .map((data) => parseInt(String(data.count ?? data.count_unique).replace(/[,\s]/g, ""), 10))
         .filter((n) => !Number.isNaN(n));
       if (counts.length === 0) return;
       const n = Math.max(...counts);
       document.getElementById("visits").innerHTML =
-        `<strong>${n}</strong> ${n === 1 ? "person has" : "people have"} used this tool so far.`;
+        `<strong>${n.toLocaleString("en-US")}</strong> ${n === 1 ? "visit" : "visits"} to this site so far.`;
     });
   </script>
-</html>
 </body>
 </html>
