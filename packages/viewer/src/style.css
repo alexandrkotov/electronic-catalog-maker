@@ -902,6 +902,9 @@ button:disabled {
 
 .cart-panel-actions {
   display: flex;
+  /* Translated labels ("Оформить заказ (3)") can be too long for two
+     side-by-side buttons in a phone-width panel — wrap instead of overflowing. */
+  flex-wrap: wrap;
   gap: 0.5rem;
   flex-shrink: 0;
   border-top: 1px solid var(--border);
@@ -909,7 +912,7 @@ button:disabled {
 }
 
 .cart-panel-actions button {
-  flex: 1;
+  flex: 1 1 auto;
 }
 
 /* Mobile layout — below this width the desktop three-column grid (fixed-px
