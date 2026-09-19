@@ -243,7 +243,23 @@
     <div><a href="{{@base}}privacy.html">{{common.footer.privacy}}</a></div>
   </footer>
 
-  <script src="https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js"></script>
+  <script>
+    // jsDelivr serves the @main bundle with max-age=7 days, so a returning
+    // visitor's browser could pair this page with an old cached bundle (an
+    // English-only widget on a translated page, say). Revalidate first — an
+    // unchanged bundle costs one tiny 304 — then load it; offline or blocked,
+    // fall through to whatever is cached. Same approach as the landing page.
+    (function () {
+      var BUNDLE = "https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js";
+      function inject() {
+        var s = document.createElement("script");
+        s.src = BUNDLE;
+        document.head.appendChild(s);
+      }
+      if (window.fetch) fetch(BUNDLE, { cache: "no-cache" }).then(inject, inject);
+      else inject();
+    })();
+  </script>
   <script>
     // Theme toggle (same behavior as the landing page). If an embedded viewer
     // is on the page it follows the toggle, and the page follows its own button.
