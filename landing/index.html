@@ -350,7 +350,7 @@
       var buttons = document.querySelectorAll(".tabs button");
       var scriptLoaded = false;
       // [image id, hotspot id] to show selected on load, per example catalog.
-      var START = { "auto-spare-parts": [83, 5381], "furniture": [1, 1] };
+      var START = { "auto-spare-parts": [9, 580], "furniture": [1, 1] };
       var BUNDLE = "https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js";
       function loadScript(cb) {
         if (scriptLoaded) return cb();
@@ -386,6 +386,9 @@
           var start = START[cat];
           el.setAttribute("initial-image", start[0]);
           el.setAttribute("initial-link", start[1]);
+          // Phones: a dense diagram fitted whole is an unreadable pile of
+          // markers, so open close-up on the selected item (Fit shows it all).
+          el.setAttribute("compact-zoom", "0.75");
           el.setAttribute("src", new URL("demo/" + cat + ".ecatm", location.href).href);
           frame.appendChild(el);
         });
