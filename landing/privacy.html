@@ -3,8 +3,40 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script>
+  // Apply the saved (or OS-preferred) theme before first paint — no light flash.
+  // Same key/values as the Editor and Viewer (packages/shared/src/theme.ts),
+  // so one choice carries across the whole site.
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("ecm-theme"); } catch (e) {}
+    if (t !== "light" && t !== "dark") {
+      t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
 <title>Privacy Policy — Electronic Catalog Maker</title>
 <style>
+  :root {
+    color-scheme: light;
+    --bg: #fff; --text: #1a1a1a; --text-2: #444; --muted: #666; --faint: #888;
+    --border: #d0d5dd; --link: #2563eb;
+    --tile-bg: #f6f8fe; --tile-border: #dbe3fb;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #14161b; --text: #e5e7eb; --text-2: #c4c9d2; --muted: #9aa1ac; --faint: #7d8590;
+    --border: #3a3f4b; --link: #60a5fa;
+    --tile-bg: #1c2233; --tile-border: #2b3550;
+  }
+  .theme-toggle {
+    font: inherit; font-size: 0.9rem;
+    color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 0.35rem 0.9rem; min-height: 40px; cursor: pointer;
+  }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
   /* Same light-only, no-color-scheme approach as landing/index.html — see
      that file's comment for why. */
   body {
@@ -13,22 +45,23 @@
     margin: 4rem auto;
     padding: 0 1.5rem;
     line-height: 1.6;
-    color: #1a1a1a;
-    background: #fff;
+    color: var(--text);
+    background: var(--bg);
   }
   h1 { margin-bottom: 0.25rem; }
-  p.tagline { color: #666; margin-top: 0; }
+  p.tagline { color: var(--muted); margin-top: 0; }
   h2 { margin-top: 2rem; font-size: 1.15rem; }
-  a { color: #2563eb; }
+  a { color: var(--link); }
   footer {
     margin-top: 3rem;
     font-size: 0.85rem;
-    color: #888;
+    color: var(--faint);
   }
   footer a { color: inherit; }
 </style>
 </head>
 <body>
+  <div class="topbar"><a href="./">← Electronic Catalog Maker</a><button type="button" class="theme-toggle" id="theme-toggle"></button></div>
   <h1>Privacy Policy</h1>
   <p class="tagline">Electronic Catalog Maker — Editor &amp; Viewer</p>
 
@@ -132,5 +165,29 @@
     <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Source on GitHub</a>
     <div>Last updated: August 31, 2026.</div>
   </footer>
+  <script>
+    // Theme toggle (same behavior as the landing page). If an embedded viewer
+    // is on the page it follows the toggle, and the page follows its own button.
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById("theme-toggle");
+      function label() { btn.textContent = root.dataset.theme === "dark" ? "☀️ Light" : "🌙 Dark"; }
+      function setTheme(t, store) {
+        root.dataset.theme = t;
+        document.querySelectorAll("ecm-viewer").forEach(function (w) { if (w.dataset.theme !== t) w.dataset.theme = t; });
+        if (store) { try { localStorage.setItem("ecm-theme", t); } catch (e) {} }
+        label();
+      }
+      btn.addEventListener("click", function () { setTheme(root.dataset.theme === "dark" ? "light" : "dark", true); });
+      label();
+      document.querySelectorAll("ecm-viewer").forEach(function (w) {
+        if (w.dataset.theme !== root.dataset.theme) w.dataset.theme = root.dataset.theme;
+        new MutationObserver(function () {
+          var t = w.dataset.theme;
+          if ((t === "light" || t === "dark") && t !== root.dataset.theme) setTheme(t, false);
+        }).observe(w, { attributes: true, attributeFilter: ["data-theme"] });
+      });
+    })();
+  </script>
 </body>
 </html>
