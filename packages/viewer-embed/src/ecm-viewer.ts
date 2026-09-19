@@ -51,7 +51,11 @@ const HOST_DEFAULTS_CSS = `
  *   toolbar chrome, fixed to `src`) or "full" (the standalone viewer's
  *   entire toolbar — Open catalog…/Open remote catalog…/Search…/theme —
  *   `src` just becomes what's shown initially, visitors can open a
- *   different catalog from there).
+ *   different catalog from there) or "showcase" (for marketing pages: no
+ *   toolbar/table/image list — the image is fitted whole and the selected
+ *   hotspot's item shows as a compact details card).
+ * - `initial-image` / `initial-link` — ids of the image and hotspot to show
+ *   selected once `src` has loaded (silently ignored if they don't exist).
  */
 class EcmViewerElement extends HTMLElement {
   private controller: ViewerController | null = null;
@@ -67,12 +71,19 @@ class EcmViewerElement extends HTMLElement {
     const mount = document.createElement("div");
     shadow.appendChild(mount);
 
-    const mode = this.getAttribute("mode") === "full" ? "full" : "lite";
+    const modeAttr = this.getAttribute("mode");
+    const mode = modeAttr === "full" || modeAttr === "showcase" ? modeAttr : "lite";
+    const intAttr = (name: string): number | undefined => {
+      const n = Number.parseInt(this.getAttribute(name) ?? "", 10);
+      return Number.isNaN(n) ? undefined : n;
+    };
     this.controller = mountViewer({
       container: mount,
       root: shadow,
       mode,
       initialSrc: this.getAttribute("src") ?? undefined,
+      initialImageId: intAttr("initial-image"),
+      initialLinkId: intAttr("initial-link"),
       // Never rewrite the *embedding* page's address bar.
       updateAddressBar: false,
       // Apply data-theme to this element itself (the shadow host), never

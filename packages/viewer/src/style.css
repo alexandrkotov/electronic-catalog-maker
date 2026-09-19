@@ -983,3 +983,113 @@ button:disabled {
     display: block;
   }
 }
+
+/* ---- mode-showcase: opt-in marketing presentation (see viewerEngine.ts,
+   MountViewerOptions.mode). Image fitted whole on the left, one details card
+   for the selected hotspot on the right; no toolbar, image list, or table. ---- */
+.ecm-viewer-app.mode-showcase {
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 34%);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "stage details";
+}
+
+.showcase-details {
+  grid-area: details;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 1rem 1.1rem;
+  border-left: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.showcase-details h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+  line-height: 1.3;
+}
+
+.showcase-details p {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+}
+
+.showcase-details .showcase-sku {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.showcase-extra {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.3rem 0.8rem;
+  margin: 0.9rem 0 0;
+  font-size: 0.85rem;
+}
+
+.showcase-extra dt {
+  color: var(--muted);
+}
+
+.showcase-extra dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.showcase-buy {
+  display: inline-block;
+  margin-top: 1rem;
+  text-decoration: none;
+}
+
+.showcase-picker {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 10;
+  display: flex;
+}
+
+.showcase-picker select {
+  max-width: 100%;
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.15);
+}
+
+.mode-showcase .hotspot:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@container ecm-viewer (max-width: 640px) {
+  .ecm-viewer-app.mode-showcase {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 42%);
+    grid-template-areas:
+      "stage"
+      "details";
+  }
+
+  .mode-showcase .showcase-details {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+
+/* Beats the ≤860px rules above that hide .stage unless its mobile tab is
+   active — showcase has no tabs, the stage is always shown. */
+.ecm-viewer-app.mode-showcase .stage {
+  grid-area: stage;
+  display: block;
+  width: auto;
+}
+
+.ecm-viewer-app.mode-showcase .hotspot {
+  transform: translate(-50%, -50%) scale(var(--marker-scale, 1));
+}
