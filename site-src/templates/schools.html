@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{@lang}}">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <script>
   // Page language + the few strings the page scripts need (from the dictionary's js.* keys).
-  var LANG = "en";
-  var T = {"themeLight":"☀️ Light","themeDark":"🌙 Dark","demoLoadFailed":"The live demo couldn’t load. Use “Open full demo” below.","visits.one":"\u003cstrong>{n}\u003c/strong> visit to this site so far.","visits.other":"\u003cstrong>{n}\u003c/strong> visits to this site so far."};
+  var LANG = "{{@lang}}";
+  var T = {{@messages}};
 </script>
 <script>
   // Apply the saved (or OS-preferred) theme before first paint — no light flash.
@@ -21,14 +21,11 @@
     document.documentElement.dataset.theme = t;
   })();
 </script>
-<link rel="alternate" hreflang="en" href="https://tapalog.com/schools.html" />
-<link rel="alternate" hreflang="ru" href="https://tapalog.com/ru/schools.html" />
-<link rel="alternate" hreflang="x-default" href="https://tapalog.com/schools.html" />
-<link rel="canonical" href="https://tapalog.com/schools.html" />
-<title>Electronic Catalog Maker for Schools</title>
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
-<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png" />
-<link rel="apple-touch-icon" href="icon-192.png" />
+{{@alternates}}
+<title>{{schools.title}}</title>
+<link rel="icon" type="image/png" sizes="32x32" href="{{@base}}favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="{{@base}}favicon-16.png" />
+<link rel="apple-touch-icon" href="{{@base}}icon-192.png" />
 <style>
   .lang-switch { font-size: 0.9rem; color: var(--muted); text-decoration: none; padding: 0.35rem 0.6rem; min-height: 40px; display: inline-flex; align-items: center; }
   .lang-switch:hover { color: var(--link); text-decoration: underline; }
@@ -188,62 +185,62 @@
 </style>
 </head>
 <body>
-  <div class="topbar"><a class="back" href="./">← Electronic Catalog Maker</a><span class="top-actions"><a class="lang-switch" href="ru/schools.html" hreflang="ru" lang="ru">Русский</a><button type="button" class="theme-toggle" id="theme-toggle"></button></span></div>
+  <div class="topbar"><a class="back" href="./">{{schools.back}}</a><span class="top-actions">{{@switch}}<button type="button" class="theme-toggle" id="theme-toggle"></button></span></div>
 
   <div class="brand">
-    <img src="icon-192.png" alt="" width="32" height="32" />
-    <h1>ECM for Schools 🎓</h1>
+    <img src="{{@base}}icon-192.png" alt="" width="32" height="32" />
+    <h1>{{schools.h1}}</h1>
   </div>
   <p class="tagline">
-    Got a diagram? In a few minutes it's a click-around class project — no accounts to create, no cloud to trust, nothing to pay for.
+    {{schools.tagline}}
   </p>
 
   <div class="points">
     <div>
       <div class="point-icon">🔒</div>
-      <h3>No accounts, no student data</h3>
-      <p>A catalog is just a file on your own device. There's no cloud database behind it — nothing to sign up for, and nothing to breach or leak.</p>
+      <h3>{{schools.points.privacy.title}}</h3>
+      <p>{{schools.points.privacy.text}}</p>
     </div>
     <div>
       <div class="point-icon">👥</div>
-      <h3>Real-time group projects</h3>
-      <p>A whole class can label one diagram together, live, on the same file at once — using the free, optional collaboration server.</p>
+      <h3>{{schools.points.group.title}}</h3>
+      <p>{{schools.points.group.text}}</p>
     </div>
     <div>
       <div class="point-icon">📅</div>
-      <h3>Still works next year</h3>
-      <p>A file saved in September opens exactly the same in June — no renewal, no expiring account, no breaking update to worry about.</p>
+      <h3>{{schools.points.year.title}}</h3>
+      <p>{{schools.points.year.text}}</p>
     </div>
     <div>
       <div class="point-icon">💸</div>
-      <h3>Free apps, no subscription</h3>
-      <p>The same Editor and Viewer everyone else uses — just switched to "Education" mode, which relabels Buy/Cart into Learn more/Collection.</p>
+      <h3>{{schools.points.free.title}}</h3>
+      <p>{{schools.points.free.text}}</p>
     </div>
   </div>
 
   <div class="demo-section">
-    <h2>🧫 Try it — an animal cell, ready to click around</h2>
+    <h2>{{schools.demo.title}}</h2>
     <p class="hint">
-      This demo catalog has "Education" mode switched on: notice the toolbar says "📚 Collection" instead of "🛒 Cart", and each part says "Learn more" instead of "Buy" — same app, same file format, just relabeled for a classroom.
+      {{schools.demo.hint}}
     </p>
-    <ecm-viewer mode="full" src="demo/cell-biology.ecatm"></ecm-viewer>
+    <ecm-viewer mode="full" src="{{@base}}demo/cell-biology.ecatm"></ecm-viewer>
     <p class="demo-links">
-      <a href="viewer/?src=..%2Fdemo%2Fcell-biology.ecatm">Open in Viewer</a>
-      <a href="editor/?src=..%2Fdemo%2Fcell-biology.ecatm">Open in Editor</a>
+      <a href="{{@base}}viewer/?src=..%2Fdemo%2Fcell-biology.ecatm">{{schools.demo.openViewer}}</a>
+      <a href="{{@base}}editor/?src=..%2Fdemo%2Fcell-biology.ecatm">{{schools.demo.openEditor}}</a>
     </p>
   </div>
 
   <div class="cta">
-    <h2>✏️ Build your own</h2>
-    <p>Drop in a diagram — a cell, an engine, a map, a machine — place a few hotspots, and it's a class project. Works offline after your first visit, and keeps working after the bell rings on the last day of school.</p>
-    <a class="btn" href="editor/">Open the Editor →</a>
-    <a class="btn secondary" href="./">See the full app →</a>
+    <h2>{{schools.build.title}}</h2>
+    <p>{{schools.build.text}}</p>
+    <a class="btn" href="{{@base}}editor/">{{schools.build.editor}}</a>
+    <a class="btn secondary" href="./">{{schools.build.app}}</a>
   </div>
 
   <footer>
-    <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Source on GitHub</a>
-    — catalogs stay on your disk unless opened from a URL.
-    <div><a href="privacy.html">Privacy policy</a></div>
+    <a href="{url_github}">{{common.footer.source}}</a>
+    {{common.footer.note}}
+    <div><a href="{{@base}}privacy.html">{{common.footer.privacy}}</a></div>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js"></script>
