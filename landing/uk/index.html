@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="ru">
+<html lang="uk">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <script>
   // Page language + the few strings the page scripts need (from the dictionary's js.* keys).
-  var LANG = "ru";
-  var T = {"themeLight":"☀️ Светлая","themeDark":"🌙 Тёмная","demoLoadFailed":"Не удалось загрузить живое демо. Воспользуйтесь ссылкой «Открыть полное демо» ниже.","visits.one":"\u003cstrong>{n}\u003c/strong> визит на этот сайт на данный момент.","visits.few":"\u003cstrong>{n}\u003c/strong> визита на этот сайт на данный момент.","visits.many":"\u003cstrong>{n}\u003c/strong> визитов на этот сайт на данный момент.","visits.other":"\u003cstrong>{n}\u003c/strong> визита на этот сайт на данный момент."};
+  var LANG = "uk";
+  var T = {"themeLight":"☀️ Світла","themeDark":"🌙 Темна","demoLoadFailed":"Не вдалося завантажити живе демо. Скористайтеся посиланням «Відкрити повне демо» нижче.","visits.one":"\u003cstrong>{n}\u003c/strong> візит на цей сайт на цей момент.","visits.few":"\u003cstrong>{n}\u003c/strong> візити на цей сайт на цей момент.","visits.many":"\u003cstrong>{n}\u003c/strong> візитів на цей сайт на цей момент.","visits.other":"\u003cstrong>{n}\u003c/strong> візиту на цей сайт на цей момент."};
 </script>
 <script>
   // Apply the saved (or OS-preferred) theme before first paint — no light flash.
@@ -25,8 +25,8 @@
 <link rel="alternate" hreflang="ru" href="https://tapalog.com/ru/" />
 <link rel="alternate" hreflang="uk" href="https://tapalog.com/uk/" />
 <link rel="alternate" hreflang="x-default" href="https://tapalog.com/" />
-<link rel="canonical" href="https://tapalog.com/ru/" />
-<title>Electronic Catalog Maker — интерактивные каталоги на изображениях</title>
+<link rel="canonical" href="https://tapalog.com/uk/" />
+<title>Electronic Catalog Maker — інтерактивні каталоги на зображеннях</title>
 <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png" />
 <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png" />
 <link rel="apple-touch-icon" href="../icon-192.png" />
@@ -219,122 +219,122 @@
   <div class="brand">
     <img src="../icon-192.png" alt="" width="32" height="32" />
     Electronic Catalog Maker <span class="brand-domain">tapalog.com</span>
-    <span class="top-actions"><a class="lang-switch" href="../" hreflang="en" lang="en">English</a> <a class="lang-switch" href="../uk/" hreflang="uk" lang="uk">Українська</a><button type="button" class="theme-toggle" id="theme-toggle"></button></span>
+    <span class="top-actions"><a class="lang-switch" href="../" hreflang="en" lang="en">English</a> <a class="lang-switch" href="../ru/" hreflang="ru" lang="ru">Русский</a><button type="button" class="theme-toggle" id="theme-toggle"></button></span>
   </div>
 
   <header class="hero">
-    <h1>Превратите любое изображение в интерактивный каталог.</h1>
-    <p>Добавляйте кликабельные точки на фотографии и схемы. Прикрепляйте описания товаров, артикулы и ссылки — и всё это в одном файле каталога.</p>
+    <h1>Перетворіть будь-яке зображення на інтерактивний каталог.</h1>
+    <p>Додавайте клікабельні точки на фотографії та схеми. Прикріплюйте описи товарів, артикули й посилання — і все це в одному файлі каталогу.</p>
     <div class="cta">
-      <a class="btn primary" href="#demo">Посмотреть демо</a>
-      <a class="btn secondary" href="../editor/">Создать каталог</a>
+      <a class="btn primary" href="#demo">Переглянути демо</a>
+      <a class="btn secondary" href="../editor/">Створити каталог</a>
     </div>
   </header>
 
   <main>
     <section class="demo" id="demo" aria-labelledby="demo-h">
-      <h2 id="demo-h">Как это работает</h2>
-      <p class="intro">Выберите маркер или листайте стрелками, чтобы увидеть сведения о позиции. Кнопка «Вписать» показывает изображение целиком.</p>
-      <div class="tabs" role="group" aria-label="Пример каталога">
-        <button type="button" data-cat="auto-spare-parts" aria-pressed="true">Автозапчасти</button>
-        <button type="button" data-cat="furniture" aria-pressed="false">Мебель</button>
+      <h2 id="demo-h">Як це працює</h2>
+      <p class="intro">Виберіть маркер або гортайте стрілками, щоб побачити відомості про позицію. Кнопка «Вмістити» показує зображення повністю.</p>
+      <div class="tabs" role="group" aria-label="Приклад каталогу">
+        <button type="button" data-cat="auto-spare-parts" aria-pressed="true">Автозапчастини</button>
+        <button type="button" data-cat="furniture" aria-pressed="false">Меблі</button>
       </div>
       <div class="frame" id="frame"></div>
       <p class="demo-links">
-        <a id="open-full" href="../viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Открыть полное демо</a>
-        <a id="edit-this" href="../editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Редактировать этот пример</a>
+        <a id="open-full" href="../viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Відкрити повне демо</a>
+        <a id="edit-this" href="../editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Редагувати цей приклад</a>
       </p>
-      <p class="demo-note">Кнопка «Купить» ведёт на оформление заказа в нашем демо-магазине, где любая позиция стоит $0.</p>
-      <p class="steps-line"><strong>Сделайте свой каталог:</strong> добавьте изображение → отметьте детали точками → сохраните файл каталога и откройте его в Просмотрщике.</p>
-      <noscript><p>Для живого демо нужен JavaScript — воспользуйтесь ссылкой «Открыть полное демо» выше.</p></noscript>
+      <p class="demo-note">Кнопка «Купити» веде на оформлення замовлення в нашому демонстраційному магазині, де будь-яка позиція коштує $0.</p>
+      <p class="steps-line"><strong>Створіть свій каталог:</strong> додайте зображення → позначте деталі точками → збережіть файл каталогу та відкрийте його в Переглядачі.</p>
+      <noscript><p>Для живого демо потрібен JavaScript — скористайтеся посиланням «Відкрити повне демо» вище.</p></noscript>
     </section>
 
-    <h2>Для кого это</h2>
+    <h2>Для кого це</h2>
     <div class="card-row use-cases">
-      <div class="card"><h3>Запчасти и оборудование</h3><p>Свяжите детали на схеме с артикулами и описаниями.</p></div>
-      <div class="card"><h3>Мебель и товары</h3><p>Добавьте сведения к предметам или их частям на фотографии.</p></div>
-      <div class="card"><h3>Обучение</h3><p>Схемы, которые можно исследовать, для уроков и школьных проектов — без учётных записей учеников и без облака. <a href="schools.html">Страница для школ →</a></p></div>
+      <div class="card"><h3>Запчастини та обладнання</h3><p>Пов’яжіть деталі на схемі з артикулами й описами.</p></div>
+      <div class="card"><h3>Меблі та товари</h3><p>Додайте відомості до предметів або їхніх частин на фотографії.</p></div>
+      <div class="card"><h3>Навчання</h3><p>Схеми, які можна досліджувати, для уроків і шкільних проєктів — без облікових записів учнів і без хмари. <a href="schools.html">Сторінка для шкіл →</a></p></div>
     </div>
 
-    <h2>Приложения</h2>
+    <h2>Застосунки</h2>
     <div class="card-row apps-row">
       <div class="card">
         <h2><a href="../editor/">Редактор →</a></h2>
-        <p>Создавайте каталог: ставьте точки на изображении и прикрепляйте к каждой данные.</p>
-        <p><a href="https://apps.microsoft.com/detail/9p4zk48txrln?hl=ru-RU&amp;gl=US">Скачать в Microsoft Store</a></p>
+        <p>Створюйте каталог: ставте точки на зображенні та прикріплюйте до кожної дані.</p>
+        <p><a href="https://apps.microsoft.com/detail/9p4zk48txrln?hl=uk-UA&amp;gl=US">Завантажити з Microsoft Store</a></p>
       </div>
       <div class="card">
-        <h2><a href="../viewer/">Просмотрщик →</a></h2>
-        <p>Откройте файл каталога и изучайте его кликами.</p>
-        <p><a href="https://apps.microsoft.com/detail/9nb4shzt8fd1?hl=ru-RU&amp;gl=US">Скачать в Microsoft Store</a></p>
+        <h2><a href="../viewer/">Переглядач →</a></h2>
+        <p>Відкрийте файл каталогу та вивчайте його клацаннями.</p>
+        <p><a href="https://apps.microsoft.com/detail/9nb4shzt8fd1?hl=uk-UA&amp;gl=US">Завантажити з Microsoft Store</a></p>
       </div>
       <div class="card">
-        <h2>Сервер совместной работы</h2>
-        <p>Необязательный, запускается у вас: редактируйте каталог вместе с кем-то в реальном времени.</p>
+        <h2>Сервер спільної роботи</h2>
+        <p>Необов’язковий, запускається у вас: редагуйте каталог разом із кимось у реальному часі.</p>
         <ul class="links">
-          <li><a href="https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=ru-RU&amp;gl=US">Microsoft Store (Windows)</a></li>
+          <li><a href="https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=uk-UA&amp;gl=US">Microsoft Store (Windows)</a></li>
           <li><a href="https://snapcraft.io/ecm-collab-server">Snap Store (Linux)</a></li>
-          <li><a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest" id="collab-other">Другие варианты загрузки (macOS, Chromebook, напрямую)</a></li>
+          <li><a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest" id="collab-other">Інші варіанти завантаження (macOS, Chromebook, напряму)</a></li>
         </ul>
       </div>
     </div>
 
   <section class="benefits" aria-labelledby="benefits-h">
-    <h2 id="benefits-h">Всё строится вокруг ваших файлов каталога</h2>
+    <h2 id="benefits-h">Усе будується навколо ваших файлів каталогу</h2>
     <ul>
       <li>
-        <strong>Бесплатно, без подписки</strong>
-        Приложения бесплатны и с открытым исходным кодом (MIT). Без учётных записей и тарифов.
+        <strong>Безкоштовно, без підписки</strong>
+        Застосунки безкоштовні та з відкритим вихідним кодом (MIT). Без облікових записів і тарифів.
       </li>
       <li>
-        <strong>Каталог — это один файл</strong>
-        Изображения, точки и данные хранятся вместе в одном файле <code>.ecatm</code> на вашем устройстве. Он никуда не уходит, пока вы сами им не поделитесь.
+        <strong>Каталог — це один файл</strong>
+        Зображення, точки й дані зберігаються разом в одному файлі <code>.ecatm</code> на вашому пристрої. Він нікуди не йде, доки ви самі ним не поділитеся.
       </li>
       <li>
-        <strong>Фотографии и схемы</strong>
-        Ставьте точки на любое изображение — фотографию мебели, схему запчастей, анатомическую таблицу.
+        <strong>Фотографії та схеми</strong>
+        Ставте точки на будь-яке зображення — фотографію меблів, схему запчастин, анатомічну таблицю.
       </li>
       <li>
-        <strong>Ссылки на ваш собственный магазин</strong>
-        Направляйте позиции в любой интернет-магазин, которым вы уже пользуетесь. Никакого нашего маркетплейса или оформления заказа посередине нет.
+        <strong>Посилання на ваш власний магазин</strong>
+        Спрямовуйте позиції в будь-який інтернет-магазин, яким ви вже користуєтеся. Ніякого нашого маркетплейсу чи оформлення замовлення посередині немає.
       </li>
       <li>
-        <strong>Работает без сети после первого запуска</strong>
-        После первого запуска на компьютере, планшете или телефоне приложения сохраняются в браузере и продолжают работать без подключения.
+        <strong>Працює без мережі після першого запуску</strong>
+        Після першого запуску на комп’ютері, планшеті або телефоні застосунки зберігаються в браузері та продовжують працювати без підключення.
       </li>
       <li>
-        <strong>Совместное редактирование — только если оно вам нужно</strong>
-        Для редактирования вместе нужен необязательный сервер совместной работы, который запускается у вас. Всё остальное работает без него.
+        <strong>Спільне редагування — лише якщо воно вам потрібне</strong>
+        Для спільного редагування потрібен необов’язковий сервер спільної роботи, який запускається у вас. Усе інше працює без нього.
       </li>
     </ul>
   </section>
 
     <dialog class="collab" id="collab" aria-labelledby="collab-h">
-      <button type="button" class="close" aria-label="Закрыть">×</button>
-      <h2 id="collab-h">Загрузка сервера совместной работы</h2>
-      <p>Запустите сервер совместной работы у себя, чтобы редактировать каталог вместе с другими людьми в реальном времени. Чтобы создавать или просматривать каталог самостоятельно, он не нужен.</p>      <p>
-        <strong>Windows:</strong> <a href="https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=ru-RU&amp;gl=US">скачать в Microsoft Store</a> (или <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-windows-x64.exe">прямая загрузка</a>, файл .exe)
+      <button type="button" class="close" aria-label="Закрити">×</button>
+      <h2 id="collab-h">Завантаження сервера спільної роботи</h2>
+      <p>Запустіть сервер спільної роботи в себе, щоб редагувати каталог разом з іншими людьми в реальному часі. Щоб створювати чи переглядати каталог самостійно, він не потрібен.</p>      <p>
+        <strong>Windows:</strong> <a href="https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=uk-UA&amp;gl=US">завантажити з Microsoft Store</a> (або <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-windows-x64.exe">пряме завантаження</a>, файл .exe)
       </p>
       <p>
-        <strong>Linux:</strong> <a href="https://snapcraft.io/ecm-collab-server">скачать в Snap Store</a> (Ubuntu App Center, или <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-linux-x64">прямая загрузка</a> для других дистрибутивов)
+        <strong>Linux:</strong> <a href="https://snapcraft.io/ecm-collab-server">завантажити зі Snap Store</a> (Ubuntu App Center, або <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-linux-x64">пряме завантаження</a> для інших дистрибутивів)
       </p>
       <p>
-        <strong>macOS:</strong> (нужна macOS 13 или новее) <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-macos-arm64.zip">прямая загрузка</a> (Apple Silicon, или <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-macos-x64.zip">Intel</a>) — распакуйте архив, затем на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">странице релиза</a> найдите однострочную команду для Терминала, которая нужна при первом запуске
+        <strong>macOS:</strong> (потрібна macOS 13 або новіша) <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-macos-arm64.zip">пряме завантаження</a> (Apple Silicon, або <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-macos-x64.zip">Intel</a>) — розпакуйте архів, а потім на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">сторінці релізу</a> знайдіть однорядкову команду для Терміналу, яка потрібна під час першого запуску
       </p>
       <p>
-        <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-amd64.deb">прямая загрузка</a>, файл .deb — инструкцию по настройке смотрите на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">странице релиза</a>
+        <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-amd64.deb">пряме завантаження</a>, файл .deb — інструкцію з налаштування дивіться на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">сторінці релізу</a>
       </p>
     </dialog>
   </main>
 
   <footer>
-    <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Исходный код на GitHub</a>
-    — каталоги остаются на вашем диске, если их не открывают по URL.
-    <div><a href="../demo/embed-demo.html">Как это выглядит на сайте →</a></div>
-    <div><a href="../privacy.html">Политика конфиденциальности (на английском)</a></div>
+    <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Вихідний код на GitHub</a>
+    — каталоги залишаються на вашому диску, якщо їх не відкривають за URL.
+    <div><a href="../demo/embed-demo.html">Як це виглядає на сайті →</a></div>
+    <div><a href="../privacy.html">Політика конфіденційності (англійською)</a></div>
     <div id="visits"></div>
     <div class="built-by">
-      Автор: Александр Котов (<a href="https://www.linkedin.com/in/alexkotovwa/">LinkedIn</a> · <a href="https://x.com/kotov_wa">X</a>)
+      Автор: Олександр Котов (<a href="https://www.linkedin.com/in/alexkotovwa/">LinkedIn</a> · <a href="https://x.com/kotov_wa">X</a>)
     </div>
   </footer>
 

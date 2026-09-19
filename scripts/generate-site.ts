@@ -38,6 +38,7 @@ interface LangConfig {
 const LANGS: Record<string, LangConfig> = {
   en: { dir: "landing", path: "/", base: "", name: "English", storeLocale: "en-US" },
   ru: { dir: "landing/ru", path: "/ru/", base: "../", name: "Русский", storeLocale: "ru-RU" },
+  uk: { dir: "landing/uk", path: "/uk/", base: "../", name: "Українська", storeLocale: "uk-UA" },
 };
 const DEFAULT_LANG = "en";
 const PAGES = ["index.html", "schools.html"];
@@ -75,8 +76,9 @@ function render(template: string, page: string, lang: string): string {
         .filter(([l]) => l !== lang)
         .map(([l, c]) => {
           const rel = page === "index.html" ? "" : page;
-          // From /ru/ to /: "../" ; from / to /ru/: "ru/". Relative, so it works on any host.
-          const target = l === DEFAULT_LANG ? cfg.base + rel : (cfg.base === "" ? c.path.slice(1) : "") + rel;
+          // Relative, so it works on any host: back to the root ("../") for
+          // English, otherwise down into the language's directory ("ru/", "../uk/").
+          const target = cfg.base + (l === DEFAULT_LANG ? "" : c.path.slice(1)) + rel;
           return `<a class="lang-switch" href="${target || "./"}" hreflang="${l}" lang="${l}">${c.name}</a>`;
         })
         .join(" "),

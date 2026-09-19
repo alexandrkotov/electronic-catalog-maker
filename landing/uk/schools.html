@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="{{@lang}}">
+<html lang="uk">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <script>
   // Page language + the few strings the page scripts need (from the dictionary's js.* keys).
-  var LANG = "{{@lang}}";
-  var T = {{@messages}};
+  var LANG = "uk";
+  var T = {"themeLight":"☀️ Світла","themeDark":"🌙 Темна","demoLoadFailed":"Не вдалося завантажити живе демо. Скористайтеся посиланням «Відкрити повне демо» нижче.","visits.one":"\u003cstrong>{n}\u003c/strong> візит на цей сайт на цей момент.","visits.few":"\u003cstrong>{n}\u003c/strong> візити на цей сайт на цей момент.","visits.many":"\u003cstrong>{n}\u003c/strong> візитів на цей сайт на цей момент.","visits.other":"\u003cstrong>{n}\u003c/strong> візиту на цей сайт на цей момент."};
 </script>
 <script>
   // Apply the saved (or OS-preferred) theme before first paint — no light flash.
@@ -21,11 +21,15 @@
     document.documentElement.dataset.theme = t;
   })();
 </script>
-{{@alternates}}
-<title>{{schools.title}}</title>
-<link rel="icon" type="image/png" sizes="32x32" href="{{@base}}favicon-32.png" />
-<link rel="icon" type="image/png" sizes="16x16" href="{{@base}}favicon-16.png" />
-<link rel="apple-touch-icon" href="{{@base}}icon-192.png" />
+<link rel="alternate" hreflang="en" href="https://tapalog.com/schools.html" />
+<link rel="alternate" hreflang="ru" href="https://tapalog.com/ru/schools.html" />
+<link rel="alternate" hreflang="uk" href="https://tapalog.com/uk/schools.html" />
+<link rel="alternate" hreflang="x-default" href="https://tapalog.com/schools.html" />
+<link rel="canonical" href="https://tapalog.com/uk/schools.html" />
+<title>Electronic Catalog Maker для шкіл</title>
+<link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png" />
+<link rel="apple-touch-icon" href="../icon-192.png" />
 <style>
   .lang-switch { font-size: 0.9rem; color: var(--muted); text-decoration: none; padding: 0.35rem 0.6rem; min-height: 40px; display: inline-flex; align-items: center; white-space: nowrap; }
   .lang-switch:hover { color: var(--link); text-decoration: underline; }
@@ -185,62 +189,62 @@
 </style>
 </head>
 <body>
-  <div class="topbar"><a class="back" href="./">{{schools.back}}</a><span class="top-actions">{{@switch}}<button type="button" class="theme-toggle" id="theme-toggle"></button></span></div>
+  <div class="topbar"><a class="back" href="./">← Electronic Catalog Maker</a><span class="top-actions"><a class="lang-switch" href="../schools.html" hreflang="en" lang="en">English</a> <a class="lang-switch" href="../ru/schools.html" hreflang="ru" lang="ru">Русский</a><button type="button" class="theme-toggle" id="theme-toggle"></button></span></div>
 
   <div class="brand">
-    <img src="{{@base}}icon-192.png" alt="" width="32" height="32" />
-    <h1>{{schools.h1}}</h1>
+    <img src="../icon-192.png" alt="" width="32" height="32" />
+    <h1>ECM для шкіл 🎓</h1>
   </div>
   <p class="tagline">
-    {{schools.tagline}}
+    Маєте схему? За кілька хвилин це інтерактивний класний проєкт — без створення облікових записів, без хмари, якій треба довіряти, і безкоштовно.
   </p>
 
   <div class="points">
     <div>
       <div class="point-icon">🔒</div>
-      <h3>{{schools.points.privacy.title}}</h3>
-      <p>{{schools.points.privacy.text}}</p>
+      <h3>Без облікових записів і даних учнів</h3>
+      <p>Каталог — це просто файл на вашому пристрої. За ним немає хмарної бази даних: не потрібно реєструватися, і нічому зламуватися чи витікати.</p>
     </div>
     <div>
       <div class="point-icon">👥</div>
-      <h3>{{schools.points.group.title}}</h3>
-      <p>{{schools.points.group.text}}</p>
+      <h3>Групові проєкти в реальному часі</h3>
+      <p>Цілий клас може разом підписувати одну схему одночасно, в одному файлі — за допомогою безкоштовного необов’язкового сервера спільної роботи.</p>
     </div>
     <div>
       <div class="point-icon">📅</div>
-      <h3>{{schools.points.year.title}}</h3>
-      <p>{{schools.points.year.text}}</p>
+      <h3>Запрацює і наступного року</h3>
+      <p>Файл, збережений у вересні, у червні відкриється так само — без продовжень, без облікових записів, що спливають, і без оновлень, які все ламають.</p>
     </div>
     <div>
       <div class="point-icon">💸</div>
-      <h3>{{schools.points.free.title}}</h3>
-      <p>{{schools.points.free.text}}</p>
+      <h3>Безкоштовні застосунки, без підписки</h3>
+      <p>Ті самі Редактор і Переглядач, що й в усіх, — просто перемкнені в режим «Навчальний», у якому «Купити» та «Кошик» перетворюються на «Докладніше» та «Колекція».</p>
     </div>
   </div>
 
   <div class="demo-section">
-    <h2>{{schools.demo.title}}</h2>
+    <h2>🧫 Спробуйте — клітина тварини, по якій можна клацати</h2>
     <p class="hint">
-      {{schools.demo.hint}}
+      У цьому демонстраційному каталозі ввімкнено режим «Навчальний»: на панелі інструментів замість «🛒 Кошик» написано «📚 Колекція», а в кожної частини замість «Купити» — «Докладніше». Застосунок і формат файлу ті самі, просто підписи змінено для класу.
     </p>
-    <ecm-viewer mode="full" src="{{@base}}demo/cell-biology.ecatm"></ecm-viewer>
+    <ecm-viewer mode="full" src="../demo/cell-biology.ecatm"></ecm-viewer>
     <p class="demo-links">
-      <a href="{{@base}}viewer/?src=..%2Fdemo%2Fcell-biology.ecatm">{{schools.demo.openViewer}}</a>
-      <a href="{{@base}}editor/?src=..%2Fdemo%2Fcell-biology.ecatm">{{schools.demo.openEditor}}</a>
+      <a href="../viewer/?src=..%2Fdemo%2Fcell-biology.ecatm">Відкрити в Переглядачі</a>
+      <a href="../editor/?src=..%2Fdemo%2Fcell-biology.ecatm">Відкрити в Редакторі</a>
     </p>
   </div>
 
   <div class="cta">
-    <h2>{{schools.build.title}}</h2>
-    <p>{{schools.build.text}}</p>
-    <a class="btn" href="{{@base}}editor/">{{schools.build.editor}}</a>
-    <a class="btn secondary" href="./">{{schools.build.app}}</a>
+    <h2>✏️ Створіть свій проєкт</h2>
+    <p>Візьміть схему — клітину, двигун, карту, механізм — поставте кілька точок, і вийде проєкт для класу. Працює без мережі після першого запуску на комп’ютері, планшеті або телефоні та продовжить працювати і після останнього дзвінка наприкінці навчального року.</p>
+    <a class="btn" href="../editor/">Відкрити Редактор →</a>
+    <a class="btn secondary" href="./">Переглянути застосунок повністю →</a>
   </div>
 
   <footer>
-    <a href="{url_github}">{{common.footer.source}}</a>
-    {{common.footer.note}}
-    <div><a href="{{@base}}privacy.html">{{common.footer.privacy}}</a></div>
+    <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Вихідний код на GitHub</a>
+    — каталоги залишаються на вашому диску, якщо їх не відкривають за URL.
+    <div><a href="../privacy.html">Політика конфіденційності (англійською)</a></div>
   </footer>
 
   <script>

@@ -23,6 +23,7 @@
 </script>
 <link rel="alternate" hreflang="en" href="https://tapalog.com/" />
 <link rel="alternate" hreflang="ru" href="https://tapalog.com/ru/" />
+<link rel="alternate" hreflang="uk" href="https://tapalog.com/uk/" />
 <link rel="alternate" hreflang="x-default" href="https://tapalog.com/" />
 <link rel="canonical" href="https://tapalog.com/" />
 <title>Electronic Catalog Maker — Interactive Image Catalogs</title>
@@ -82,6 +83,8 @@
     margin: 0;
   }
   @media (max-width: 480px) { .brand .brand-domain { display: none; } }
+  /* Three or more languages: let the switches drop to their own row instead of overflowing. */
+  @media (max-width: 600px) { .brand { flex-wrap: wrap; } .top-actions { flex-basis: 100%; margin-left: 0; } }
   p.tagline { color: var(--muted); margin-top: 0; }
   .hero { padding: 2.5rem 0 1.5rem; }
   .hero h1 { font-size: clamp(1.9rem, 5vw, 2.8rem); line-height: 1.15; margin: 0 0 0.75rem; }
@@ -216,7 +219,7 @@
   <div class="brand">
     <img src="icon-192.png" alt="" width="32" height="32" />
     Electronic Catalog Maker <span class="brand-domain">tapalog.com</span>
-    <span class="top-actions"><a class="lang-switch" href="ru/" hreflang="ru" lang="ru">Русский</a><button type="button" class="theme-toggle" id="theme-toggle"></button></span>
+    <span class="top-actions"><a class="lang-switch" href="ru/" hreflang="ru" lang="ru">Русский</a> <a class="lang-switch" href="uk/" hreflang="uk" lang="uk">Українська</a><button type="button" class="theme-toggle" id="theme-toggle"></button></span>
   </div>
 
   <header class="hero">
