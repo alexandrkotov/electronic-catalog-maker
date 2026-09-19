@@ -113,6 +113,7 @@
   .frame ecm-viewer { display: block; width: 100%; height: 100%; }
   .demo-links { margin: 0.6rem 0 0; font-size: 0.95rem; }
   .demo-links a + a { margin-left: 1rem; }
+  .demo-note { margin: 0.4rem 0 0; font-size: 0.9rem; color: var(--muted); }
   .steps-line { margin: 1rem 0 0; color: var(--text-2); }
 
 
@@ -219,7 +220,7 @@
   <main>
     <section class="demo" id="demo" aria-labelledby="demo-h">
       <h2 id="demo-h">See how it works</h2>
-      <p class="intro">Select a marker or use the arrows to explore item details.</p>
+      <p class="intro">Select a marker or use the arrows to explore item details. Use Fit to see the whole image.</p>
       <div class="tabs" role="group" aria-label="Example catalog">
         <button type="button" data-cat="auto-spare-parts" aria-pressed="true">Auto parts</button>
         <button type="button" data-cat="furniture" aria-pressed="false">Furniture</button>
@@ -229,6 +230,7 @@
         <a id="open-full" href="viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Open full demo</a>
         <a id="edit-this" href="editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Edit this example</a>
       </p>
+      <p class="demo-note">Buy opens our demo store checkout, where every item costs $0.</p>
       <p class="steps-line"><strong>Build your own:</strong> add an image → mark the details with hotspots → save the catalog file and open it in Viewer.</p>
       <noscript><p>The live demo needs JavaScript — use “Open full demo” above.</p></noscript>
     </section>
