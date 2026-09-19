@@ -1,7 +1,15 @@
 import "./style.css";
 import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import pdfFontUrl from "@ecm/shared/assets/fonts/DejaVuSans.ttf?url";
-import { mountViewer, setUpPwa, type Database, type PdfExportOptions } from "@ecm/shared";
+import {
+  VIEWER_LOCALES,
+  appLocaleCandidates,
+  mountViewer,
+  pickLocale,
+  setUpPwa,
+  type Database,
+  type PdfExportOptions,
+} from "@ecm/shared";
 
 // Service Worker registration + the standalone-aware GoatCounter gate —
 // see packages/shared/src/pwa.ts.
@@ -43,8 +51,14 @@ async function exportPdf(db: Database, options: PdfExportOptions): Promise<Uint8
   }
 }
 
+// Saved choice → browser language → English. The standalone app owns the
+// whole page, so it also sets <html lang> for screen readers and hyphenation.
+const locale = pickLocale(appLocaleCandidates(VIEWER_LOCALES), VIEWER_LOCALES);
+document.documentElement.lang = locale;
+
 mountViewer({
   container: document.getElementById("app")!,
+  locale,
   mode: "full",
   initialSrc: params.get("src") ?? undefined,
   initialImageId: Number.isFinite(initialImageId) ? initialImageId : undefined,
