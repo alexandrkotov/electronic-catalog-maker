@@ -1,6 +1,7 @@
 import { createTranslator, type Messages, type Translate } from "../../i18n.js";
 import en from "./en.json";
 import ru from "./ru.json";
+import uk from "./uk.json";
 
 /**
  * Languages the viewer UI is translated into, English first (the source of
@@ -8,12 +9,12 @@ import ru from "./ru.json";
  * `<tag>.json` next to en.json, import it here, and list it in both places
  * below; en.test.ts checks every listed language against en.json.
  */
-export const VIEWER_LOCALES = ["en", "ru"] as const;
+export const VIEWER_LOCALES = ["en", "ru", "uk"] as const;
 
 /** Each language's own name for itself — shown in the language picker, never translated. */
-export const VIEWER_LOCALE_NAMES: Record<string, string> = { en: "English", ru: "Русский" };
+export const VIEWER_LOCALE_NAMES: Record<string, string> = { en: "English", ru: "Русский", uk: "Українська" };
 
-export const viewerMessages: Record<string, Messages> = { en, ru };
+export const viewerMessages: Record<string, Messages> = { en, ru, uk };
 
 /** Translator for chrome outside mountViewer (e.g. the host page's <title>), default wording. */
 export function viewerTranslator(locale: string): Translate {
