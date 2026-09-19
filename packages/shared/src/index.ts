@@ -3,6 +3,7 @@ export * from "./schema.js";
 export * from "./db.js";
 export * from "./theme.js";
 export * from "./i18n.js";
+export { EDITOR_LOCALES, EDITOR_LOCALE_NAMES, editorMessages } from "./locales/editor/index.js";
 export { VIEWER_LOCALES, VIEWER_LOCALE_NAMES, viewerTranslator } from "./locales/viewer/index.js";
 export * from "./search.js";
 export * from "./images.js";

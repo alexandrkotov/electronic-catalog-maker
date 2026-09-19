@@ -2,6 +2,16 @@ import "./style.css";
 import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import pdfFontUrl from "@ecm/shared/assets/fonts/DejaVuSans.ttf?url";
 import {
+  EDITOR_LOCALES,
+  EDITOR_LOCALE_NAMES,
+  appLocaleCandidates,
+  createTranslator,
+  editorMessages,
+  matchLocale,
+  pickLocale,
+  saveLocale,
+  type MessageParams,
+  type Translate,
   addImage,
   addLink,
   addRow,
@@ -82,8 +92,38 @@ setUpPwa();
 
 const app = document.getElementById("app")!;
 
+// UI language: saved choice -> browser language -> English (see i18n.ts).
+// The editor is a single-instance page, so this is plain module state
+// rather than the viewer's per-mount option.
+let locale = pickLocale(appLocaleCandidates(EDITOR_LOCALES), EDITOR_LOCALES);
+document.documentElement.lang = locale;
+const translators = new Map<string, Translate>();
+/** Catalog mode picks wording through `key@education` overrides — pass the mode explicitly where it matters (see skuLabel, the store settings dialog). */
+function tMode(mode: "commercial" | "education", key: string, params?: MessageParams): string {
+  const cacheKey = `${locale}|${mode}`;
+  let translate = translators.get(cacheKey);
+  if (!translate) {
+    translate = createTranslator({
+      messages: editorMessages[locale] ?? {},
+      locale,
+      fallback: editorMessages.en,
+      mode: mode === "education" ? "education" : undefined,
+    });
+    translators.set(cacheKey, translate);
+  }
+  return translate(key, params);
+}
+function t(key: string, params?: MessageParams): string {
+  return tMode("commercial", key, params);
+}
+document.title = t("toolbar.title");
+/** t() for text/attribute positions inside the HTML templates. */
+function te(key: string, params?: MessageParams): string {
+  return escapeHtml(t(key, params));
+}
+
 const CATALOG_PICKER_TYPE: FilePickerAcceptType = {
-  description: "Electronic catalog",
+  description: t("filePicker.description"),
   // .sch: the previous-generation desktop app's format — opened read-write
   // here too, but always as an unattached copy (see openCatalogFromBytes).
   accept: { "application/x-sqlite3": [`.${CATALOG_FILE_EXTENSION}`, ".sch"] },
@@ -595,7 +635,7 @@ const initialCollabParam = new URLSearchParams(location.search).get("collab");
 const initialCollabServerParam = new URLSearchParams(location.search).get("server");
 
 async function boot() {
-  app.innerHTML = `<p style="padding:1rem">Loading SQLite (sql.js)…</p>`;
+  app.innerHTML = `<p style="padding:1rem">${te("boot.loadingSqlite")}</p>`;
   SQL = await initSqlite(wasmUrl);
   if (initialCollabParam) {
     if (initialCollabServerParam) saveCollabServerUrl(initialCollabServerParam);
@@ -608,14 +648,14 @@ async function boot() {
 }
 
 async function loadInitialFromUrl(url: string) {
-  app.innerHTML = `<p style="padding:1rem">Loading catalog…</p>`;
+  app.innerHTML = `<p style="padding:1rem">${te("boot.loadingCatalog")}</p>`;
   let bytes: Uint8Array;
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     bytes = new Uint8Array(await res.arrayBuffer());
   } catch (err) {
-    statusMessage = `Could not load "${url}": ${(err as Error).message}`;
+    statusMessage = t("status.loadFailed", { url, message: (err as Error).message });
     render();
     return;
   }
@@ -646,14 +686,14 @@ function actionSetZoom(next: number) {
 // ---------- actions: catalog lifecycle ----------
 
 function actionNewCatalog() {
-  const name = prompt("New catalog name:", "Untitled catalog");
+  const name = prompt(t("catalog.newPrompt"), t("catalog.untitled"));
   if (name === null) return;
-  db = createEmptyCatalog(SQL, name || "Untitled catalog");
+  db = createEmptyCatalog(SQL, name || t("catalog.untitled"));
   activeImageId = null;
   openedFileHandle = null;
   resetTransientEditState();
   mobileTab = "images"; // fresh catalog — start from the image list, same as opening one
-  setStatus(`Created new catalog "${name}".`);
+  setStatus(t("catalog.created", { name: name || t("catalog.untitled") }));
 }
 
 /**
@@ -669,7 +709,7 @@ function actionNewCatalog() {
 async function openCatalogFromBytes(
   bytes: Uint8Array,
   handle: FileSystemFileHandle | null,
-  sourceName = "Legacy catalog",
+  sourceName = t("legacy.sourceName"),
   fileStamp: { size: number; lastModified: number } | null = null,
 ) {
   // Opening a different local file while still connected to a shared
@@ -679,7 +719,7 @@ async function openCatalogFromBytes(
   try {
     const kind = detectFileKind(SQL, bytes);
     if (kind === "legacy-sch") {
-      setStatus("Converting legacy .sch catalog… this can take a moment for large files.");
+      setStatus(t("status.converting"));
       await new Promise((resolve) => setTimeout(resolve, 0));
       const result = await importSchCatalog(SQL, bytes, sourceName);
       db = result.db;
@@ -689,7 +729,12 @@ async function openCatalogFromBytes(
       resetTransientEditState();
       mobileTab = "images"; // fresh catalog — start from the image list
       setStatus(
-        `Converted legacy catalog "${sourceName}" (${result.imageCount} image${result.imageCount === 1 ? "" : "s"}${result.skippedDiagrams ? `, ${result.skippedDiagrams} skipped` : ""}). Save to keep it as a .${CATALOG_FILE_EXTENSION} file.`,
+        t(result.skippedDiagrams ? "status.convertedSkipped" : "status.converted", {
+          name: sourceName,
+          count: result.imageCount,
+          skipped: result.skippedDiagrams,
+          ext: CATALOG_FILE_EXTENSION,
+        }),
       );
     } else {
       db = openCatalog(SQL, bytes);
@@ -699,10 +744,10 @@ async function openCatalogFromBytes(
       openedFileStamp = handle ? fileStamp : null;
       resetTransientEditState();
       mobileTab = "images"; // fresh catalog — start from the image list
-      setStatus(`Opened catalog "${meta.catalogName}".`);
+      setStatus(t("catalog.opened", { name: meta.catalogName }));
     }
   } catch (err) {
-    setStatus(`Could not open file: ${(err as Error).message}`);
+    setStatus(t("status.openFailed", { message: (err as Error).message }));
   }
 }
 
@@ -723,7 +768,7 @@ async function actionOpenCatalogClicked(fallbackInput: HTMLInputElement) {
       });
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
-        setStatus(`Could not open file: ${(err as Error).message}`);
+        setStatus(t("status.openFailed", { message: (err as Error).message }));
       }
     }
     return;
@@ -806,7 +851,7 @@ function actionSubmitStoreSettings() {
     defaultView: storeSettingsDefaultView,
   });
   storeSettingsOpen = false;
-  setStatus("Updated store settings.");
+  setStatus(t("store.updated"));
 }
 
 function actionCancelCollabNotFound() {
@@ -910,7 +955,7 @@ async function actionConfirmExportPdf() {
     URL.revokeObjectURL(a.href);
   } catch (err) {
     pdfFontBytesPromise = null; // let a retry re-fetch, in case the failure was a network blip fetching the font
-    statusMessage = `PDF export failed: ${err instanceof Error ? err.message : String(err)}`;
+    statusMessage = t("pdf.failed", { message: err instanceof Error ? err.message : String(err) });
   } finally {
     exportPdfBusy = false;
     render();
@@ -936,7 +981,7 @@ async function actionSave() {
       openedFileStamp = null; // nothing of ours on disk yet to compare against
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
-        setStatus(`Could not choose a save location: ${(err as Error).message}`);
+        setStatus(t("status.saveLocationFailed", { message: (err as Error).message }));
       }
       return;
     }
@@ -945,7 +990,7 @@ async function actionSave() {
   if (openedFileHandle) {
     if (openedFileStamp && (await fileChangedOnDisk(openedFileHandle, openedFileStamp))) {
       askConfirm(
-        `"${openedFileHandle.name}" changed since you opened it — probably saved by someone else in the meantime. Overwrite it with your changes anyway? ("Export a copy…" keeps both instead of choosing.)`,
+        t("status.changedOnDisk", { name: openedFileHandle.name }),
         () => void writeToOpenedHandle(bytes),
       );
       return;
@@ -955,7 +1000,7 @@ async function actionSave() {
   }
 
   downloadBytes(bytes);
-  setStatus('Downloaded a copy (this browser can\'t save in place — "Open catalog…" it again next time).');
+  setStatus(t("status.downloadedCopy"));
 }
 
 /**
@@ -986,9 +1031,9 @@ async function writeToOpenedHandle(bytes: Uint8Array) {
     await writable.close();
     const saved = await openedFileHandle.getFile();
     openedFileStamp = { size: saved.size, lastModified: saved.lastModified };
-    setStatus(`Saved "${openedFileHandle.name}".`);
+    setStatus(t("status.saved", { name: openedFileHandle.name }));
   } catch (err) {
-    setStatus(`Could not save: ${(err as Error).message}`);
+    setStatus(t("status.saveFailed", { message: (err as Error).message }));
   }
 }
 
@@ -1159,7 +1204,7 @@ function applyRemoteOp(op: Op) {
     // it beats a silently half-applied change, without taking the whole
     // tab down over one bad op. Still counted as "applied" (see below) so
     // a permanently-failing op can't wedge every future op behind it.
-    setStatus(`Couldn't apply a change from the shared session: ${(err as Error).message}`);
+    setStatus(t("collab.status.remoteOpFailed", { message: (err as Error).message }));
     lastAppliedSeq = op.seq;
     return;
   }
@@ -1204,27 +1249,27 @@ function describeOp(fn: string, args: unknown[]): string {
     case "addRow":
     case "updateRow": {
       const input = (fn === "addRow" ? args[0] : args[1]) as { name?: string; sku?: string };
-      return `row — name "${input.name || "(empty)"}", SKU "${input.sku || "(empty)"}"`;
+      return t("op.row", { name: input.name || t("op.empty"), sku: input.sku || t("op.empty") });
     }
     case "deleteRow":
-      return "row — deleted";
+      return t("op.rowDeleted");
     case "updateLink": {
       const input = args[1] as { name: string; url: string };
-      return `hotspot — name "${input.name}", address "${input.url}"`;
+      return t("op.link", { name: input.name, url: input.url });
     }
     case "deleteLink":
-      return "hotspot — deleted";
+      return t("op.linkDeleted");
     case "updateLinkPosition":
-      return `hotspot position — top ${args[1]}, left ${args[2]}`;
+      return t("op.linkPosition", { top: String(args[1]), left: String(args[2]) });
     case "updateImage": {
       const input = args[1] as { name: string; folder: string };
-      return `image — name "${input.name}"${input.folder ? `, folder "${input.folder}"` : ""}`;
+      return input.folder ? t("op.imageFolder", { name: input.name, folder: input.folder }) : t("op.image", { name: input.name });
     }
     case "deleteImage":
-      return "image — deleted";
+      return t("op.imageDeleted");
     case "updateStoreSettings": {
       const input = args[0] as { storeUrl: string };
-      return `store settings — URL "${input.storeUrl}"`;
+      return t("op.storeSettings", { url: input.storeUrl });
     }
     default:
       return fn;
@@ -1279,10 +1324,12 @@ function drainOutbox(elseDidWhileAway: Op[]) {
   if (conflicting.length > 0) {
     const n = conflicting.length;
     const details = conflicting
-      .map(({ queued, theirs }) => `Yours: ${describeOp(queued.fn, queued.args)}\nCurrent: ${describeOp(theirs.fn, theirs.args)}`)
+      .map(({ queued, theirs }) =>
+        t("collab.conflict.pair", { yours: describeOp(queued.fn, queued.args), current: describeOp(theirs.fn, theirs.args) }),
+      )
       .join("\n\n");
     askConfirm(
-      `While you were disconnected, someone else also changed ${n === 1 ? "something" : `${n} things`} you also edited:\n\n${details}\n\nOverwrite ${n === 1 ? "it" : "them"} with your offline change${n === 1 ? "" : "s"}?`,
+      t("collab.conflict", { count: n, details }),
       () => {
         for (const { queued } of conflicting) applyQueuedOpAsOverwrite(queued);
         render();
@@ -1398,7 +1445,7 @@ function scheduleReconnect(roomId: string) {
 /** Kicks off a brand-new shared session — auto-detects a running collab-server app first (see detectLocalCollabServer) rather than relying on anyone having typed an address in anywhere. */
 async function actionStartCollaboration() {
   if (!db) return;
-  setStatus("Looking for your collaboration server…");
+  setStatus(t("collab.status.looking"));
   const detected = (await detectLocalCollabServer()) ?? (await detectLocalCollabServerViaBridge(COLLAB_AUTO_DETECT_BASE_PORT));
   if (!detected) {
     // Deliberately blank, not collabServerUrl — that's very often the
@@ -1410,13 +1457,12 @@ async function actionStartCollaboration() {
     // confusing in exactly that scenario, not just a hypothetical.
     collabManualUrlValue = "";
     collabNotFoundOpen = true;
-    setStatus("Could not find a running collaboration server.");
+    setStatus(t("collab.status.notFound"));
     return;
   }
   if (!detected.hasPublicUrl) {
     pendingConfirmation = {
-      message:
-        "Found your collaboration server, but it doesn't have a public address yet (still connecting, or its tunnel isn't available). You can continue — this tab will work — but the link won't work for a colleague until that's ready. Continue anyway?",
+      message: t("collab.confirm.noPublicUrl"),
       onConfirm: () => promptForCollabNameThen(() => void beginCollaboration(detected.url)),
     };
     render();
@@ -1460,7 +1506,7 @@ function actionSubmitCollabNameDialog() {
 async function beginCollaboration(serverUrl: string) {
   if (!db) return;
   saveCollabServerUrl(serverUrl);
-  setStatus("Starting a shared session…");
+  setStatus(t("collab.status.starting"));
   try {
     const bytes = exportCatalog(db);
     const room = await createRoom(collabServerUrl, bytes);
@@ -1473,15 +1519,15 @@ async function beginCollaboration(serverUrl: string) {
     // for its own reload/reconnect to know where to look.
     history.replaceState(null, "", `?collab=${room.roomId}&server=${encodeURIComponent(collabServerUrl)}`);
     await connectAndSync(room.roomId);
-    setStatus("Started a shared session — share the link shown below with a colleague.");
+    setStatus(t("collab.status.started"));
   } catch (err) {
-    setStatus(collabErrorMessage("start a shared session", err));
+    setStatus(collabErrorMessage("start", err));
   }
 }
 
 /** Joins an existing shared session by id — downloads its original snapshot, replays the full history, then catches up via connectAndSync. */
 async function actionJoinCollaboration(roomId: string) {
-  setStatus("Joining the shared session…");
+  setStatus(t("collab.status.joining"));
   try {
     const bytes = await downloadSnapshot(collabServerUrl, roomId);
     db = openCatalog(SQL, bytes);
@@ -1497,9 +1543,9 @@ async function actionJoinCollaboration(roomId: string) {
     // resend (or flag as a conflict) rather than silently losing them.
     outbox = await loadOutbox(roomId);
     await connectAndSync(roomId);
-    setStatus("Joined the shared session.");
+    setStatus(t("collab.status.joined"));
   } catch (err) {
-    setStatus(collabErrorMessage("join that shared session", err));
+    setStatus(collabErrorMessage("join", err));
   }
 }
 
@@ -1511,9 +1557,9 @@ async function actionJoinCollaboration(roomId: string) {
  * to fetch") doesn't tell a non-technical person that; naming the address
  * it tried does.
  */
-function collabErrorMessage(action: string, err: unknown): string {
+function collabErrorMessage(action: "start" | "join" | "end", err: unknown): string {
   const detail = err instanceof Error ? err.message : String(err);
-  return `Could not ${action} — is the collaboration server at ${collabServerUrl} still running? (${detail})`;
+  return t(`collab.error.${action}`, { server: collabServerUrl, detail });
 }
 
 /**
@@ -1554,7 +1600,7 @@ function exitCollaboration() {
 /** Disconnects this tab only — the room itself and everyone else in it are unaffected. Ending it for everyone is actionEndSessionForEveryone(), a separate, deliberate action. */
 function actionLeaveCollaboration() {
   exitCollaboration();
-  setStatus("Left the shared session — you're back to working locally.");
+  setStatus(t("collab.status.left"));
 }
 
 // Set for the duration of actionEndSessionForEveryone()'s own DELETE call.
@@ -1576,9 +1622,9 @@ async function actionEndSessionForEveryone() {
   try {
     await deleteRoom(collabServerUrl, roomId, ownerToken, collabDisplayName);
     exitCollaboration();
-    setStatus("Ended the shared session for everyone — you're back to working locally.");
+    setStatus(t("collab.status.ended"));
   } catch (err) {
-    setStatus(collabErrorMessage("end the shared session", err));
+    setStatus(collabErrorMessage("end", err));
   } finally {
     endingCollabSelf = false;
   }
@@ -1588,7 +1634,7 @@ function actionConfirmEndSessionForEveryone() {
   if (!collabRoomId) return;
   pendingConfirmation = {
     message:
-      "End this shared session for everyone? Anyone still connected will be disconnected — they'll keep their own current copy, but the live session ends. This can't be undone.",
+      t("collab.confirm.end"),
     onConfirm: actionEndSessionForEveryone,
   };
   render();
@@ -1611,9 +1657,9 @@ function handleCollabClosed(reason: CollabClosedReason) {
   const message =
     reason.kind === "room-closed"
       ? reason.by
-        ? `${reason.by} ended this shared session — you're back to working locally with your current copy.`
-        : "This shared session was ended — you're back to working locally with your current copy."
-      : "The collaboration server was stopped — you're back to working locally with your current copy.";
+        ? t("collab.closed.byName", { by: reason.by })
+        : t("collab.closed.ended")
+      : t("collab.closed.serverStopped");
   // Both the modal (the actual point of this — see this function's own doc)
   // and the toolbar's corner hint, so it doesn't keep reading something
   // stale like "Joined the shared session" after the modal's dismissed.
@@ -1637,7 +1683,7 @@ async function actionCopyCollabLink() {
   if (!collabRoomId) return;
   try {
     await navigator.clipboard.writeText(collabShareLink());
-    setStatus("Copied the link — share it with whoever you want editing alongside you.");
+    setStatus(t("collab.status.linkCopied"));
     // The dialog's overlay sits on top of the toolbar status line above, so
     // it gets its own transient "Copied!" next to the button instead.
     collabShareCopyFeedback = true;
@@ -1647,7 +1693,7 @@ async function actionCopyCollabLink() {
       render();
     }, 1500);
   } catch {
-    setStatus(`Couldn't copy automatically — here's the link: ${collabShareLink()}`);
+    setStatus(t("collab.status.copyFailed", { link: collabShareLink() }));
   }
 }
 
@@ -1658,7 +1704,7 @@ async function actionAddImage(file: File) {
   const dataUrl = await fileToDataUrl(file);
   const [, mimeType, base64] = dataUrl.match(/^data:([^;]+);base64,(.*)$/s) ?? [];
   if (!base64) {
-    setStatus("Could not read the image.");
+    setStatus(t("image.imageReadFailed"));
     return;
   }
   const { width, height } = await imageDimensions(dataUrl);
@@ -1676,7 +1722,7 @@ async function actionAddImage(file: File) {
   });
   activeImageId = id;
   resetTransientEditState();
-  setStatus(`Added image "${file.name}".`);
+  setStatus(t("image.added", { name: file.name }));
 }
 
 /** Renames the active image and/or moves it into a different (or no) folder. */
@@ -1684,10 +1730,10 @@ function actionUpdateImageMeta() {
   if (!db || activeImageId === null) return;
   const nameInput = document.getElementById("image-name-input") as HTMLInputElement | null;
   const folderInput = document.getElementById("image-folder-input") as HTMLInputElement | null;
-  const name = nameInput?.value.trim() || "Untitled image";
+  const name = nameInput?.value.trim() || t("image.untitled");
   const folder = folderInput?.value.trim() ?? "";
   applyAndBroadcast("updateImage", updateImage, activeImageId, { name, folder });
-  setStatus(`Updated "${name}".`);
+  setStatus(t("image.updated", { name }));
 }
 
 /**
@@ -1703,19 +1749,22 @@ function actionDeleteImage(imageId: number) {
   const image = currentImages().find((i) => i.id === imageId);
   const linkCount = listLinksForImage(db, imageId).length;
   if (linkCount > 0) {
-    notify(`Can't delete "${image?.name ?? "this image"}" — it still has ${linkCount} hotspot${linkCount === 1 ? "" : "s"} on it.`);
+    notify(t("image.cantDelete", { name: image?.name ?? t("image.thisImage"), count: linkCount }));
     return;
   }
   const rowCount = listRowsForImage(db, imageId).length;
-  const consequence = rowCount ? ` It still has ${rowCount} data row${rowCount === 1 ? "" : "s"} with no hotspot, which go with it.` : "";
-  askConfirm(`Delete "${image?.name ?? "this image"}"?${consequence} This can't be undone.`, () => {
+  const imageName = image?.name ?? t("image.thisImage");
+  const confirmMessage = rowCount
+    ? t("image.confirmDeleteRows", { name: imageName, count: rowCount })
+    : t("image.confirmDelete", { name: imageName });
+  askConfirm(confirmMessage, () => {
     if (!db) return;
     applyAndBroadcast("deleteImage", deleteImage, imageId);
     if (activeImageId === imageId) {
       activeImageId = currentImages()[0]?.id ?? null;
       resetTransientEditState();
     }
-    setStatus(`Deleted "${image?.name ?? "image"}".`);
+    setStatus(t("image.deleted", { name: image?.name ?? t("image.imageWord") }));
   });
 }
 
@@ -2053,9 +2102,9 @@ function actionToggleSearch() {
 /** A repeated name/url is legitimate (the same part drawn at several positions on one diagram). */
 function conflictMessage(conflicts: LinkConflict[]): string {
   const lines = conflicts.map(
-    (c) => `${c.field === "name" ? "Name" : "Address"} "${c.value}" is already used by another hotspot in this catalog.`,
+    (c) => t(c.field === "name" ? "link.conflict.name" : "link.conflict.address", { value: c.value }),
   );
-  return `${lines.join("\n")}\n\nThis is fine if it's the same part drawn again elsewhere. Save anyway?`;
+  return `${lines.join("\n")}\n\n${t("link.conflict.footer")}`;
 }
 
 function actionAddLink(name: string, url: string) {
@@ -2070,9 +2119,9 @@ function actionAddLink(name: string, url: string) {
     try {
       applyAddAndBroadcast("addLink", addLink, { imageId, name, url, top, left });
       pendingHotspot = null;
-      setStatus(`Link "${name}" added.`);
+      setStatus(t("link.added", { name }));
     } catch (err) {
-      setStatus(`Could not add link: ${(err as Error).message}`);
+      setStatus(t("link.addFailed", { message: (err as Error).message }));
     }
   };
 
@@ -2093,9 +2142,9 @@ function actionUpdateLink(name: string, url: string) {
     try {
       applyAndBroadcast("updateLink", updateLink, linkId, { name, url });
       editingLinkId = null;
-      setStatus(`Link "${name}" updated.`);
+      setStatus(t("link.updated", { name }));
     } catch (err) {
-      setStatus(`Could not update link: ${(err as Error).message}`);
+      setStatus(t("link.updateFailed", { message: (err as Error).message }));
     }
   };
 
@@ -2119,17 +2168,17 @@ function actionDeleteLink() {
   const link = listLinksForImage(db, activeImageId).find((l) => l.id === linkId);
   if (!link) return;
   if (rowExistsForUrl(db, link.url)) {
-    notify(`Can't delete this hotspot — its table row ("${link.url}") is still there. Delete the row first.`);
+    notify(t("link.cantDelete", { url: link.url }));
     return;
   }
-  askConfirm("Delete this hotspot? This can't be undone.", () => {
+  askConfirm(t("link.confirmDelete"), () => {
     if (!db) return;
     try {
       applyAndBroadcast("deleteLink", deleteLink, linkId);
       editingLinkId = null;
-      setStatus("Link deleted.");
+      setStatus(t("link.deleted"));
     } catch (err) {
-      setStatus(`Could not delete link: ${(err as Error).message}`);
+      setStatus(t("link.deleteFailed", { message: (err as Error).message }));
     }
   });
 }
@@ -2145,7 +2194,7 @@ function parseExtraField(extraText: string): Record<string, string> | null {
   try {
     return JSON.parse(extraText);
   } catch {
-    setStatus('The "extra characteristics" field must be a valid JSON object.');
+    setStatus(t("extra.invalidJson"));
     return null;
   }
 }
@@ -2154,9 +2203,9 @@ function parseExtraField(extraText: string): Record<string, string> | null {
 function extraPairRowHtml(key: string, value: string): string {
   return `
     <div class="extra-pair">
-      <input type="text" class="extra-key" list="extra-key-options" placeholder="Key" value="${escapeHtml(key)}" />
-      <input type="text" class="extra-value" placeholder="Value" value="${escapeHtml(value)}" />
-      <button type="button" class="btn-remove-pair" title="Remove" aria-label="Remove">×</button>
+      <input type="text" class="extra-key" list="extra-key-options" placeholder="${te("extra.key")}" value="${escapeHtml(key)}" />
+      <input type="text" class="extra-value" placeholder="${te("extra.value")}" value="${escapeHtml(value)}" />
+      <button type="button" class="btn-remove-pair" title="${te("extra.remove")}" aria-label="${te("extra.remove")}">×</button>
     </div>`;
 }
 
@@ -2171,14 +2220,14 @@ function extraPairRowHtml(key: string, value: string): string {
 function renderExtraField(extra: Record<string, string>): string {
   return `
     <div class="field extra-field">
-      <label>Extra characteristics</label>
+      <label>${te("extra.label")}</label>
       <div class="extra-pairs">${Object.entries(extra)
         .map(([k, v]) => extraPairRowHtml(k, v))
         .join("")}</div>
       <textarea class="extra-json" rows="3" placeholder='{"weight": "2.3 kg"}' style="display:none">${escapeHtml(Object.keys(extra).length ? JSON.stringify(extra, null, 2) : "")}</textarea>
       <div class="extra-field-actions">
-        <button type="button" class="btn-add-pair">+ Add pair</button>
-        <button type="button" class="btn-toggle-extra-json">Edit as JSON…</button>
+        <button type="button" class="btn-add-pair">${te("extra.addPair")}</button>
+        <button type="button" class="btn-toggle-extra-json">${te("extra.toJson")}</button>
       </div>
     </div>`;
 }
@@ -2225,8 +2274,7 @@ function resolveExtraThen(formEl: HTMLFormElement, onResolved: (extra: Record<st
   const extra = Object.fromEntries(entries);
   if (duplicates.length > 0) {
     const list = duplicates.map((k) => `"${k}"`).join(", ");
-    const verb = duplicates.length > 1 ? "are" : "is";
-    askConfirm(`Key ${list} ${verb} entered twice — only the last value for each will be kept. Save anyway?`, () => onResolved(extra));
+    askConfirm(t("extra.duplicate", { count: duplicates.length, list }), () => onResolved(extra));
     return;
   }
   onResolved(extra);
@@ -2270,7 +2318,7 @@ function wireExtraField(fieldEl: HTMLElement) {
       jsonTextarea.style.display = "none";
       pairsContainer.style.display = "";
       addBtn.style.display = "";
-      toggleBtn.textContent = "Edit as JSON…";
+      toggleBtn.textContent = t("extra.toJson");
     } else {
       const { entries } = collectExtraPairs(fieldEl);
       const obj = Object.fromEntries(entries);
@@ -2278,7 +2326,7 @@ function wireExtraField(fieldEl: HTMLElement) {
       pairsContainer.style.display = "none";
       addBtn.style.display = "none";
       jsonTextarea.style.display = "";
-      toggleBtn.textContent = "Edit as pairs…";
+      toggleBtn.textContent = t("extra.toPairs");
     }
   });
 }
@@ -2286,7 +2334,7 @@ function wireExtraField(fieldEl: HTMLElement) {
 function actionAddRow(url: string, name: string, sku: string, description: string, extra: Record<string, string>) {
   if (!db || activeImageId === null) return;
   applyAddAndBroadcast("addRow", addRow, { imageId: activeImageId, url, name, sku, description, extra });
-  setStatus(`Row for "${url}" added.`);
+  setStatus(t("row.added", { url }));
 }
 
 function actionEditRow(rowId: number) {
@@ -2306,17 +2354,17 @@ function actionSaveRowEdit(name: string, sku: string, description: string, extra
   if (!db || editingRowId === null) return;
   applyAndBroadcast("updateRow", updateRow, editingRowId, { name, sku, description, extra });
   editingRowId = null;
-  setStatus(`Row "${name}" updated.`);
+  setStatus(t("row.updated", { name }));
 }
 
 function actionDeleteRow() {
   if (!db || editingRowId === null) return;
   const rowId = editingRowId;
-  askConfirm("Delete this table row? Its hotspot stays on the image, just unassigned from any data. This can't be undone.", () => {
+  askConfirm(t("row.confirmDelete"), () => {
     if (!db) return;
     applyAndBroadcast("deleteRow", deleteRow, rowId);
     editingRowId = null;
-    setStatus("Row deleted.");
+    setStatus(t("row.deleted"));
   });
 }
 
@@ -2414,41 +2462,44 @@ function render() {
   app.setAttribute("data-mobile-tab", mobileTab);
   app.innerHTML = `
     <div class="toolbar">
-      <h1>Electronic Catalog — Editor</h1>
-      <button id="btn-new">New catalog</button>
-      <button id="btn-open">Open catalog…</button>
+      <h1>${te("toolbar.title")}</h1>
+      <button id="btn-new">${te("toolbar.new")}</button>
+      <button id="btn-open">${te("toolbar.open")}</button>
       <input type="file" id="file-open" accept=".${CATALOG_FILE_EXTENSION},.sch" style="display:none" />
-      <button id="btn-copy-remote" title="Fetch a copy of a catalog hosted at a URL to start editing">Copy remote catalog…</button>
-      <button id="btn-add-image" ${db ? "" : "disabled"}>Add image…</button>
+      <button id="btn-copy-remote" title="${te("toolbar.copyRemote.tip")}">${te("toolbar.copyRemote")}</button>
+      <button id="btn-add-image" ${db ? "" : "disabled"}>${te("toolbar.addImage")}</button>
       <input type="file" id="file-image" accept="image/*" style="display:none" />
-      <button id="btn-save" ${db ? "" : "disabled"} title="Save in place (overwrites the opened file where your browser supports it)">Save</button>
-      <button id="btn-export" ${db ? "" : "disabled"} title="Always downloads a new copy">Export .${CATALOG_FILE_EXTENSION}</button>
-      <button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="Export this catalog as a printable A4 PDF — a QR code next to each item that has a Buy link">${exportPdfBusy ? "Exporting PDF…" : "Export PDF…"}</button>
-      <button id="btn-search" ${db ? "" : "disabled"} title="Search every row in this catalog, not just the current image">Search…</button>
-      <button id="btn-store-settings" ${db ? "" : "disabled"} title="Configure this catalog's store link and Buy-button behavior">⚙️ Store settings…</button>
-      ${db && !collabRoomId ? `<button id="btn-start-collab" title="Start a live session others can join to edit this catalog with you">🤝 Start collaboration</button>` : ""}
+      <button id="btn-save" ${db ? "" : "disabled"} title="${te("toolbar.save.tip")}">${te("toolbar.save")}</button>
+      <button id="btn-export" ${db ? "" : "disabled"} title="${te("toolbar.export.tip")}">${te("toolbar.export", { ext: CATALOG_FILE_EXTENSION })}</button>
+      <button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="${te("toolbar.exportPdf.tip")}">${exportPdfBusy ? te("toolbar.exportPdf.busy") : te("toolbar.exportPdf")}</button>
+      <button id="btn-search" ${db ? "" : "disabled"} title="${te("toolbar.search.tip")}">${te("toolbar.search")}</button>
+      <button id="btn-store-settings" ${db ? "" : "disabled"} title="${te("toolbar.storeSettings.tip")}">${te("toolbar.storeSettings")}</button>
+      ${db && !collabRoomId ? `<button id="btn-start-collab" title="${te("toolbar.startCollab.tip")}">${te("toolbar.startCollab")}</button>` : ""}
       ${collabRoomId ? renderCollabStatus() : ""}
       <span class="spacer"></span>
-      <button id="btn-theme" title="Toggle light/dark theme">${currentTheme() === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
+      <select id="lang-select" title="${te("toolbar.language.tip")}" aria-label="${te("toolbar.language.tip")}">${EDITOR_LOCALES.map(
+        (l) => `<option value="${l}" ${l === locale ? "selected" : ""}>${escapeHtml(EDITOR_LOCALE_NAMES[l] ?? l)}</option>`,
+      ).join("")}</select>
+      <button id="btn-theme" title="${te("toolbar.theme.tip")}">${currentTheme() === "dark" ? te("theme.light") : te("theme.dark")}</button>
       <span class="hint">${escapeHtml(statusMessage)}</span>
       ${searchOpen ? renderSearchPanel() : ""}
     </div>
 
     <div class="mobile-tabs">
-      <button type="button" class="mobile-tab-btn ${mobileTab === "images" ? "active" : ""}" data-tab="images">Images</button>
-      <button type="button" class="mobile-tab-btn ${mobileTab === "stage" ? "active" : ""}" data-tab="stage">Diagram</button>
-      <button type="button" class="mobile-tab-btn ${mobileTab === "inspector" ? "active" : ""}" data-tab="inspector">Details</button>
+      <button type="button" class="mobile-tab-btn ${mobileTab === "images" ? "active" : ""}" data-tab="images">${te("tab.images")}</button>
+      <button type="button" class="mobile-tab-btn ${mobileTab === "stage" ? "active" : ""}" data-tab="stage">${te("tab.diagram")}</button>
+      <button type="button" class="mobile-tab-btn ${mobileTab === "inspector" ? "active" : ""}" data-tab="inspector">${te("tab.details")}</button>
     </div>
 
     <div class="panel-images">
       ${
         images.length === 0
-          ? `<p class="hint">${db ? "No images in this catalog yet." : "Create or open a catalog."}</p>`
+          ? `<p class="hint">${db ? te("images.none") : te("images.createOrOpen")}</p>`
           : renderImageList(images)
       }
     </div>
 
-    <div class="panel-divider" id="divider-images" title="Drag to resize"></div>
+    <div class="panel-divider" id="divider-images" title="${te("divider.tip")}"></div>
 
     <div class="stage">
       <div class="stage-scroll" id="stage-scroll">
@@ -2460,17 +2511,17 @@ function render() {
                  <div class="crosshair-h" id="crosshair-h"></div>
                  <div class="crosshair-v" id="crosshair-v"></div>
                  ${links.map((l) => hotspotHtml(l, editingUrl)).join("")}
-                 ${pendingHotspot ? `<div class="hotspot pending" style="top:${pendingHotspot.top}px;left:${pendingHotspot.left}px">new…</div>` : ""}
+                 ${pendingHotspot ? `<div class="hotspot pending" style="top:${pendingHotspot.top}px;left:${pendingHotspot.left}px">${te("hotspot.pending")}</div>` : ""}
                  <div id="editing-balloons">${renderEditingBalloons(links, activeImage.id)}</div>
                </div>`
-            : `<p class="hint" style="padding:2rem">Select an image on the left, or add a new one.</p>`
+            : `<p class="hint" style="padding:2rem">${te("stage.select")}</p>`
         }
       </div>
       ${activeImage ? renderZoomControls() : ""}
       ${instances.length > 1 ? renderInstanceNav(instanceIndex, instances.length) : ""}
     </div>
 
-    <div class="panel-divider" id="divider-inspector" title="Drag to resize"></div>
+    <div class="panel-divider" id="divider-inspector" title="${te("divider.tip")}"></div>
 
     <div class="inspector" id="inspector">
       <datalist id="extra-key-options">${extraKeys.map((k) => `<option value="${escapeHtml(k)}"></option>`).join("")}</datalist>
@@ -2533,8 +2584,8 @@ function renderImageListItem(img: CatalogImage): string {
   const links = db ? listLinksForImage(db, img.id) : [];
   const blocked = links.length > 0;
   const title = blocked
-    ? `Can't delete — ${links.length} hotspot${links.length === 1 ? "" : "s"} still attached: ${links.map((l) => l.name).join(", ")}`
-    : `Delete "${img.name}"`;
+    ? t("image.delete.blocked", { count: links.length, names: links.map((l) => l.name).join(", ") })
+    : t("image.delete.tip", { name: img.name });
   return `
     <li data-id="${img.id}" class="${img.id === activeImageId ? "active" : ""}">
       <span class="image-list-name">${escapeHtml(img.name)}</span>
@@ -2553,17 +2604,17 @@ function renderImageForm(image: CatalogImage, allImages: CatalogImage[]): string
   const folders = collectFolders(allImages);
   return `
     <section>
-      <h2>Image</h2>
+      <h2>${te("image.title")}</h2>
       <div class="field">
-        <label for="image-name-input">Name</label>
+        <label for="image-name-input">${te("column.name")}</label>
         <input type="text" id="image-name-input" value="${escapeHtml(image.name)}" />
       </div>
       <div class="field">
-        <label for="image-folder-input">Folder (leave empty for none)</label>
-        <input type="text" id="image-folder-input" list="folder-options" value="${escapeHtml(image.folder)}" placeholder="e.g. Wardrobe" />
+        <label for="image-folder-input">${te("image.folder")}</label>
+        <input type="text" id="image-folder-input" list="folder-options" value="${escapeHtml(image.folder)}" placeholder="${te("image.folder.placeholder")}" />
         <datalist id="folder-options">${folders.map((f) => `<option value="${escapeHtml(f)}"></option>`).join("")}</datalist>
       </div>
-      <button id="btn-save-image">Save</button>
+      <button id="btn-save-image">${te("action.save")}</button>
     </section>
   `;
 }
@@ -2571,10 +2622,10 @@ function renderImageForm(image: CatalogImage, allImages: CatalogImage[]): string
 function renderZoomControls(): string {
   return `
     <div class="zoom-controls">
-      <button id="btn-zoom-out" title="Zoom out">−</button>
+      <button id="btn-zoom-out" title="${te("zoom.out")}">−</button>
       <span class="zoom-pct">${Math.round(zoom * 100)}%</span>
-      <button id="btn-zoom-in" title="Zoom in">+</button>
-      <button id="btn-zoom-reset" title="Reset zoom">Reset</button>
+      <button id="btn-zoom-in" title="${te("zoom.in")}">+</button>
+      <button id="btn-zoom-reset" title="${te("zoom.reset.tip")}">${te("zoom.reset")}</button>
     </div>
   `;
 }
@@ -2583,9 +2634,9 @@ function renderZoomControls(): string {
 function renderInstanceNav(index: number, total: number): string {
   return `
     <div class="instance-nav">
-      <button id="btn-instance-prev" title="Previous occurrence of this part">‹</button>
-      <span>${index + 1} of ${total}</span>
-      <button id="btn-instance-next" title="Next occurrence of this part">›</button>
+      <button id="btn-instance-prev" title="${te("instance.prev")}">‹</button>
+      <span>${te("nav.position", { index: index + 1, total })}</span>
+      <button id="btn-instance-next" title="${te("instance.next")}">›</button>
     </div>
   `;
 }
@@ -2596,11 +2647,11 @@ function collabShareLink(): string {
 
 function collabStatusText(): { icon: string; label: string; title: string } {
   const icon = collabStatus === "connected" ? "🟢" : collabStatus === "connecting" ? "🟡" : "🔴";
-  let label = collabStatus === "connected" ? "Live" : collabStatus === "connecting" ? "Connecting…" : "Disconnected";
-  let title = `Share this link so a colleague can join: ${collabShareLink()}`;
+  let label = t(collabStatus === "connected" ? "collab.live" : collabStatus === "connecting" ? "collab.connecting" : "collab.disconnected");
+  let title = t("collab.tip", { link: collabShareLink() });
   if (outbox.length > 0) {
-    label += ` (${outbox.length} pending)`;
-    title = `${outbox.length} edit${outbox.length === 1 ? "" : "s"} not sent yet — still editing locally, will send once reconnected. ${title}`;
+    label = t("collab.statusPending", { label, count: outbox.length });
+    title = t("collab.tipPending", { count: outbox.length, tip: title });
   }
   return { icon, label, title };
 }
@@ -2609,11 +2660,11 @@ function renderCollabStatus(): string {
   const { icon, label, title } = collabStatusText();
   return `
     <span class="collab-status" id="collab-status-text" title="${escapeHtml(title)}">${icon} ${label}</span>
-    <button type="button" id="btn-copy-collab-link">Share link…</button>
-    <button type="button" id="btn-leave-collab">Leave</button>
+    <button type="button" id="btn-copy-collab-link">${te("collab.shareLink")}</button>
+    <button type="button" id="btn-leave-collab">${te("collab.leave")}</button>
     ${
       collabOwnerToken
-        ? `<button type="button" id="btn-end-collab-session" title="Ends the session for everyone, not just this tab">End for everyone</button>`
+        ? `<button type="button" id="btn-end-collab-session" title="${te("collab.end.tip")}">${te("collab.end")}</button>`
         : ""
     }
     ${renderPresenceRoster()}
@@ -2628,13 +2679,13 @@ function sanitizePresenceColor(color: string): string {
 
 /** A row of small initial avatars — who's currently active in this session (see PresenceUser; someone connected but idle/hidden just isn't in the list, not shown greyed-out). */
 function renderPresenceRoster(): string {
-  return `<div class="collab-presence" id="collab-presence-list" title="Who's here right now">${collabPresence.map(renderPresenceAvatar).join("")}</div>`;
+  return `<div class="collab-presence" id="collab-presence-list" title="${te("presence.tip")}">${collabPresence.map(renderPresenceAvatar).join("")}</div>`;
 }
 
 function renderPresenceAvatar(user: PresenceUser): string {
   const initial = (user.name.trim()[0] ?? "?").toUpperCase();
   const isMe = user.clientId === collabClientId;
-  const label = isMe ? `${user.name} (you)` : user.name;
+  const label = isMe ? t("presence.you", { name: user.name }) : user.name;
   return `<span class="presence-avatar${isMe ? " presence-avatar-me" : ""}" style="background:${sanitizePresenceColor(user.color)}" title="${escapeHtml(label)}">${escapeHtml(initial)}</span>`;
 }
 
@@ -2664,7 +2715,7 @@ function renderEditingBalloons(links: CatalogLink[], imageId: number): string {
       // duplicate-highlight already tracks this same set — see
       // hotspotHtml's row-match class).
       for (const link of links.filter((l) => l.url === entry.url)) {
-        balloons.push(renderOneEditingBalloon(link.top, link.left, name, color, "Edit table row", stackedAt));
+        balloons.push(renderOneEditingBalloon(link.top, link.left, name, color, t("balloon.editRow"), stackedAt));
       }
       continue;
     }
@@ -2673,9 +2724,9 @@ function renderEditingBalloons(links: CatalogLink[], imageId: number): string {
     if (entry.mode === "drag") {
       const move = collabEditingMoves.get(entry.clientId);
       const pos = move && move.linkId === entry.linkId ? move : link;
-      balloons.push(renderOneEditingBalloon(pos.top, pos.left, name, color, "moving hotspot", stackedAt));
+      balloons.push(renderOneEditingBalloon(pos.top, pos.left, name, color, t("balloon.moving"), stackedAt));
     } else {
-      balloons.push(renderOneEditingBalloon(link.top, link.left, name, color, "Edit link", stackedAt));
+      balloons.push(renderOneEditingBalloon(link.top, link.left, name, color, t("balloon.editLink"), stackedAt));
     }
   }
   return balloons.join("");
@@ -2687,7 +2738,7 @@ function renderOneEditingBalloon(top: number, left: number, name: string, color:
   const stack = stackedAt.get(key) ?? 0;
   stackedAt.set(key, stack + 1);
   const yOffset = 14 + stack * 22; // px above the hotspot's own point, stacking further up per collision
-  return `<div class="editing-balloon" style="top:${top - yOffset}px;left:${left}px;background:${color}">${escapeHtml(name)} — ${action}</div>`;
+  return `<div class="editing-balloon" style="top:${top - yOffset}px;left:${left}px;background:${color}">${te("balloon.text", { name, action })}</div>`;
 }
 
 /** Same reasoning as updateCollabStatusDisplay() below — a change here (a drag in progress, a form opening/closing) can land at any moment, including mid-typing in an open form elsewhere on the page, so this patches the balloons' own small DOM subtree instead of calling render(). Cheap even during a live drag's throttled stream of editing-move frames — a handful of small `<div>`s, not the whole #app. */
@@ -2731,8 +2782,8 @@ function renderConfirmOverlay(): string {
       <div class="confirm-box">
         <p>${escapeHtml(pendingConfirmation.message)}</p>
         <div class="confirm-actions">
-          <button id="btn-confirm-no">Cancel</button>
-          <button id="btn-confirm-yes">OK</button>
+          <button id="btn-confirm-no">${te("action.cancel")}</button>
+          <button id="btn-confirm-yes">${te("action.ok")}</button>
         </div>
       </div>
     </div>
@@ -2752,7 +2803,7 @@ function renderNoticeOverlay(): string {
       <div class="confirm-box">
         <p>${escapeHtml(pendingNotice)}</p>
         <div class="confirm-actions">
-          <button id="btn-notice-ok">OK</button>
+          <button id="btn-notice-ok">${te("action.ok")}</button>
         </div>
       </div>
     </div>
@@ -2764,19 +2815,19 @@ function renderRemoteDialog(): string {
   return `
     <div class="confirm-overlay">
       <div class="confirm-box">
-        <h2>Copy remote catalog</h2>
+        <h2>${te("remote.title")}</h2>
         <div class="field">
-          <label for="remote-url-input">URL to a .${CATALOG_FILE_EXTENSION} file</label>
-          <input type="text" id="remote-url-input" value="${escapeHtml(remoteUrlValue)}" placeholder="https://example.com/catalog.${CATALOG_FILE_EXTENSION}" ${remoteLoading ? "disabled" : ""} />
+          <label for="remote-url-input">${te("remote.urlLabel", { ext: CATALOG_FILE_EXTENSION })}</label>
+          <input type="text" id="remote-url-input" value="${escapeHtml(remoteUrlValue)}" placeholder="${te("remote.placeholder", { ext: CATALOG_FILE_EXTENSION })}" ${remoteLoading ? "disabled" : ""} />
         </div>
         ${
           remoteError
             ? `<p class="error">${escapeHtml(remoteError)}</p>`
-            : `<p class="hint">Fetches a copy to edit locally — it won't stay linked to that URL, use Save/Export to keep your changes. The host must allow cross-origin requests (CORS).</p>`
+            : `<p class="hint">${te("remote.hint")}</p>`
         }
         <div class="confirm-actions">
-          <button id="remote-cancel" ${remoteLoading ? "disabled" : ""}>Cancel</button>
-          <button id="remote-submit" ${remoteLoading || !remoteUrlValue.trim() ? "disabled" : ""}>${remoteLoading ? "Copying…" : "Copy"}</button>
+          <button id="remote-cancel" ${remoteLoading ? "disabled" : ""}>${te("action.cancel")}</button>
+          <button id="remote-submit" ${remoteLoading || !remoteUrlValue.trim() ? "disabled" : ""}>${remoteLoading ? te("remote.copying") : te("remote.copy")}</button>
         </div>
       </div>
     </div>
@@ -2796,11 +2847,7 @@ function renderStoreSettingsDialog(): string {
   // is, but under "Education" those words read as an odd mismatch next to
   // "Learn more"/"Collection" above. Keep the mechanism identical, just
   // relabel every string here the same way the viewer's own UI does.
-  const behaviorLabel = isEducation ? "Collection behavior" : "Buy button behavior";
-  const accumulateLabel = isEducation
-    ? "Add to collection, open everything at once"
-    : "Add to cart, checkout for everything at once";
-  const instantLabel = isEducation ? "Open each item's own link right away" : "Go straight to payment for each item";
+  const tm = (key: string, params?: MessageParams) => escapeHtml(tMode(storeSettingsCatalogMode, key, params));
   // The regex/param/base-url "recipe" only exists to combine several ids
   // into one store's checkout URL (Payhip-style) — a commercial-only
   // concept. A school catalog's buy_urls are plain reference links with
@@ -2808,79 +2855,75 @@ function renderStoreSettingsDialog(): string {
   // confusing advanced config for a mechanism Education mode never uses
   // (see actionPrintCollection/actionOpenCart in viewerEngine.ts: every
   // Education-mode link opens/prints on its own regardless of this recipe).
-  const advancedSummary = "Advanced: how to combine items into one cart (defaults work for Payhip)";
-  const itemParamLabel = "Per-item cart parameter (use {id})";
-  const baseUrlLabel = "Cart checkout base URL";
-  const hintText = `A row's buy_url is only combinable if it matches the Item ID pattern above. Its captured id is substituted into the per-item parameter (once per item, joined with "&"), then appended to the base URL. Anything that doesn't match still joins the cart above, it just opens on its own instead of merging into that combined link.`;
   return `
     <div class="confirm-overlay">
       <div class="confirm-box">
-        <h2>Store settings</h2>
+        <h2>${te("store.title")}</h2>
         <div class="field">
-          <label>Catalog type</label>
+          <label>${te("store.type.legend")}</label>
           <label class="radio-option">
             <input type="radio" name="catalog-mode" value="commercial" ${!isEducation ? "checked" : ""} />
-            Commercial — labeled "Buy" / "Cart", as a store catalog
+            ${te("store.type.commercial")}
           </label>
           <label class="radio-option">
             <input type="radio" name="catalog-mode" value="education" ${isEducation ? "checked" : ""} />
-            Education — same buttons relabeled "Learn more" / "Collection" (📚), nothing else changes
+            ${te("store.type.education")}
           </label>
         </div>
         <div class="field">
-          <label for="store-url-input">Store URL (for your own reference)</label>
+          <label for="store-url-input">${te("store.url.label")}</label>
           <input type="text" id="store-url-input" value="${escapeHtml(storeSettingsUrlValue)}" placeholder="https://payhip.com/YourStore" />
         </div>
         <div class="field">
-          <label>${behaviorLabel}</label>
+          <label>${tm("store.behavior.legend")}</label>
           <label class="radio-option">
             <input type="radio" name="cart-mode" value="accumulate" ${storeSettingsCartMode === "accumulate" ? "checked" : ""} />
-            ${accumulateLabel}
+            ${tm("store.behavior.accumulate")}
           </label>
           <label class="radio-option">
             <input type="radio" name="cart-mode" value="instant" ${storeSettingsCartMode === "instant" ? "checked" : ""} />
-            ${instantLabel}
+            ${tm("store.behavior.instant")}
           </label>
         </div>
         ${
           isEducation
             ? ""
             : `<details class="cart-recipe" ${usingDefaultRecipe ? "" : "open"}>
-          <summary>${advancedSummary}</summary>
+          <summary>${te("store.recipe.summary")}</summary>
           <div class="field">
-            <label for="cart-id-pattern-input">Item ID pattern (regex, one capture group)</label>
+            <label for="cart-id-pattern-input">${te("store.recipe.idPattern")}</label>
             <input type="text" id="cart-id-pattern-input" value="${escapeHtml(storeSettingsCartIdPattern)}" />
           </div>
           <div class="field">
-            <label for="cart-item-param-input">${itemParamLabel}</label>
+            <label for="cart-item-param-input">${te("store.recipe.itemParam")}</label>
             <input type="text" id="cart-item-param-input" value="${escapeHtml(storeSettingsCartItemParam)}" />
           </div>
           <div class="field">
-            <label for="cart-base-url-input">${baseUrlLabel}</label>
+            <label for="cart-base-url-input">${te("store.recipe.baseUrl")}</label>
             <input type="text" id="cart-base-url-input" value="${escapeHtml(storeSettingsCartCheckoutBaseUrl)}" />
           </div>
-          <p class="hint">${hintText}</p>
+          <p class="hint">${te("store.recipe.hint")}</p>
         </details>`
         }
         <div class="field">
-          <label>Default view (on a narrow screen/embed)</label>
+          <label>${te("store.view.legend")}</label>
           <label class="radio-option">
             <input type="radio" name="default-view" value="images" ${storeSettingsDefaultView === "images" ? "checked" : ""} />
-            Images — same as before this setting existed
+            ${te("store.view.images")}
           </label>
           <label class="radio-option">
             <input type="radio" name="default-view" value="diagram" ${storeSettingsDefaultView === "diagram" ? "checked" : ""} />
-            Diagram — skip straight to the clickable image
+            ${te("store.view.diagram")}
           </label>
           <label class="radio-option">
             <input type="radio" name="default-view" value="table" ${storeSettingsDefaultView === "table" ? "checked" : ""} />
-            Table — skip straight to the data table
+            ${te("store.view.table")}
           </label>
-          <p class="hint">Only visible below the mobile-tab breakpoint (an embed in a narrow container, or an actual phone) — above it, Images/Diagram/Table already all show at once.</p>
+          <p class="hint">${te("store.view.hint")}</p>
         </div>
         <div class="confirm-actions">
-          <button id="store-settings-cancel">Cancel</button>
-          <button id="store-settings-submit">Save</button>
+          <button id="store-settings-cancel">${te("action.cancel")}</button>
+          <button id="store-settings-submit">${te("action.save")}</button>
         </div>
       </div>
     </div>
@@ -2894,43 +2937,43 @@ function renderPdfOptionsDialog(): string {
   return `
     <div class="confirm-overlay">
       <div class="confirm-box">
-        <h2>Export PDF</h2>
+        <h2>${te("pdf.title")}</h2>
         <div class="field">
-          <label>QR code placement on diagrams</label>
+          <label>${te("pdf.qr.legend")}</label>
           <label class="radio-option">
             <input type="radio" name="pdf-qr-placement" value="table" ${pdfQrPlacement === "table" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
-            In the table only
+            ${te("pdf.qr.table")}
           </label>
           <label class="radio-option">
             <input type="radio" name="pdf-qr-placement" value="image" ${pdfQrPlacement === "image" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
-            On the diagram only
+            ${te("pdf.qr.image")}
           </label>
           <label class="radio-option">
             <input type="radio" name="pdf-qr-placement" value="both" ${pdfQrPlacement === "both" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
-            Both
+            ${te("pdf.qr.both")}
           </label>
           <p class="hint">
             ${
               hasBuyUrl
-                ? "A tile catalog's own on-corner QR is unaffected either way."
-                : "This catalog has no items linked to an online store, so there's nothing to put a QR code on."
+                ? te("pdf.qr.hint")
+                : te("pdf.qr.hintNoStore")
             }
           </p>
         </div>
         <div class="field">
-          <label>Diagram page size</label>
+          <label>${te("pdf.size.legend")}</label>
           <label class="radio-option">
             <input type="radio" name="pdf-diagram-page-mode" value="fit" ${pdfDiagramPageMode === "fit" ? "checked" : ""} />
-            Fit to one page
+            ${te("pdf.size.fit")}
           </label>
           <label class="radio-option">
             <input type="radio" name="pdf-diagram-page-mode" value="real-size" ${pdfDiagramPageMode === "real-size" ? "checked" : ""} />
-            Real size, split across sheets
+            ${te("pdf.size.real")}
           </label>
         </div>
         <div class="confirm-actions">
-          <button id="pdf-options-cancel">Cancel</button>
-          <button id="pdf-options-submit">Export</button>
+          <button id="pdf-options-cancel">${te("action.cancel")}</button>
+          <button id="pdf-options-submit">${te("pdf.submit")}</button>
         </div>
       </div>
     </div>
@@ -2942,20 +2985,20 @@ function renderCollabNotFoundDialog(): string {
   return `
     <div class="confirm-overlay">
       <div class="confirm-box">
-        <h2>Can't find a collaboration server</h2>
-        <p>Make sure the <strong>ECM Collaboration Server</strong> app is running on your computer, then try again.</p>
+        <h2>${te("collab.notFound.title")}</h2>
+        <p>${t("collab.notFound.body.html")}</p>
         <div class="confirm-actions">
-          <button id="collab-not-found-cancel">Cancel</button>
-          <button id="collab-not-found-retry">Try again</button>
+          <button id="collab-not-found-cancel">${te("action.cancel")}</button>
+          <button id="collab-not-found-retry">${te("collab.notFound.retry")}</button>
         </div>
         <details style="margin-top: 0.75rem">
-          <summary>Or enter its address by hand</summary>
-          <p class="hint" style="margin-top: 0.5rem">If it's running on a different computer, paste in its address.</p>
+          <summary>${te("collab.notFound.manual")}</summary>
+          <p class="hint" style="margin-top: 0.5rem">${te("collab.notFound.manualHint")}</p>
           <div class="field" style="margin-top: 0.5rem">
-            <label for="collab-manual-url-input">Its address</label>
+            <label for="collab-manual-url-input">${te("collab.notFound.address")}</label>
             <input type="text" id="collab-manual-url-input" value="${escapeHtml(collabManualUrlValue)}" placeholder="${DEFAULT_COLLAB_SERVER_URL}" />
           </div>
-          <button id="collab-manual-url-submit">Use this address</button>
+          <button id="collab-manual-url-submit">${te("collab.notFound.use")}</button>
         </details>
       </div>
     </div>
@@ -2967,15 +3010,15 @@ function renderCollabNameDialog(): string {
   return `
     <div class="confirm-overlay">
       <div class="confirm-box">
-        <h2>Join as…</h2>
-        <p>Pick a name so others in this session know who's who — no account needed.</p>
+        <h2>${te("collab.name.title")}</h2>
+        <p>${te("collab.name.body")}</p>
         <div class="field">
-          <label for="collab-name-input">Your name</label>
-          <input type="text" id="collab-name-input" value="${escapeHtml(collabNameValue)}" placeholder="e.g. Alec" maxlength="60" />
+          <label for="collab-name-input">${te("collab.name.label")}</label>
+          <input type="text" id="collab-name-input" value="${escapeHtml(collabNameValue)}" placeholder="${te("collab.name.placeholder")}" maxlength="60" />
         </div>
         <div class="confirm-actions">
-          <button id="collab-name-cancel">Cancel</button>
-          <button id="collab-name-submit" ${collabNameValue.trim() ? "" : "disabled"}>Join</button>
+          <button id="collab-name-cancel">${te("action.cancel")}</button>
+          <button id="collab-name-submit" ${collabNameValue.trim() ? "" : "disabled"}>${te("collab.name.join")}</button>
         </div>
       </div>
     </div>
@@ -2989,17 +3032,17 @@ function renderCollabShareDialog(): string {
   return `
     <div class="confirm-overlay">
       <div class="confirm-box collab-share-box">
-        <h2>Share this session</h2>
-        <p>Anyone with this link — or who scans this code — can join and edit alongside you. It stays live for as long as this session runs.</p>
+        <h2>${te("collab.share.title")}</h2>
+        <p>${te("collab.share.body")}</p>
         <div class="collab-share-qr">${renderQrCodeSvg(link)}</div>
         <div class="field">
-          <label for="collab-share-link-input">Link</label>
+          <label for="collab-share-link-input">${te("collab.share.link")}</label>
           <textarea id="collab-share-link-input" readonly rows="5">${escapeHtml(link)}</textarea>
         </div>
         <div class="confirm-actions">
-          <span class="hint collab-share-copy-feedback">${collabShareCopyFeedback ? "Copied!" : ""}</span>
-          <button type="button" id="collab-share-copy">Copy link</button>
-          <button type="button" id="collab-share-close">Close</button>
+          <span class="hint collab-share-copy-feedback">${collabShareCopyFeedback ? te("collab.share.copied") : ""}</span>
+          <button type="button" id="collab-share-copy">${te("collab.share.copy")}</button>
+          <button type="button" id="collab-share-close">${te("action.close")}</button>
         </div>
       </div>
     </div>
@@ -3010,7 +3053,7 @@ function renderCollabShareDialog(): string {
 // commerce jargon in a classroom catalog, so Education mode calls it "Code"
 // instead. The underlying `sku` column/field is unchanged either way.
 function skuLabel(): string {
-  return db && readMeta(db).catalogMode === "education" ? "Code" : "SKU";
+  return tMode(db ? readMeta(db).catalogMode : "commercial", "column.sku");
 }
 
 function renderSearchPanel(): string {
@@ -3019,16 +3062,16 @@ function renderSearchPanel(): string {
   return `
     <div class="search-panel" id="search-panel">
       <div class="search-controls">
-        <input type="text" id="search-input" value="${escapeHtml(searchQuery)}" placeholder="Search every row…" />
+        <input type="text" id="search-input" value="${escapeHtml(searchQuery)}" placeholder="${te("search.placeholder")}" />
         <select id="search-field">
-          <option value="all" ${searchField === "all" ? "selected" : ""}>All fields</option>
-          <option value="name" ${searchField === "name" ? "selected" : ""}>Name</option>
+          <option value="all" ${searchField === "all" ? "selected" : ""}>${te("search.allFields")}</option>
+          <option value="name" ${searchField === "name" ? "selected" : ""}>${te("column.name")}</option>
           <option value="sku" ${searchField === "sku" ? "selected" : ""}>${skuLabel()}</option>
-          <option value="description" ${searchField === "description" ? "selected" : ""}>Description</option>
+          <option value="description" ${searchField === "description" ? "selected" : ""}>${te("column.description")}</option>
           ${extraKeys
             .map(
               (k) =>
-                `<option value="extra:${escapeHtml(k)}" ${searchField === `extra:${k}` ? "selected" : ""}>Extra: ${escapeHtml(k)}</option>`,
+                `<option value="extra:${escapeHtml(k)}" ${searchField === `extra:${k}` ? "selected" : ""}>${te("search.extraField", { key: k })}</option>`,
             )
             .join("")}
         </select>
@@ -3040,9 +3083,9 @@ function renderSearchPanel(): string {
 
 function renderSearchResultsList(): string {
   if (!db) return "";
-  if (!searchQuery.trim()) return `<p class="hint">Type to search across every image's table.</p>`;
+  if (!searchQuery.trim()) return `<p class="hint">${te("search.hint")}</p>`;
   const results = searchRows(listAllRows(db), searchQuery, searchField).slice(0, 30);
-  if (results.length === 0) return `<p class="hint">No matches.</p>`;
+  if (results.length === 0) return `<p class="hint">${te("search.none")}</p>`;
   const imageNameById = new Map(listImages(db).map((i) => [i.id, i.name]));
   return `<ul>${results
     .map(
@@ -3073,7 +3116,7 @@ function hotspotHtml(l: CatalogLink, highlightUrl: string | null): string {
   const classes = ["hotspot"];
   if (l.id === editingLinkId) classes.push("editing");
   if (highlightUrl !== null && l.url === highlightUrl) classes.push("row-match");
-  return `<div class="${classes.join(" ")}" data-id="${l.id}" style="top:${l.top}px;left:${l.left}px" title="${escapeHtml(l.url)} — drag to reposition, click to edit">${escapeHtml(l.name)}</div>`;
+  return `<div class="${classes.join(" ")}" data-id="${l.id}" style="top:${l.top}px;left:${l.left}px" title="${te("hotspot.tip", { url: l.url })}">${escapeHtml(l.name)}</div>`;
 }
 
 function renderLinkForm(links: CatalogLink[]): string {
@@ -3082,27 +3125,27 @@ function renderLinkForm(links: CatalogLink[]): string {
   const reusable = Array.from(new Map(links.map((l) => [l.url, l])).values());
   return `
     <section>
-      <h2>New link (hotspot)</h2>
-      <p class="hint">A hotspot's Address is what ties it to a row in the table below — several hotspots can share the same Address when the same part is drawn more than once on this diagram, and they'll all point to that one row.</p>
+      <h2>${te("link.new.title")}</h2>
+      <p class="hint">${te("link.new.hint")}</p>
       ${
         pendingHotspot
-          ? `<p class="hint">Position: top=${pendingHotspot.top}, left=${pendingHotspot.left}</p>
+          ? `<p class="hint">${te("link.position", { top: pendingHotspot.top, left: pendingHotspot.left })}</p>
              <form id="form-link">
                ${
                  reusable.length > 0
-                   ? `<div class="field"><label>Same part as an existing hotspot? (optional)</label>
+                   ? `<div class="field"><label>${te("link.reuse.label")}</label>
                         <select id="reuse-link-select">
-                          <option value="">— new part —</option>
+                          <option value="">${te("link.reuse.none")}</option>
                           ${reusable.map((l) => `<option value="${escapeHtml(l.url)}" data-name="${escapeHtml(l.name)}">${escapeHtml(l.name)} (${escapeHtml(l.url)})</option>`).join("")}
                         </select>
                       </div>`
                    : ""
                }
-               <div class="field"><label>Link name</label><input name="name" required /></div>
-               <div class="field"><label>Address</label><input name="url" required /></div>
-               <button type="submit">Add link</button>
+               <div class="field"><label>${te("link.name")}</label><input name="name" required /></div>
+               <div class="field"><label>${te("link.address")}</label><input name="url" required /></div>
+               <button type="submit">${te("link.add")}</button>
              </form>`
-          : `<p class="hint">Click on the image to place a hotspot.</p>`
+          : `<p class="hint">${te("link.placeHint")}</p>`
       }
     </section>
   `;
@@ -3112,15 +3155,15 @@ function renderEditLinkForm(link: CatalogLink | null): string {
   if (!link) return "";
   return `
     <section>
-      <h2>Edit link</h2>
-      <p class="hint">Position: top=${link.top}, left=${link.left} (drag the hotspot on the image to move it)</p>
+      <h2>${te("link.edit.title")}</h2>
+      <p class="hint">${te("link.edit.position", { top: link.top, left: link.left })}</p>
       <form id="form-edit-link">
-        <div class="field"><label>Link name</label><input name="name" value="${escapeHtml(link.name)}" required /></div>
-        <div class="field"><label>Address, unique across the whole catalog</label><input name="url" value="${escapeHtml(link.url)}" required /></div>
+        <div class="field"><label>${te("link.name")}</label><input name="name" value="${escapeHtml(link.name)}" required /></div>
+        <div class="field"><label>${te("link.edit.address")}</label><input name="url" value="${escapeHtml(link.url)}" required /></div>
         <div style="display:flex; gap:0.5rem; align-items:center">
-          <button type="submit">Save changes</button>
-          <button type="button" id="btn-cancel-edit">Cancel</button>
-          <button type="button" id="btn-delete-link" style="margin-left:auto; color:#b91c1c; border-color:#b91c1c">Delete</button>
+          <button type="submit">${te("action.saveChanges")}</button>
+          <button type="button" id="btn-cancel-edit">${te("action.cancel")}</button>
+          <button type="button" id="btn-delete-link" style="margin-left:auto; color:#b91c1c; border-color:#b91c1c">${te("action.delete")}</button>
         </div>
       </form>
     </section>
@@ -3131,13 +3174,13 @@ function renderLinksSection(links: CatalogLink[], editingLinkId: number | null):
   const [nameW, urlW] = colWidths.links;
   return `
     <section>
-      <h2>Links on this image (${links.length})</h2>
+      <h2>${te("links.title", { count: links.length })}</h2>
       <div class="table-scroll">
         <table data-col-key="links" style="table-layout:fixed; width:${colTableTotalWidth("links")}px">
           <colgroup><col style="width:${nameW}px"><col style="width:${urlW}px"></colgroup>
           <thead><tr>
-            <th>Name<span class="col-resize-handle" data-table="links" data-col="0"></span></th>
-            <th>Address<span class="col-resize-handle" data-table="links" data-col="1"></span></th>
+            <th>${te("column.name")}<span class="col-resize-handle" data-table="links" data-col="0"></span></th>
+            <th>${te("column.address")}<span class="col-resize-handle" data-table="links" data-col="1"></span></th>
           </tr></thead>
           <tbody>
             ${links
@@ -3149,7 +3192,7 @@ function renderLinksSection(links: CatalogLink[], editingLinkId: number | null):
           </tbody>
         </table>
       </div>
-      <p class="hint">Click a row (or its hotspot on the image) to edit or delete it.</p>
+      <p class="hint">${te("links.hint")}</p>
     </section>
   `;
 }
@@ -3157,19 +3200,19 @@ function renderLinksSection(links: CatalogLink[], editingLinkId: number | null):
 function renderRowForm(availableLinks: CatalogLink[]): string {
   return `
     <section>
-      <h2>New table row</h2>
+      <h2>${te("row.new.title")}</h2>
       ${
         availableLinks.length === 0
-          ? `<p class="hint">Add a link with no data row first.</p>`
+          ? `<p class="hint">${te("row.addLinkFirst")}</p>`
           : `<form id="form-row">
-               <div class="field"><label>Address (matches a link)</label>
+               <div class="field"><label>${te("row.address")}</label>
                  <select name="url">${availableLinks.map((l) => `<option value="${escapeHtml(l.url)}">${escapeHtml(l.url)} (${escapeHtml(l.name)})</option>`).join("")}</select>
                </div>
-               <div class="field"><label>Name</label><input name="name" /></div>
+               <div class="field"><label>${te("column.name")}</label><input name="name" /></div>
                <div class="field"><label>${skuLabel()}</label><input name="sku" /></div>
-               <div class="field"><label>Description</label><input name="description" /></div>
+               <div class="field"><label>${te("column.description")}</label><input name="description" /></div>
                ${renderExtraField({})}
-               <button type="submit">Add row</button>
+               <button type="submit">${te("row.add")}</button>
              </form>`
       }
     </section>
@@ -3180,17 +3223,17 @@ function renderEditRowForm(row: CatalogRow | null): string {
   if (!row) return "";
   return `
     <section>
-      <h2>Edit table row</h2>
-      <p class="hint">Address: ${escapeHtml(row.url)} (change the hotspot's address to repoint this row)</p>
+      <h2>${te("row.edit.title")}</h2>
+      <p class="hint">${te("row.edit.address", { url: row.url })}</p>
       <form id="form-edit-row">
-        <div class="field"><label>Name</label><input name="name" value="${escapeHtml(row.name)}" /></div>
+        <div class="field"><label>${te("column.name")}</label><input name="name" value="${escapeHtml(row.name)}" /></div>
         <div class="field"><label>${skuLabel()}</label><input name="sku" value="${escapeHtml(row.sku)}" /></div>
-        <div class="field"><label>Description</label><input name="description" value="${escapeHtml(row.description)}" /></div>
+        <div class="field"><label>${te("column.description")}</label><input name="description" value="${escapeHtml(row.description)}" /></div>
         ${renderExtraField(row.extra)}
         <div style="display:flex; gap:0.5rem; align-items:center">
-          <button type="submit">Save changes</button>
-          <button type="button" id="btn-cancel-edit-row">Cancel</button>
-          <button type="button" id="btn-delete-row" style="margin-left:auto; color:#b91c1c; border-color:#b91c1c">Delete</button>
+          <button type="submit">${te("action.saveChanges")}</button>
+          <button type="button" id="btn-cancel-edit-row">${te("action.cancel")}</button>
+          <button type="button" id="btn-delete-row" style="margin-left:auto; color:#b91c1c; border-color:#b91c1c">${te("action.delete")}</button>
         </div>
       </form>
     </section>
@@ -3208,16 +3251,16 @@ function renderRowsSection(rows: ReturnType<typeof listRowsForImage>, editingRow
   const [urlW, nameW, skuW, descriptionW, extraW] = colWidths.rows;
   return `
     <section>
-      <h2>Table (${rows.length} rows)</h2>
+      <h2>${te("rows.title", { count: rows.length })}</h2>
       <div class="table-scroll">
         <table data-col-key="rows" style="table-layout:fixed; width:${colTableTotalWidth("rows")}px">
           <colgroup><col style="width:${urlW}px"><col style="width:${nameW}px"><col style="width:${skuW}px"><col style="width:${descriptionW}px"><col style="width:${extraW}px"></colgroup>
           <thead><tr>
-            <th>Address<span class="col-resize-handle" data-table="rows" data-col="0"></span></th>
-            <th>Name<span class="col-resize-handle" data-table="rows" data-col="1"></span></th>
+            <th>${te("column.address")}<span class="col-resize-handle" data-table="rows" data-col="0"></span></th>
+            <th>${te("column.name")}<span class="col-resize-handle" data-table="rows" data-col="1"></span></th>
             <th>${skuLabel()}<span class="col-resize-handle" data-table="rows" data-col="2"></span></th>
-            <th>Description<span class="col-resize-handle" data-table="rows" data-col="3"></span></th>
-            <th>Extra<span class="col-resize-handle" data-table="rows" data-col="4"></span></th>
+            <th>${te("column.description")}<span class="col-resize-handle" data-table="rows" data-col="3"></span></th>
+            <th>${te("column.extra")}<span class="col-resize-handle" data-table="rows" data-col="4"></span></th>
           </tr></thead>
           <tbody>
             ${rows
@@ -3244,7 +3287,7 @@ function renderRowsSection(rows: ReturnType<typeof listRowsForImage>, editingRow
           </tbody>
         </table>
       </div>
-      <p class="hint">Click a row to edit its name, ${skuLabel()}, description or extra characteristics.</p>
+      <p class="hint">${tMode(db ? readMeta(db).catalogMode : "commercial", "rows.hint")}</p>
     </section>
   `;
 }
@@ -3264,6 +3307,16 @@ function wireEvents(links: CatalogLink[]) {
     render();
   });
 
+  document.getElementById("lang-select")?.addEventListener("change", (evt) => {
+    const chosen = matchLocale((evt.target as HTMLSelectElement).value, EDITOR_LOCALES);
+    if (!chosen || chosen === locale) return;
+    locale = chosen;
+    saveLocale(chosen);
+    document.documentElement.lang = chosen;
+    document.title = t("toolbar.title");
+    statusMessage = ""; // was worded in the previous language
+    render();
+  });
   document.getElementById("btn-theme")?.addEventListener("click", () => {
     toggleTheme();
     render();
