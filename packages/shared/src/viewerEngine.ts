@@ -125,9 +125,13 @@ export interface MountViewerOptions {
   /**
    * "full": toolbar with Open catalog…/Open remote catalog…/Search…/theme
    * toggle, same as the standalone app. "lite": no toolbar chrome at all —
-   * just the image list, stage, and data table. Default "full".
+   * just the image list, stage, and data table. "showcase": an opt-in
+   * presentation for marketing pages — no toolbar, no image list or table;
+   * the image is fitted whole into the stage, and the selected hotspot's
+   * item is shown as a compact details card next to it (see
+   * renderShowcaseDetails). Default "full".
    */
-  mode?: "full" | "lite";
+  mode?: "full" | "lite" | "showcase";
   /** A catalog URL to fetch and open automatically once mounted. */
   initialSrc?: string;
   /**
@@ -204,6 +208,19 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // one. The url derived from this link is still what highlights the row.
   let selectedLinkId: number | null = null;
   let zoom = 1;
+  // "showcase" mode only: the image is fitted whole into the stage instead of
+  // starting at 100%. `fitPending` asks the next render() to measure the
+  // stage and set `zoom` accordingly; `userZoomed` stops a container resize
+  // from overriding a zoom the visitor chose on purpose; `fitZoom` is the
+  // last fitted value (Reset returns to it, and the zoom-out floor follows it
+  // so a large image can still be fitted below the usual 0.25 minimum).
+  let fitPending = mode === "showcase";
+  let userZoomed = false;
+  let fitZoom = 1;
+  let resizeObserver: ResizeObserver | null = null;
+  // Last measured size of the stage's scroll box (showcase mode) — used to
+  // center an image that, once fitted, is smaller than the stage on one axis.
+  let stageBox = { w: 0, h: 0 };
   let statusMessage = "";
   // "Open remote catalog…" dialog state — a URL alternative to the local file
   // picker, for opening a catalog someone shared as a link (see loadFromUrl).
@@ -491,8 +508,37 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   }
 
   function actionSetZoom(next: number) {
-    zoom = Math.min(4, Math.max(0.25, next));
+    zoom = Math.min(4, Math.max(Math.min(0.25, fitZoom), next));
+    userZoomed = true;
     render();
+  }
+
+  /** Reset button: 100% normally; "fit the whole image" in showcase mode. */
+  function actionResetZoom() {
+    if (mode === "showcase") {
+      userZoomed = false;
+      fitPending = true;
+      render();
+      return;
+    }
+    actionSetZoom(1);
+  }
+
+  /**
+   * Showcase mode: the zoom that fits the whole active image inside the
+   * stage (never above 100% — a small image shouldn't be blown up and blurred).
+   * Null while the stage has no size yet (e.g. the widget is still hidden);
+   * the container's ResizeObserver asks again once it does.
+   */
+  function measureFitZoom(): number | null {
+    const scroll = root.getElementById("stage-scroll");
+    const img = root.getElementById("stage-img") as HTMLImageElement | null;
+    if (!scroll || !img) return null;
+    const w = Number(img.getAttribute("width"));
+    const h = Number(img.getAttribute("height"));
+    if (!w || !h || !scroll.clientWidth || !scroll.clientHeight) return null;
+    stageBox = { w: scroll.clientWidth, h: scroll.clientHeight };
+    return Math.min(1, scroll.clientWidth / w, scroll.clientHeight / h);
   }
 
   async function boot() {
@@ -700,6 +746,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     activeImageId = listImages(db)[0]?.id ?? null;
     selectedLinkId = null;
     zoom = 1;
+    userZoomed = false;
+    fitPending = mode === "showcase";
     // Fresh catalog: start on the catalog's own defaultView (see CatalogMeta
     // — "images" unless the author picked otherwise in Store settings).
     // Only visible below the mobile-tab breakpoint (embeds in a narrow
@@ -774,7 +822,15 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function actionSelectImage(id: number) {
     activeImageId = id;
     selectedLinkId = null;
+    // Showcase has no table to fall back on, so an empty details card after a
+    // switch would just be a hint — select the image's first hotspot instead
+    // (same "always something to read" state as the initial preselection).
+    if (mode === "showcase" && db) {
+      selectedLinkId = [...listLinksForImage(db, id)].sort((a, b) => a.id - b.id)[0]?.id ?? null;
+    }
     zoom = 1;
+    userZoomed = false;
+    fitPending = mode === "showcase";
     mobileTab = "stage"; // no-op above the mobile breakpoint — see mobileTab's declaration
     syncAddressBar();
     render();
@@ -1198,6 +1254,22 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   }
 
   function centerSelection() {
+    if (mode === "showcase") {
+      // scrollIntoView would also scroll the host *page* to bring the widget
+      // into view — wrong for a demo embedded mid-page (and on load). Only
+      // move the stage's own scroller, and only when it actually overflows
+      // (i.e. the visitor zoomed in).
+      const scroll = root.getElementById("stage-scroll");
+      const el = root.querySelector<HTMLElement>(`.hotspot[data-id="${selectedLinkId}"]`);
+      if (scroll && el && (scroll.scrollWidth > scroll.clientWidth || scroll.scrollHeight > scroll.clientHeight)) {
+        scroll.scrollTo({
+          left: parseFloat(el.style.left) * zoom - scroll.clientWidth / 2,
+          top: parseFloat(el.style.top) * zoom - scroll.clientHeight / 2,
+          behavior: "smooth",
+        });
+      }
+      return;
+    }
     const hotspotEl = root.querySelector(`.hotspot[data-id="${selectedLinkId}"]`);
     hotspotEl?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
     const url = hotspotEl?.getAttribute("data-url");
@@ -1273,6 +1345,16 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // Styling hooks live on `container` itself (a class, not a hardcoded id —
     // it might be the standalone app's own #app div, or a plain div created
     // inside a shadow root by the embed) so nothing here assumes who created it.
+    const showcase = mode === "showcase";
+    // A wholesale innerHTML rebuild drops keyboard focus; in showcase mode
+    // (keyboard-operable hotspots, a picker, zoom buttons) remember what was
+    // focused and put it back afterwards — see the restore below.
+    const focusedEl = showcase ? (root.activeElement as HTMLElement | null) : null;
+    const focusKey = focusedEl?.id
+      ? `#${focusedEl.id}`
+      : focusedEl?.dataset?.id && focusedEl.classList.contains("hotspot")
+        ? `.hotspot[data-id="${focusedEl.dataset.id}"]`
+        : null;
     container.classList.add("ecm-viewer-app", `mode-${mode}`);
     // Read by the mobile breakpoint's CSS (.ecm-viewer-app[data-mobile-tab=...])
     // to decide which single panel to show — see mobileTab's declaration.
@@ -1302,7 +1384,10 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
             : ""
         }
 
-        <div class="mobile-tabs">
+        ${
+          showcase
+            ? ""
+            : `<div class="mobile-tabs">
           <button type="button" class="mobile-tab-btn ${mobileTab === "images" ? "active" : ""}" data-tab="images">Images</button>
           <button type="button" class="mobile-tab-btn ${mobileTab === "stage" ? "active" : ""}" data-tab="stage">Diagram</button>
           <button type="button" class="mobile-tab-btn ${mobileTab === "table" ? "active" : ""}" data-tab="table">Table</button>
@@ -1320,24 +1405,35 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           }
         </div>
 
-        <div class="panel-divider" id="divider-images" title="Drag to resize"></div>
+        <div class="panel-divider" id="divider-images" title="Drag to resize"></div>`
+        }
 
         <div class="stage">
           <div class="stage-scroll" id="stage-scroll">
             ${
               activeImage
-                ? `<div class="stage-inner" style="transform: scale(${zoom})">
+                ? `<div class="stage-inner" style="${
+                    showcase
+                      ? // Centered when smaller than the stage; markers are counter-scaled
+                        // (capped) so they stay legible while the whole image is shrunk to fit.
+                        `transform: translate(${Math.max(0, (stageBox.w - activeImage.width * zoom) / 2)}px, ${Math.max(0, (stageBox.h - activeImage.height * zoom) / 2)}px) scale(${zoom}); --marker-scale: ${Math.max(1, Math.min(1 / zoom, 1.8))}`
+                      : `transform: scale(${zoom})`
+                  }">
                      <img id="stage-img" src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
                      ${links.map((l) => hotspotHtml(l, selectedUrl, selectedLinkId)).join("")}
                    </div>`
                 : `<p class="hint" style="padding:2rem">No image selected.</p>`
             }
           </div>
+          ${showcase ? renderShowcaseImagePicker(images) : ""}
           ${activeImage ? renderZoomControls() : ""}
           ${instances.length > 1 ? renderInstanceNav(instanceIndex, instances.length) : ""}
         </div>
 
-        <div class="panel-divider" id="divider-table" title="Drag to resize"></div>
+        ${
+          showcase
+            ? renderShowcaseDetails(rows.find((r) => r.url === selectedUrl) ?? null)
+            : `<div class="panel-divider" id="divider-table" title="Drag to resize"></div>
 
         <div class="table-panel">
           ${
@@ -1355,7 +1451,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                  </table>`
               : ""
           }
-        </div>
+        </div>`
+        }
 
         ${
           mode === "full" && remoteDialogOpen
@@ -1383,6 +1480,21 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         ${mode === "full" && updateAddressBar ? renderShareViewDialog() : ""}
         ${renderPdfOptionsDialog()}
     `;
+
+    if (showcase && fitPending) {
+      const fit = measureFitZoom();
+      if (fit !== null) {
+        fitPending = false;
+        fitZoom = fit;
+        zoom = fit;
+        render(); // second pass with the fitted zoom; restores focus and wires events itself
+        return;
+      }
+    }
+
+    if (focusKey) {
+      root.querySelector<HTMLElement>(focusKey)?.focus({ preventScroll: true });
+    }
 
     if (savedScroll) {
       const stageScroll = root.getElementById("stage-scroll");
@@ -1428,13 +1540,78 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       .join("");
   }
 
+  /** "diagram_weight_kg" style keys -> a label and a display value ("Weight", "3.4 kg"). */
+  function formatExtraEntry(key: string, value: unknown): { label: string; text: string } {
+    let base = key;
+    let unit = "";
+    const m = /^(.*)_(kg|g|lb|cm|mm|m|usd|eur|gbp)$/i.exec(key);
+    if (m) {
+      base = m[1]!;
+      unit = m[2]!.toLowerCase();
+    }
+    const spaced = base.replace(/_/g, " ").trim();
+    const label = spaced ? spaced.charAt(0).toUpperCase() + spaced.slice(1) : key;
+    let text: string;
+    if (typeof value === "boolean") text = value ? "Yes" : "No";
+    else if (unit === "usd") text = `$${value}`;
+    else if (unit === "eur") text = `€${value}`;
+    else if (unit === "gbp") text = `£${value}`;
+    else if (unit) text = `${value} ${unit}`;
+    else text = String(value);
+    return { label, text };
+  }
+
+  /** Showcase mode: a picker for switching diagrams when the catalog has several. */
+  function renderShowcaseImagePicker(images: CatalogImage[]): string {
+    if (images.length < 2) return "";
+    return `<div class="showcase-picker">
+      <select id="showcase-image" aria-label="Image">
+        ${images.map((img) => `<option value="${img.id}" ${img.id === activeImageId ? "selected" : ""}>${escapeHtml(img.name)}</option>`).join("")}
+      </select>
+    </div>`;
+  }
+
+  /**
+   * Showcase mode's replacement for the table: one card for the selected
+   * item. Readable labels/values instead of raw extra keys; the description
+   * is skipped when it just repeats the name (common in imported catalogs).
+   * The Buy control is always a plain link — there is no toolbar cart here,
+   * so an "add to cart" toggle would lead nowhere.
+   */
+  function renderShowcaseDetails(row: CatalogRow | null): string {
+    if (!row) {
+      return `<section class="showcase-details" role="region" aria-label="Selected item details" aria-live="polite">
+        <p class="hint">Select a marker on the image to see its details.</p>
+      </section>`;
+    }
+    const buyUrl = typeof row.extra.buy_url === "string" && row.extra.buy_url ? row.extra.buy_url : null;
+    const entries = Object.entries(row.extra).filter(([k, v]) => k !== "buy_url" && v !== "" && v !== null && v !== undefined);
+    const showDescription = row.description && row.description.trim().toLowerCase() !== row.name.trim().toLowerCase();
+    return `<section class="showcase-details" role="region" aria-label="Selected item details" aria-live="polite">
+      <h2>${escapeHtml(row.name)}</h2>
+      ${row.sku ? `<p class="showcase-sku">${skuLabel()} ${escapeHtml(row.sku)}</p>` : ""}
+      ${showDescription ? `<p class="showcase-desc">${escapeHtml(row.description)}</p>` : ""}
+      ${
+        entries.length
+          ? `<dl class="showcase-extra">${entries
+              .map(([k, v]) => {
+                const { label, text } = formatExtraEntry(k, v);
+                return `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(text)}</dd>`;
+              })
+              .join("")}</dl>`
+          : ""
+      }
+      ${buyUrl ? `<a class="buy-btn showcase-buy" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer">${directOpenLabel()}</a>` : ""}
+    </section>`;
+  }
+
   function renderZoomControls(): string {
     return `
       <div class="zoom-controls">
-        <button id="btn-zoom-out" title="Zoom out">−</button>
+        <button id="btn-zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
         <span class="zoom-pct">${Math.round(zoom * 100)}%</span>
-        <button id="btn-zoom-in" title="Zoom in">+</button>
-        <button id="btn-zoom-reset" title="Reset zoom">Reset</button>
+        <button id="btn-zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
+        <button id="btn-zoom-reset" title="${mode === "showcase" ? "Fit the whole image" : "Reset zoom"}">${mode === "showcase" ? "Fit" : "Reset"}</button>
       </div>
     `;
   }
@@ -1646,7 +1823,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const classes = ["hotspot"];
     if (l.url === selectedUrl) classes.push("selected");
     if (l.id === selectedLinkId) classes.push("current");
-    return `<div class="${classes.join(" ")}" data-id="${l.id}" data-url="${escapeHtml(l.url)}" style="top:${l.top}px;left:${l.left}px;font-size:${l.fontSize}px" title="${escapeHtml(l.url)}">${escapeHtml(l.name)}</div>`;
+    // Showcase mode: keyboard-operable (Tab to a marker, Enter/Space to select)
+    // with a spoken name instead of the raw url as tooltip.
+    const a11y =
+      mode === "showcase" ? ` role="button" tabindex="0" aria-label="${escapeHtml(l.name)} — show details" aria-pressed="${l.id === selectedLinkId}"` : "";
+    const title = mode === "showcase" ? "" : ` title="${escapeHtml(l.url)}"`;
+    return `<div class="${classes.join(" ")}" data-id="${l.id}" data-url="${escapeHtml(l.url)}"${a11y} style="top:${l.top}px;left:${l.left}px;font-size:${l.fontSize}px"${title}>${escapeHtml(l.name)}</div>`;
   }
 
   // catalog_mode's only effect (see CatalogMeta.catalogMode) — swaps every
@@ -1824,7 +2006,10 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
     root.getElementById("btn-zoom-in")?.addEventListener("click", () => actionSetZoom(zoom * 1.25));
     root.getElementById("btn-zoom-out")?.addEventListener("click", () => actionSetZoom(zoom / 1.25));
-    root.getElementById("btn-zoom-reset")?.addEventListener("click", () => actionSetZoom(1));
+    root.getElementById("btn-zoom-reset")?.addEventListener("click", actionResetZoom);
+    root.getElementById("showcase-image")?.addEventListener("change", (evt) => {
+      actionSelectImage(Number((evt.target as HTMLSelectElement).value));
+    });
 
     root.getElementById("btn-instance-prev")?.addEventListener("click", () => actionCycleInstance(-1));
     root.getElementById("btn-instance-next")?.addEventListener("click", () => actionCycleInstance(1));
@@ -1847,6 +2032,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
     root.querySelectorAll<HTMLDivElement>(".hotspot[data-id]").forEach((el) => {
       el.addEventListener("click", () => actionSelectHotspot(Number(el.dataset.id)));
+      if (mode === "showcase") {
+        el.addEventListener("keydown", (evt) => {
+          if (evt.key === "Enter" || evt.key === " ") {
+            evt.preventDefault();
+            actionSelectHotspot(Number(el.dataset.id));
+          }
+        });
+      }
     });
 
     root.querySelectorAll<HTMLTableRowElement>("tr[data-url]").forEach((tr) => {
@@ -1888,12 +2081,38 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     void findRowByUrl; // used indirectly via listRowsForImage today; kept for future direct-lookup use
   }
 
+  // Showcase mode: keep the image fitted as the widget's box changes (window
+  // resize, the demo frame changing height on a phone) — unless the visitor
+  // has zoomed on purpose.
+  if (mode === "showcase" && typeof ResizeObserver !== "undefined") {
+    let lastW = 0;
+    let lastH = 0;
+    resizeObserver = new ResizeObserver(() => {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      if (w === lastW && h === lastH) return;
+      lastW = w;
+      lastH = h;
+      if (!db) return;
+      if (userZoomed) {
+        const scroll = root.getElementById("stage-scroll");
+        if (scroll) stageBox = { w: scroll.clientWidth, h: scroll.clientHeight };
+        render();
+        return;
+      }
+      fitPending = true;
+      render();
+    });
+    resizeObserver.observe(container);
+  }
+
   void boot();
 
   return {
     destroy() {
       container.innerHTML = "";
-      container.classList.remove("ecm-viewer-app", "mode-full", "mode-lite");
+      resizeObserver?.disconnect();
+      container.classList.remove("ecm-viewer-app", "mode-full", "mode-lite", "mode-showcase");
     },
   };
 }
