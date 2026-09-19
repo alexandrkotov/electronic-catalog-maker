@@ -1258,10 +1258,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       // scrollIntoView would also scroll the host *page* to bring the widget
       // into view — wrong for a demo embedded mid-page (and on load). Only
       // move the stage's own scroller, and only when it actually overflows
-      // (i.e. the visitor zoomed in).
+      // (i.e. the visitor zoomed in; at the fitted zoom the scroll area still
+      // counts the unscaled image, so check zoom rather than scroll sizes alone).
       const scroll = root.getElementById("stage-scroll");
       const el = root.querySelector<HTMLElement>(`.hotspot[data-id="${selectedLinkId}"]`);
-      if (scroll && el && (scroll.scrollWidth > scroll.clientWidth || scroll.scrollHeight > scroll.clientHeight)) {
+      if (scroll && el && zoom > fitZoom + 0.001 && (scroll.scrollWidth > scroll.clientWidth || scroll.scrollHeight > scroll.clientHeight)) {
         scroll.scrollTo({
           left: parseFloat(el.style.left) * zoom - scroll.clientWidth / 2,
           top: parseFloat(el.style.top) * zoom - scroll.clientHeight / 2,
@@ -1444,7 +1445,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
         ${
           showcase
-            ? renderShowcaseDetails(rows.find((r) => r.url === selectedUrl) ?? null)
+            ? renderShowcaseDetails(rows.find((r) => r.url === selectedUrl) ?? null, links)
             : `<div class="panel-divider" id="divider-table" title="Drag to resize"></div>
 
         <div class="table-panel">
@@ -1588,7 +1589,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    * The Buy control is always a plain link — there is no toolbar cart here,
    * so an "add to cart" toggle would lead nowhere.
    */
-  function renderShowcaseDetails(row: CatalogRow | null): string {
+  function renderShowcaseDetails(row: CatalogRow | null, imageLinks: { id: number }[]): string {
     if (!row) {
       return `<section class="showcase-details" role="region" aria-label="Selected item details" aria-live="polite">
         <p class="hint">Select a marker on the image to see its details.</p>
@@ -1597,7 +1598,17 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const buyUrl = typeof row.extra.buy_url === "string" && row.extra.buy_url ? row.extra.buy_url : null;
     const entries = Object.entries(row.extra).filter(([k, v]) => k !== "buy_url" && v !== "" && v !== null && v !== undefined);
     const showDescription = row.description && row.description.trim().toLowerCase() !== row.name.trim().toLowerCase();
+    // Prev/next over every marker on this image: markers can be tiny on a
+    // phone-sized fit of a dense diagram, so tapping one precisely is not the
+    // only way to reach an item.
+    const ordered = [...imageLinks].sort((a, b) => a.id - b.id);
+    const at = ordered.findIndex((l) => l.id === selectedLinkId);
+    const nav =
+      ordered.length > 1 && at >= 0
+        ? `<div class="showcase-nav"><button type="button" id="btn-showcase-prev" aria-label="Previous item">‹</button><span>${at + 1} of ${ordered.length}</span><button type="button" id="btn-showcase-next" aria-label="Next item">›</button></div>`
+        : "";
     return `<section class="showcase-details" role="region" aria-label="Selected item details" aria-live="polite">
+      ${nav}
       <h2>${escapeHtml(row.name)}</h2>
       ${row.sku ? `<p class="showcase-sku">${skuLabel()} ${escapeHtml(row.sku)}</p>` : ""}
       ${showDescription ? `<p class="showcase-desc">${escapeHtml(row.description)}</p>` : ""}
@@ -2026,6 +2037,16 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     root.getElementById("showcase-image")?.addEventListener("change", (evt) => {
       actionSelectImage(Number((evt.target as HTMLSelectElement).value));
     });
+
+    const stepShowcase = (dir: 1 | -1) => {
+      if (!db || activeImageId === null) return;
+      const ordered = [...listLinksForImage(db, activeImageId)].sort((a, b) => a.id - b.id);
+      const at = ordered.findIndex((l) => l.id === selectedLinkId);
+      const next = ordered[(at + dir + ordered.length) % ordered.length];
+      if (next) actionSelectHotspot(next.id);
+    };
+    root.getElementById("btn-showcase-prev")?.addEventListener("click", () => stepShowcase(-1));
+    root.getElementById("btn-showcase-next")?.addEventListener("click", () => stepShowcase(1));
 
     root.getElementById("btn-instance-prev")?.addEventListener("click", () => actionCycleInstance(-1));
     root.getElementById("btn-instance-next")?.addEventListener("click", () => actionCycleInstance(1));
