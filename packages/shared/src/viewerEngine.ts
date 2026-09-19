@@ -1409,7 +1409,20 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         }
 
         <div class="stage">
-          <div class="stage-scroll" id="stage-scroll">
+          ${
+            showcase
+              ? // A real bar above the image (not overlays on it), so nothing covers the
+                // diagram — and first in DOM order, so Tab reaches picker/zoom before the markers.
+                `<div class="showcase-bar">${renderShowcaseImagePicker(images)}${activeImage ? renderZoomControls() : ""}</div>`
+              : ""
+          }
+          <div class="stage-scroll${
+            // Showcase, at the fitted zoom: the whole image is already visible, so
+            // there is nothing to pan — and a scrollable box here would (a) show
+            // blank scroll room past the scaled image and (b) swallow the page's
+            // wheel/touch scrolling while the pointer is over the demo.
+            showcase && zoom <= fitZoom + 0.001 ? " fitted" : ""
+          }" id="stage-scroll">
             ${
               activeImage
                 ? `<div class="stage-inner" style="${
@@ -1420,13 +1433,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                       : `transform: scale(${zoom})`
                   }">
                      <img id="stage-img" src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
-                     ${links.map((l) => hotspotHtml(l, selectedUrl, selectedLinkId)).join("")}
+                     ${links.map((l, i) => hotspotHtml(l, selectedUrl, selectedLinkId, i === 0)).join("")}
                    </div>`
                 : `<p class="hint" style="padding:2rem">No image selected.</p>`
             }
           </div>
-          ${showcase ? renderShowcaseImagePicker(images) : ""}
-          ${activeImage ? renderZoomControls() : ""}
+          ${!showcase && activeImage ? renderZoomControls() : ""}
           ${instances.length > 1 ? renderInstanceNav(instanceIndex, instances.length) : ""}
         </div>
 
@@ -1564,11 +1576,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   /** Showcase mode: a picker for switching diagrams when the catalog has several. */
   function renderShowcaseImagePicker(images: CatalogImage[]): string {
     if (images.length < 2) return "";
-    return `<div class="showcase-picker">
-      <select id="showcase-image" aria-label="Image">
-        ${images.map((img) => `<option value="${img.id}" ${img.id === activeImageId ? "selected" : ""}>${escapeHtml(img.name)}</option>`).join("")}
-      </select>
-    </div>`;
+    return `<select id="showcase-image" aria-label="Image">
+      ${images.map((img) => `<option value="${img.id}" ${img.id === activeImageId ? "selected" : ""}>${escapeHtml(img.name)}</option>`).join("")}
+    </select>`;
   }
 
   /**
@@ -1816,7 +1826,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     `;
   }
 
-  function hotspotHtml(l: CatalogLink, selectedUrl: string | null, selectedLinkId: number | null): string {
+  function hotspotHtml(l: CatalogLink, selectedUrl: string | null, selectedLinkId: number | null, isFirst = false): string {
     // .selected: this hotspot's part is the one showing in the table (may be several).
     // .current: this is the *specific* instance centering targets — distinct so
     // stepping through duplicates with the instance-nav is visually obvious.
@@ -1825,8 +1835,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (l.id === selectedLinkId) classes.push("current");
     // Showcase mode: keyboard-operable (Tab to a marker, Enter/Space to select)
     // with a spoken name instead of the raw url as tooltip.
+    // Roving tabindex: with dozens of markers, Tab would otherwise step through
+    // every one — only the selected marker (or the first, if none) is a tab
+    // stop; arrow keys move between markers (see wireEvents).
+    const tabbable = l.id === selectedLinkId || (selectedLinkId === null && isFirst);
     const a11y =
-      mode === "showcase" ? ` role="button" tabindex="0" aria-label="${escapeHtml(l.name)} — show details" aria-pressed="${l.id === selectedLinkId}"` : "";
+      mode === "showcase"
+        ? ` role="button" tabindex="${tabbable ? 0 : -1}" aria-label="${escapeHtml(l.name)} — show details" aria-pressed="${l.id === selectedLinkId}"`
+        : "";
     const title = mode === "showcase" ? "" : ` title="${escapeHtml(l.url)}"`;
     return `<div class="${classes.join(" ")}" data-id="${l.id}" data-url="${escapeHtml(l.url)}"${a11y} style="top:${l.top}px;left:${l.left}px;font-size:${l.fontSize}px"${title}>${escapeHtml(l.name)}</div>`;
   }
@@ -2037,7 +2053,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           if (evt.key === "Enter" || evt.key === " ") {
             evt.preventDefault();
             actionSelectHotspot(Number(el.dataset.id));
+            return;
           }
+          const step = evt.key === "ArrowRight" || evt.key === "ArrowDown" ? 1 : evt.key === "ArrowLeft" || evt.key === "ArrowUp" ? -1 : 0;
+          if (!step) return;
+          evt.preventDefault();
+          const all = Array.from(root.querySelectorAll<HTMLElement>(".hotspot[data-id]"));
+          const next = all[(all.indexOf(el) + step + all.length) % all.length];
+          next?.focus({ preventScroll: true });
         });
       }
     });
