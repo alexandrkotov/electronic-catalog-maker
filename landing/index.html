@@ -347,13 +347,27 @@
       var scriptLoaded = false;
       // [image id, hotspot id] to show selected on load, per example catalog.
       var START = { "auto-spare-parts": [83, 5381], "furniture": [1, 1] };
+      var BUNDLE = "https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js";
       function loadScript(cb) {
         if (scriptLoaded) return cb();
-        var s = document.createElement("script");
-        s.src = "https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js";
-        s.onload = function () { scriptLoaded = true; cb(); };
-        s.onerror = function () { frame.textContent = "The live demo couldn’t load. Use “Open full demo” below."; frame.style.padding = "1rem"; };
-        document.head.appendChild(s);
+        function inject() {
+          var s = document.createElement("script");
+          s.src = BUNDLE;
+          s.onload = function () { scriptLoaded = true; cb(); };
+          s.onerror = function () { frame.textContent = "The live demo couldn’t load. Use “Open full demo” below."; frame.style.padding = "1rem"; };
+          document.head.appendChild(s);
+        }
+        // jsDelivr serves the @main bundle with max-age=7 days, so a returning
+        // visitor's browser could pair this (new) page with an old cached
+        // bundle that silently ignores mode="showcase". Revalidate first: an
+        // unchanged bundle costs one tiny 304, a changed one replaces the
+        // cached copy, and the script tag below then reads the fresh entry.
+        // Offline or blocked: fall through to whatever is cached.
+        if (window.fetch) {
+          fetch(BUNDLE, { cache: "no-cache" }).then(inject, inject);
+        } else {
+          inject();
+        }
       }
       function show(cat) {
         buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.cat === cat)); });
