@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { checkDictionary } from "../../i18n.js";
 import en from "./en.json";
+import { VIEWER_LOCALES, viewerMessages } from "./index.js";
 
 // Every string literal shaped like a dictionary key ("toolbar.open") in the
 // engine. Plural/mode suffixes live in the dictionary only, so compare on
@@ -27,4 +28,12 @@ describe("viewer dictionary (en)", () => {
     const unused = [...definedGroups].filter((k) => !usedKeys.has(k));
     expect(unused).toEqual([]);
   });
+});
+
+describe("translated viewer dictionaries", () => {
+  for (const locale of VIEWER_LOCALES.filter((l) => l !== "en")) {
+    test(`${locale} matches en (keys, plural forms, placeholders)`, () => {
+      expect(checkDictionary(en, viewerMessages[locale]!, locale)).toEqual([]);
+    });
+  }
 });
