@@ -63,7 +63,7 @@
   "schools.h1": "ECM for Schools 🎓",
   "schools.tagline": "Got a diagram? In a few minutes it's a click-around class project — no accounts to create, no cloud to trust, nothing to pay for.",
   "schools.points.privacy.title": "No accounts, no student data",
-  "schools.points.privacy.text": "A catalog is just a file on your own device. There's no cloud database behind it — nothing to sign up for, and nothing to breach or leak.",
+  "schools.points.privacy.text": "A catalog is just a file stored on your own device. There's no cloud database behind it, and students don't need to sign up for anything.",
   "schools.points.group.title": "Real-time group projects",
   "schools.points.group.text": "A whole class can label one diagram together, live, on the same file at once — using the free, optional collaboration server.",
   "schools.points.year.title": "Still works next year",

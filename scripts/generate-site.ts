@@ -11,7 +11,7 @@
  *   {{some.key}}   -> the dictionary message (trusted HTML), missing key = error
  *   {url_name}     -> an external URL from site-src/links.json (also usable
  *                     inside messages, so translators keep every link intact)
- *   {{@lang}} {{@base}} {{@alternates}} {{@switch}} {{@messages}} -> per-page values
+ *   {{@lang}} {{@base}} {{@q}} {{@a}} {{@alternates}} {{@switch}} {{@messages}} -> per-page values
  *
  * Usage: bun scripts/generate-site.ts [--check]
  */
@@ -64,6 +64,10 @@ function render(template: string, page: string, lang: string): string {
   const special: Record<string, () => string> = {
     "@lang": () => lang,
     "@base": () => cfg.base,
+    // Hand the page's language to the apps it links to (apps read ?lang=).
+    // English pages add nothing — the apps' own detection already covers it.
+    "@q": () => (lang === DEFAULT_LANG ? "" : `?lang=${lang}`),
+    "@a": () => (lang === DEFAULT_LANG ? "" : `&lang=${lang}`),
     "@messages": messagesJson,
     "@alternates": () =>
       [

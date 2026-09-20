@@ -225,15 +225,15 @@
     </p>
     <ecm-viewer mode="full" src="{{@base}}demo/cell-biology.ecatm"></ecm-viewer>
     <p class="demo-links">
-      <a href="{{@base}}viewer/?src=..%2Fdemo%2Fcell-biology.ecatm">{{schools.demo.openViewer}}</a>
-      <a href="{{@base}}editor/?src=..%2Fdemo%2Fcell-biology.ecatm">{{schools.demo.openEditor}}</a>
+      <a href="{{@base}}viewer/?src=..%2Fdemo%2Fcell-biology.ecatm{{@a}}">{{schools.demo.openViewer}}</a>
+      <a href="{{@base}}editor/?src=..%2Fdemo%2Fcell-biology.ecatm{{@a}}">{{schools.demo.openEditor}}</a>
     </p>
   </div>
 
   <div class="cta">
     <h2>{{schools.build.title}}</h2>
     <p>{{schools.build.text}}</p>
-    <a class="btn" href="{{@base}}editor/">{{schools.build.editor}}</a>
+    <a class="btn" href="{{@base}}editor/{{@q}}">{{schools.build.editor}}</a>
     <a class="btn secondary" href="./">{{schools.build.app}}</a>
   </div>
 

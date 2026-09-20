@@ -227,22 +227,22 @@
     <p>Добавляйте кликабельные точки на фотографии и схемы. Прикрепляйте описания товаров, артикулы и ссылки — и всё это в одном файле каталога.</p>
     <div class="cta">
       <a class="btn primary" href="#demo">Посмотреть демо</a>
-      <a class="btn secondary" href="../editor/">Создать каталог</a>
+      <a class="btn secondary" href="../editor/?lang=ru">Создать каталог</a>
     </div>
   </header>
 
   <main>
     <section class="demo" id="demo" aria-labelledby="demo-h">
       <h2 id="demo-h">Как это работает</h2>
-      <p class="intro">Выберите маркер или листайте стрелками, чтобы увидеть сведения о позиции. Кнопка «Вписать» показывает изображение целиком.</p>
+      <p class="intro">Выберите точку или листайте стрелками, чтобы увидеть сведения о позиции. Кнопка «Вписать» показывает изображение целиком.</p>
       <div class="tabs" role="group" aria-label="Пример каталога">
         <button type="button" data-cat="auto-spare-parts" aria-pressed="true">Автозапчасти</button>
         <button type="button" data-cat="furniture" aria-pressed="false">Мебель</button>
       </div>
       <div class="frame" id="frame"></div>
       <p class="demo-links">
-        <a id="open-full" href="../viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Открыть полное демо</a>
-        <a id="edit-this" href="../editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Редактировать этот пример</a>
+        <a id="open-full" href="../viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm&lang=ru">Открыть полное демо</a>
+        <a id="edit-this" href="../editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm&lang=ru">Редактировать этот пример</a>
       </p>
       <p class="demo-note">Кнопка «Купить» ведёт на оформление заказа в нашем демо-магазине, где любая позиция стоит $0.</p>
       <p class="steps-line"><strong>Сделайте свой каталог:</strong> добавьте изображение → отметьте детали точками → сохраните файл каталога и откройте его в Просмотрщике.</p>
@@ -259,13 +259,13 @@
     <h2>Приложения</h2>
     <div class="card-row apps-row">
       <div class="card">
-        <h2><a href="../editor/">Редактор →</a></h2>
+        <h2><a href="../editor/?lang=ru">Редактор →</a></h2>
         <p>Создавайте каталог: ставьте точки на изображении и прикрепляйте к каждой данные.</p>
         <p><a href="https://apps.microsoft.com/detail/9p4zk48txrln?hl=ru-RU&amp;gl=US">Скачать в Microsoft Store</a></p>
       </div>
       <div class="card">
-        <h2><a href="../viewer/">Просмотрщик →</a></h2>
-        <p>Откройте файл каталога и изучайте его кликами.</p>
+        <h2><a href="../viewer/?lang=ru">Просмотрщик →</a></h2>
+        <p>Откройте файл каталога, выбирайте детали и просматривайте сведения о них.</p>
         <p><a href="https://apps.microsoft.com/detail/9nb4shzt8fd1?hl=ru-RU&amp;gl=US">Скачать в Microsoft Store</a></p>
       </div>
       <div class="card">
@@ -369,8 +369,8 @@
       }
       function show(cat) {
         buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.cat === cat)); });
-        document.getElementById("open-full").href = "../viewer/?src=..%2Fdemo%2F" + cat + ".ecatm";
-        document.getElementById("edit-this").href = "../editor/?src=..%2Fdemo%2F" + cat + ".ecatm";
+        document.getElementById("open-full").href = "../viewer/?src=..%2Fdemo%2F" + cat + ".ecatm&lang=ru";
+        document.getElementById("edit-this").href = "../editor/?src=..%2Fdemo%2F" + cat + ".ecatm&lang=ru";
         loadScript(function () {
           frame.textContent = "";
           var el = document.createElement("ecm-viewer");
