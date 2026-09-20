@@ -6,7 +6,8 @@ import {
   DEFAULT_CART_ID_PATTERN,
   DEFAULT_CART_ITEM_PARAM,
 } from "./schema.js";
-import type { CatalogImage, CatalogLink, CatalogMeta, CatalogRow, LinkConflict } from "./types.js";
+import { readCatalogMode } from "./types.js";
+import type { CatalogImage, CatalogLink, CatalogMeta, CatalogMode, CatalogRow, LinkConflict } from "./types.js";
 
 let sqlJsPromise: Promise<SqlJsStatic> | null = null;
 
@@ -119,7 +120,7 @@ export function readMeta(db: Database): CatalogMeta {
     // Both keys are simply absent in a catalog saved before this setting
     // existed — no ALTER TABLE migration needed, `meta` is already a plain
     // key/value table, so a missing key just falls back to the default here.
-    catalogMode: kv.get("catalog_mode") === "education" ? "education" : "commercial",
+    catalogMode: readCatalogMode(kv.get("catalog_mode")),
     storeUrl: kv.get("store_url") ?? "",
     cartMode: kv.get("cart_mode") === "instant" ? "instant" : "accumulate",
     cartIdPattern: kv.get("cart_id_pattern") ?? DEFAULT_CART_ID_PATTERN,
@@ -134,7 +135,7 @@ function readDefaultView(value: string | undefined): "images" | "diagram" | "tab
 }
 
 export interface StoreSettingsInput {
-  catalogMode: "commercial" | "education";
+  catalogMode: CatalogMode;
   storeUrl: string;
   cartMode: "accumulate" | "instant";
   cartIdPattern: string;

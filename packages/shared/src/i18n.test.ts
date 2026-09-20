@@ -4,6 +4,7 @@ import { appLocaleCandidates, checkDictionary, createTranslator, matchLocale, pi
 const en = {
   "cart.label": "Cart",
   "cart.label@education": "Collection",
+  "cart.label@fitness": "My workout",
   "greet": "Hello, {name}!",
   "items.one": "{count} item",
   "items.other": "{count} items",
@@ -11,6 +12,7 @@ const en = {
 const ru = {
   "cart.label": "Корзина",
   "cart.label@education": "Коллекция",
+  "cart.label@fitness": "Моя тренировка",
   "greet": "Здравствуйте, {name}!",
   "items.one": "{count} товар",
   "items.few": "{count} товара",
@@ -37,6 +39,7 @@ describe("createTranslator", () => {
     expect(edu("cart.label")).toBe("Collection");
     expect(edu("greet", { name: "A" })).toBe("Hello, A!");
     expect(createTranslator({ messages: en, locale: "en" })("cart.label")).toBe("Cart");
+    expect(createTranslator({ messages: en, locale: "en", mode: "fitness" })("cart.label")).toBe("My workout");
   });
 
   test("falls back to English, then to the key, reporting once", () => {
@@ -86,12 +89,13 @@ describe("checkDictionary", () => {
       "missing plural form: items.few",
       "missing plural form: items.many",
       "missing: cart.label@education",
+      "missing: cart.label@fitness",
       "placeholder {name} missing in greet",
       "unknown placeholder {oops} in items.one",
     ]);
   });
   test("Japanese needs only `other`", () => {
-    const ja = { "cart.label": "カート", "cart.label@education": "コレクション", greet: "{name}さん、こんにちは", "items.other": "{count}点" };
+    const ja = { "cart.label": "カート", "cart.label@education": "コレクション", "cart.label@fitness": "マイワークアウト", greet: "{name}さん、こんにちは", "items.other": "{count}点" };
     expect(checkDictionary(en, ja, "ja")).toEqual([]);
   });
 });
