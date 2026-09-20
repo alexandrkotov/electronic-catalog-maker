@@ -40,6 +40,21 @@ export interface CatalogRow {
   extra: Record<string, string>;
 }
 
+/**
+ * "commercial" is the store default; every other mode is a purely cosmetic
+ * relabel (see CatalogMeta.catalogMode) for a catalog with nothing to buy.
+ */
+export type CatalogMode = "commercial" | "education" | "fitness";
+
+/** Whether a mode's collection is a keepable list (printed) rather than a store cart (checked out). */
+export function isListMode(mode: CatalogMode): boolean {
+  return mode !== "commercial";
+}
+
+export function readCatalogMode(value: string | undefined): CatalogMode {
+  return value === "education" || value === "fitness" ? value : "commercial";
+}
+
 export interface CatalogMeta {
   schemaVersion: number;
   catalogName: string;
@@ -53,8 +68,10 @@ export interface CatalogMeta {
    * a checkout. Every behavior stays identical either way: cart accumulation,
    * checkout links, and PDF QR codes all keep working exactly as under
    * "commercial" — see viewerEngine.ts cartIcon/cartLabel/cartNoun/buyLabel.
+   * "fitness": the same relabel for a gym catalog — "Watch exercise" and
+   * "My workout" (🏋️), the list printable like under "education".
    */
-  catalogMode: "commercial" | "education";
+  catalogMode: CatalogMode;
   /** Free-form, for the catalog author's own reference — not parsed or validated. */
   storeUrl: string;
   /**

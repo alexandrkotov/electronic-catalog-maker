@@ -44,7 +44,10 @@ import {
   listLinksForImage,
   listRowsForImage,
   openCatalog,
+  isListMode,
+  readCatalogMode,
   readMeta,
+  type CatalogMode,
   renderQrCodeSvg,
   resolveInitialTheme,
   applyTheme,
@@ -99,7 +102,7 @@ let locale = pickLocale(appLocaleCandidates(EDITOR_LOCALES), EDITOR_LOCALES);
 document.documentElement.lang = locale;
 const translators = new Map<string, Translate>();
 /** Catalog mode picks wording through `key@education` overrides — pass the mode explicitly where it matters (see skuLabel, the store settings dialog). */
-function tMode(mode: "commercial" | "education", key: string, params?: MessageParams): string {
+function tMode(mode: CatalogMode, key: string, params?: MessageParams): string {
   const cacheKey = `${locale}|${mode}`;
   let translate = translators.get(cacheKey);
   if (!translate) {
@@ -107,7 +110,7 @@ function tMode(mode: "commercial" | "education", key: string, params?: MessagePa
       messages: editorMessages[locale] ?? {},
       locale,
       fallback: editorMessages.en,
-      mode: mode === "education" ? "education" : undefined,
+      mode: mode === "commercial" ? undefined : mode,
     });
     translators.set(cacheKey, translate);
   }
@@ -258,7 +261,7 @@ let searchField: SearchField = "all";
 // from the catalog's current meta each time (not kept live in sync with it),
 // same lifecycle as the remote dialog.
 let storeSettingsOpen = false;
-let storeSettingsCatalogMode: "commercial" | "education" = "commercial";
+let storeSettingsCatalogMode: CatalogMode = "commercial";
 let storeSettingsUrlValue = "";
 let storeSettingsCartMode: "accumulate" | "instant" = "accumulate";
 // "Advanced" cart-URL recipe fields — how a combined checkout URL is built
@@ -2842,6 +2845,7 @@ function renderStoreSettingsDialog(): string {
     storeSettingsCartItemParam === DEFAULT_CART_ITEM_PARAM &&
     storeSettingsCartCheckoutBaseUrl === DEFAULT_CART_CHECKOUT_BASE_URL;
   const isEducation = storeSettingsCatalogMode === "education";
+  const isFitness = storeSettingsCatalogMode === "fitness";
   // Mirrors viewerEngine.ts's cartLabel/buyLabel — the whole dialog talks
   // about "Buy"/"cart"/"checkout" because that's what the underlying
   // mechanism (extra.buy_url, combining several into one link) literally
@@ -2863,12 +2867,16 @@ function renderStoreSettingsDialog(): string {
         <div class="field">
           <label>${te("store.type.legend")}</label>
           <label class="radio-option">
-            <input type="radio" name="catalog-mode" value="commercial" ${!isEducation ? "checked" : ""} />
+            <input type="radio" name="catalog-mode" value="commercial" ${!isEducation && !isFitness ? "checked" : ""} />
             ${te("store.type.commercial")}
           </label>
           <label class="radio-option">
             <input type="radio" name="catalog-mode" value="education" ${isEducation ? "checked" : ""} />
             ${te("store.type.education")}
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="catalog-mode" value="fitness" ${isFitness ? "checked" : ""} />
+            ${te("store.type.fitness")}
           </label>
         </div>
         <div class="field">
@@ -2887,7 +2895,7 @@ function renderStoreSettingsDialog(): string {
           </label>
         </div>
         ${
-          isEducation
+          isListMode(storeSettingsCatalogMode)
             ? ""
             : `<details class="cart-recipe" ${usingDefaultRecipe ? "" : "open"}>
           <summary>${te("store.recipe.summary")}</summary>
@@ -3426,7 +3434,7 @@ function wireEvents(links: CatalogLink[]) {
   document.querySelectorAll<HTMLInputElement>('input[name="catalog-mode"]').forEach((radio) => {
     radio.addEventListener("change", () => {
       if (!radio.checked) return;
-      storeSettingsCatalogMode = radio.value as "commercial" | "education";
+      storeSettingsCatalogMode = readCatalogMode(radio.value);
       render(); // re-labels the fields below (see renderStoreSettingsDialog)
     });
   });

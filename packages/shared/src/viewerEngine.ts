@@ -31,7 +31,7 @@ import { createTranslator, matchLocale, type MessageParams, type Translate } fro
 import { VIEWER_LOCALES, VIEWER_LOCALE_NAMES, viewerMessages } from "./locales/viewer/index.js";
 import { buildCartCheckoutUrl, cartStorageKey, catalogHasAnyBuyUrl, loadPersistedCart, parseCartItemId, savePersistedCart } from "./cart.js";
 import { DEFAULT_PDF_EXPORT_OPTIONS, type DiagramPageMode, type PdfExportOptions, type QrPlacement } from "./pdfExportOptions.js";
-import type { CatalogImage, CatalogLink, CatalogRow } from "./types.js";
+import { isListMode, type CatalogImage, type CatalogLink, type CatalogMode, type CatalogRow } from "./types.js";
 import type { Database, SqlJsStatic } from "sql.js";
 
 /**
@@ -300,7 +300,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // Cart, and PDF QR checkout codes all keep working exactly as in
   // "commercial", just under different on-screen names for an audience with
   // nothing to actually buy.
-  let catalogMode: "commercial" | "education" = "commercial";
+  let catalogMode: CatalogMode = "commercial";
   // catalogMode picks the wording ("Cart" vs "Collection", ...) through
   // `key@education` overrides in the dictionary, so the translator is per mode.
   let locale = matchLocale(options.locale, VIEWER_LOCALES) ?? "en";
@@ -313,7 +313,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         messages: viewerMessages[locale] ?? {},
         locale,
         fallback: viewerMessages.en,
-        mode: catalogMode === "education" ? "education" : undefined,
+        mode: catalogMode === "commercial" ? undefined : catalogMode,
       });
       translators.set(cacheKey, translate);
     }
@@ -1057,7 +1057,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    * once" turned out to be the wrong shape for that second case.
    */
   function actionCartPrimaryAction() {
-    if (catalogMode === "education") actionPrintCollection();
+    if (isListMode(catalogMode)) actionPrintCollection();
     else actionOpenCart();
   }
 
@@ -1993,7 +1993,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // commerce-flavored label/icon in the cart UI for an education-flavored
   // one, with identical behavior underneath either way.
   function cartIcon(): string {
-    return catalogMode === "education" ? "📚" : "🛒";
+    return catalogMode === "education" ? "📚" : catalogMode === "fitness" ? "🏋️" : "🛒";
   }
   function cartLabel(): string {
     return t("cart.label");
