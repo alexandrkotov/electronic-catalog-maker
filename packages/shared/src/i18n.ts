@@ -130,7 +130,7 @@ export function matchLocale(tag: string | null | undefined, supported: readonly 
  * can't serve and move on".
  *
  *   Apps (editor, standalone viewer):
- *     [savedChoice, ...navigator.languages]
+ *     [urlLang, savedChoice, ...navigator.languages]
  *   Embedded viewer:
  *     [componentLangAttribute, hostPageHtmlLang, ...navigator.languages]
  *
@@ -168,9 +168,23 @@ export function saveLocale(locale: string): void {
   }
 }
 
-/** Candidates for the standalone apps: saved choice, then the browser's list. */
+/**
+ * A language named in the page URL (`?lang=uk`) — how a localized landing
+ * page hands its language to the apps it links to. It applies to that page
+ * load only: it is never saved, so it can't silently override (or become)
+ * the user's own saved choice.
+ */
+export function urlLocale(): string | undefined {
+  try {
+    return new URLSearchParams(location.search).get("lang") ?? undefined;
+  } catch {
+    return undefined; // no `location` (tests, workers)
+  }
+}
+
+/** Candidates for the standalone apps: URL, saved choice, then the browser's list. */
 export function appLocaleCandidates(supported: readonly string[]): Array<string | undefined> {
-  return [readSavedLocale(supported), ...(typeof navigator !== "undefined" ? navigator.languages ?? [navigator.language] : [])];
+  return [urlLocale(), readSavedLocale(supported), ...(typeof navigator !== "undefined" ? navigator.languages ?? [navigator.language] : [])];
 }
 
 /** Candidates for the embedded viewer: attribute, host page, then the browser's list. */

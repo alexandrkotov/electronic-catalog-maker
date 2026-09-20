@@ -223,7 +223,7 @@
     <p>{{index.hero.text}}</p>
     <div class="cta">
       <a class="btn primary" href="#demo">{{index.hero.cta.demo}}</a>
-      <a class="btn secondary" href="{{@base}}editor/">{{index.hero.cta.create}}</a>
+      <a class="btn secondary" href="{{@base}}editor/{{@q}}">{{index.hero.cta.create}}</a>
     </div>
   </header>
 
@@ -237,8 +237,8 @@
       </div>
       <div class="frame" id="frame"></div>
       <p class="demo-links">
-        <a id="open-full" href="{{@base}}viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">{{index.demo.openFull}}</a>
-        <a id="edit-this" href="{{@base}}editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">{{index.demo.editThis}}</a>
+        <a id="open-full" href="{{@base}}viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm{{@a}}">{{index.demo.openFull}}</a>
+        <a id="edit-this" href="{{@base}}editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm{{@a}}">{{index.demo.editThis}}</a>
       </p>
       <p class="demo-note">{{index.demo.note}}</p>
       <p class="steps-line">{{index.demo.steps}}</p>
@@ -255,12 +255,12 @@
     <h2>{{index.apps.title}}</h2>
     <div class="card-row apps-row">
       <div class="card">
-        <h2><a href="{{@base}}editor/">{{index.apps.editor.title}}</a></h2>
+        <h2><a href="{{@base}}editor/{{@q}}">{{index.apps.editor.title}}</a></h2>
         <p>{{index.apps.editor.text}}</p>
         <p><a href="{url_msEditor}">{{index.apps.editor.store}}</a></p>
       </div>
       <div class="card">
-        <h2><a href="{{@base}}viewer/">{{index.apps.viewer.title}}</a></h2>
+        <h2><a href="{{@base}}viewer/{{@q}}">{{index.apps.viewer.title}}</a></h2>
         <p>{{index.apps.viewer.text}}</p>
         <p><a href="{url_msViewer}">{{index.apps.viewer.store}}</a></p>
       </div>
@@ -365,8 +365,8 @@
       }
       function show(cat) {
         buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.cat === cat)); });
-        document.getElementById("open-full").href = "{{@base}}viewer/?src=..%2Fdemo%2F" + cat + ".ecatm";
-        document.getElementById("edit-this").href = "{{@base}}editor/?src=..%2Fdemo%2F" + cat + ".ecatm";
+        document.getElementById("open-full").href = "{{@base}}viewer/?src=..%2Fdemo%2F" + cat + ".ecatm{{@a}}";
+        document.getElementById("edit-this").href = "{{@base}}editor/?src=..%2Fdemo%2F" + cat + ".ecatm{{@a}}";
         loadScript(function () {
           frame.textContent = "";
           var el = document.createElement("ecm-viewer");

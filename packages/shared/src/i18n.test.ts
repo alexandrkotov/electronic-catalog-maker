@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { checkDictionary, createTranslator, matchLocale, pickLocale } from "./i18n.js";
+import { appLocaleCandidates, checkDictionary, createTranslator, matchLocale, pickLocale, urlLocale } from "./i18n.js";
 
 const en = {
   "cart.label": "Cart",
@@ -93,5 +93,25 @@ describe("checkDictionary", () => {
   test("Japanese needs only `other`", () => {
     const ja = { "cart.label": "カート", "cart.label@education": "コレクション", greet: "{name}さん、こんにちは", "items.other": "{count}点" };
     expect(checkDictionary(en, ja, "ja")).toEqual([]);
+  });
+});
+
+describe("language from the page URL", () => {
+  const withSearch = (search: string, fn: () => void) => {
+    (globalThis as { location?: unknown }).location = { search };
+    try { fn(); } finally { delete (globalThis as { location?: unknown }).location; }
+  };
+  test("?lang= is read and comes first among the app candidates", () => {
+    withSearch("?src=x.ecatm&lang=uk", () => {
+      expect(urlLocale()).toBe("uk");
+      expect(pickLocale(appLocaleCandidates(["en", "ru", "uk"]), ["en", "ru", "uk"])).toBe("uk");
+    });
+  });
+  test("no ?lang= (or no location at all) means no URL preference", () => {
+    withSearch("?src=x.ecatm", () => expect(urlLocale()).toBeUndefined());
+    expect(urlLocale()).toBeUndefined();
+  });
+  test("an unsupported ?lang= falls through to the next candidate", () => {
+    withSearch("?lang=xx", () => expect(pickLocale(["xx", "ru"], ["en", "ru"])).toBe("ru"));
   });
 });
