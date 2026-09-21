@@ -1249,7 +1249,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   function quizBadge(imageId: number): string {
     const s = quizStates.get(imageId);
-    if (!s?.isQuestion || s.status === "open") return "";
+    if (!s?.isQuestion) return "";
+    // Started but not settled ("Name three ..." with one right pick so far): show the progress instead of nothing.
+    if (s.status === "open") return s.green.size > 0 ? ` <span class="quiz-badge quiz-partial" aria-label="${te("quiz.badge.partial", { done: s.green.size, need: s.need })}">${s.green.size}/${s.need}</span>` : "";
     return s.status === "passed" ? ` <span class="quiz-badge quiz-right" aria-label="${te("quiz.badge.right")}">✓</span>` : ` <span class="quiz-badge quiz-wrong" aria-label="${te("quiz.badge.wrong")}">✗</span>`;
   }
 
@@ -1285,11 +1287,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function renderQuizBar(): string {
     if (!quizTotals || quizTotals.total === 0) return "";
     const done = quizTotals.finished;
+    // Nothing to jump to when the only unanswered question is the one on screen.
+    const nextDisabled = !listImages(db!).some((i) => i.id !== activeImageId && quizStates.get(i.id)?.status === "open");
     const score = done
       ? te("quiz.final", { correct: quizTotals.correct, total: quizTotals.total, percent: quizTotals.percent })
       : te("quiz.score", { correct: quizTotals.correct, answered: quizTotals.answered, total: quizTotals.total });
     return `<span class="quiz-score ${done ? "done" : ""}" role="status">${score}</span>
-                 <button id="btn-quiz-next" ${done ? "disabled" : ""} title="${te("quiz.next.tip")}">${te("quiz.next")}</button>
+                 <button id="btn-quiz-next" ${done || nextDisabled ? "disabled" : ""} title="${te("quiz.next.tip")}">${te("quiz.next")}</button>
                  <button id="btn-quiz-print" ${quizTotals.answered === 0 ? "disabled" : ""} title="${te("quiz.print.tip")}">${te("quiz.print")}</button>
                  <button id="btn-quiz-reset" ${quizTotals.answered === 0 ? "disabled" : ""} title="${te("quiz.reset.tip")}">${te("quiz.reset")}</button>`;
   }
