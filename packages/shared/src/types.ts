@@ -44,7 +44,7 @@ export interface CatalogRow {
  * "commercial" is the store default; every other mode is a purely cosmetic
  * relabel (see CatalogMeta.catalogMode) for a catalog with nothing to buy.
  */
-export type CatalogMode = "commercial" | "education" | "fitness";
+export type CatalogMode = "commercial" | "education" | "fitness" | "quiz";
 
 /** Whether a mode's collection is a keepable list (printed) rather than a store cart (checked out). */
 export function isListMode(mode: CatalogMode): boolean {
@@ -52,7 +52,7 @@ export function isListMode(mode: CatalogMode): boolean {
 }
 
 export function readCatalogMode(value: string | undefined): CatalogMode {
-  return value === "education" || value === "fitness" ? value : "commercial";
+  return value === "education" || value === "fitness" || value === "quiz" ? value : "commercial";
 }
 
 export interface CatalogMeta {
@@ -70,6 +70,8 @@ export interface CatalogMeta {
    * "commercial" — see viewerEngine.ts cartIcon/cartLabel/cartNoun/buyLabel.
    * "fitness": the same relabel for a gym catalog — "Watch exercise" and
    * "My workout" (🏋️), the list printable like under "education".
+   * "quiz": a self-test — each image is a question, its hotspots/rows are the
+   * answer options, and clicking one paints it green or red (see quiz.ts).
    */
   catalogMode: CatalogMode;
   /** Free-form, for the catalog author's own reference — not parsed or validated. */

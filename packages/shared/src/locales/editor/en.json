@@ -121,6 +121,7 @@
   "store.type.commercial": "Commercial — labeled \"Buy\" / \"Cart\", as a store catalog",
   "store.type.education": "Education — same buttons relabeled \"Learn more\" / \"Collection\" (📚), nothing else changes",
   "store.type.fitness": "Fitness — buttons read \"Watch exercise\" / \"My workout\" (🏋️), nothing else changes",
+  "store.type.quiz": "Quiz — a self-test: clicking an answer option paints it green or red. Mark right answers with Extra key \"correct\" = 1 (optional \"need\" = how many right answers are asked for)",
   "store.url.label": "Store URL (for your own reference)",
   "store.behavior.legend": "Buy button behavior",
   "store.behavior.legend@education": "Collection behavior",
