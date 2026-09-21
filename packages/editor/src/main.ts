@@ -2879,10 +2879,15 @@ function renderStoreSettingsDialog(): string {
             ${te("store.type.fitness")}
           </label>
         </div>
-        <div class="field">
+        ${
+          // Only a memo for store catalogs — nothing reads it — so Education/Fitness hide it (the value is kept and saved as-is).
+          isListMode(storeSettingsCatalogMode)
+            ? ""
+            : `<div class="field">
           <label for="store-url-input">${te("store.url.label")}</label>
           <input type="text" id="store-url-input" value="${escapeHtml(storeSettingsUrlValue)}" placeholder="https://payhip.com/YourStore" />
-        </div>
+        </div>`
+        }
         <div class="field">
           <label>${tm("store.behavior.legend")}</label>
           <label class="radio-option">
