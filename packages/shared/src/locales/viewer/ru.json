@@ -56,7 +56,7 @@
   "column.name": "Название",
   "column.sku": "Артикул",
   "column.sku@education": "Код",
-  "column.sku@fitness": "№",
+  "column.sku@fitness": "Код",
   "column.description": "Описание",
   "column.extra": "Дополнительно",
   "value.yes": "Да",
