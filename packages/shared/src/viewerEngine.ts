@@ -1108,9 +1108,15 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    * a class can print, hand out, or scan links from with a phone has no
    * such ceiling, and doubles as a worksheet. Opens in a new tab rather
    * than replacing the viewer, and leaves the Collection untouched — this
-   * is a printable copy, not a checkout.
+   * is a printable copy, not a checkout. Each item's description is printed
+   * under its name (e.g. "3 sets × 10 reps" in a fitness workout).
    */
   function actionPrintCollection() {
+    // The full address (often a long percent-encoded search URL) lives in the
+    // link and the QR code; the sheet shows a short label plus the host.
+    const hostOf = (u: string) => {
+      try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; }
+    };
     if (!db || cartItems.size === 0) return;
     const rows = listAllRows(db).filter((r) => cartItems.has(r.url));
     const catalogTitle = readMeta(db).catalogName || t("catalog.untitled");
@@ -1121,7 +1127,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           <li>
             <div class="item-text">
               <strong>${escapeHtml(r.name || r.url)}</strong>
-              ${buyUrl ? `<a href="${escapeHtml(buyUrl)}">${escapeHtml(buyUrl)}</a>` : `<span>${escapeHtml(t("print.noLink"))}</span>`}
+              ${r.description ? `<em>${escapeHtml(r.description)}</em>` : ""}
+              ${buyUrl ? `<a href="${escapeHtml(buyUrl)}">${escapeHtml(t("buy.open"))} · ${escapeHtml(hostOf(buyUrl))}</a>` : `<span>${escapeHtml(t("print.noLink"))}</span>`}
             </div>
             ${buyUrl ? `<div class="item-qr">${renderQrCodeSvg(buyUrl)}</div>` : ""}
           </li>`;
@@ -1136,6 +1143,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   li { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.9rem 0; border-bottom: 1px solid #ddd; }
   .item-text { min-width: 0; }
   .item-text strong { display: block; font-size: 1rem; }
+  .item-text em { display: block; font-style: normal; font-size: 0.95rem; margin: 0.15rem 0 0.25rem; }
   .item-text a { font-size: 0.8rem; color: #2563eb; word-break: break-all; }
   .item-text span { font-size: 0.8rem; color: #888; }
   .item-qr { flex: none; width: 72px; height: 72px; }
