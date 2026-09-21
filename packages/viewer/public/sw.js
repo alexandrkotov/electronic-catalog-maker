@@ -14,6 +14,11 @@
 //    unless the exact same URL happens to already be cached from an
 //    earlier visit — not something this Service Worker specifically
 //    guarantees, just an incidental side effect.
+//    Exception: page navigations and catalog files (.ecatm/.ecat) go
+//    network-first — the page's meaning depends on its query string
+//    (`?src=`), and a cached copy must never stand in for a different
+//    catalog (seen on iPhone Safari: a tab kept opening the catalog it
+//    was first used for). The cache is only the offline fallback there.
 // 2. Blocking GoatCounter analytics requests, but ONLY when the page told
 //    us (via postMessage) that it's running as an installed standalone
 //    app — see packages/shared/src/pwa.ts for the full two-layer
@@ -25,7 +30,8 @@
 // out from under it mid-session. Simple, safe default; revisit only if a
 // faster update rollout is ever actually needed.
 
-const CACHE_NAME = "ecm-viewer-cache-v1";
+// v2: drops entries cached by the older cache-first handling of navigations/catalogs.
+const CACHE_NAME = "ecm-viewer-cache-v2";
 const GOATCOUNTER_HOSTS = ["ecatm.goatcounter.com", "gc.zgo.at"];
 
 let isStandalone = false;
@@ -60,6 +66,21 @@ self.addEventListener("fetch", (event) => {
   // catalog URLs (arbitrary hosts; shouldn't grow this cache unbounded)
   // and never non-GET requests.
   if (event.request.method !== "GET" || url.origin !== self.location.origin) {
+    return;
+  }
+
+  const networkFirst = event.request.mode === "navigate" || /\.ecatm?$/.test(url.pathname);
+  if (networkFirst) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then((cache) =>
+        fetch(event.request)
+          .then((response) => {
+            if (response.ok) cache.put(event.request, response.clone());
+            return response;
+          })
+          .catch(async () => (await cache.match(event.request)) || Response.error())
+      )
+    );
     return;
   }
 
