@@ -435,14 +435,16 @@ tbody tr.quiz-wrong:hover {
   color: var(--text);
 }
 
+/* Opaque (a tint layered over the solid panel colour): the verdict floats over
+   the card's lower options on a short stage, and they must not show through. */
 .quiz-feedback.right {
   border-color: #16a34a;
-  background: rgb(22 163 74 / 0.16);
+  background: linear-gradient(rgb(22 163 74 / 0.16), rgb(22 163 74 / 0.16)), var(--bg-elevated);
 }
 
 .quiz-feedback.wrong {
   border-color: #dc2626;
-  background: rgb(220 38 38 / 0.14);
+  background: linear-gradient(rgb(220 38 38 / 0.14), rgb(220 38 38 / 0.14)), var(--bg-elevated);
 }
 
 .quiz-feedback-head {
@@ -1105,6 +1107,17 @@ button:disabled {
     content: "";
     display: block;
     height: 10rem;
+  }
+
+  /* A phone's stage is short: give it the toolbar's height back. */
+  .ecm-viewer-app[data-catalog-mode="quiz"] .toolbar .hint {
+    display: none;
+  }
+
+  .ecm-viewer-app[data-catalog-mode="quiz"] .toolbar button,
+  .ecm-viewer-app[data-catalog-mode="quiz"] .toolbar select {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
   }
 
   .ecm-viewer-app[data-catalog-mode="quiz"] #btn-open,
