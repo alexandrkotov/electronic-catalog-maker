@@ -2846,6 +2846,7 @@ function renderStoreSettingsDialog(): string {
     storeSettingsCartCheckoutBaseUrl === DEFAULT_CART_CHECKOUT_BASE_URL;
   const isEducation = storeSettingsCatalogMode === "education";
   const isFitness = storeSettingsCatalogMode === "fitness";
+  const isQuiz = storeSettingsCatalogMode === "quiz";
   // Mirrors viewerEngine.ts's cartLabel/buyLabel — the whole dialog talks
   // about "Buy"/"cart"/"checkout" because that's what the underlying
   // mechanism (extra.buy_url, combining several into one link) literally
@@ -2867,7 +2868,7 @@ function renderStoreSettingsDialog(): string {
         <div class="field">
           <label>${te("store.type.legend")}</label>
           <label class="radio-option">
-            <input type="radio" name="catalog-mode" value="commercial" ${!isEducation && !isFitness ? "checked" : ""} />
+            <input type="radio" name="catalog-mode" value="commercial" ${!isEducation && !isFitness && !isQuiz ? "checked" : ""} />
             ${te("store.type.commercial")}
           </label>
           <label class="radio-option">
@@ -2877,6 +2878,10 @@ function renderStoreSettingsDialog(): string {
           <label class="radio-option">
             <input type="radio" name="catalog-mode" value="fitness" ${isFitness ? "checked" : ""} />
             ${te("store.type.fitness")}
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="catalog-mode" value="quiz" ${isQuiz ? "checked" : ""} />
+            ${te("store.type.quiz")}
           </label>
         </div>
         ${

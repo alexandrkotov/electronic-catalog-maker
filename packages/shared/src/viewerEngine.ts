@@ -31,6 +31,16 @@ import { createTranslator, matchLocale, type MessageParams, type Translate } fro
 import { VIEWER_LOCALES, VIEWER_LOCALE_NAMES, viewerMessages } from "./locales/viewer/index.js";
 import { buildCartCheckoutUrl, cartStorageKey, catalogHasAnyBuyUrl, loadPersistedCart, parseCartItemId, savePersistedCart } from "./cart.js";
 import { DEFAULT_PDF_EXPORT_OPTIONS, type DiagramPageMode, type PdfExportOptions, type QrPlacement } from "./pdfExportOptions.js";
+import {
+  QUIZ_HIDDEN_EXTRA_KEYS,
+  evaluateQuestion,
+  loadQuizPicks,
+  quizStorageKey,
+  saveQuizPicks,
+  scoreQuiz,
+  type QuestionState,
+  type QuizScore,
+} from "./quiz.js";
 import { isListMode, type CatalogImage, type CatalogLink, type CatalogMode, type CatalogRow } from "./types.js";
 import type { Database, SqlJsStatic } from "sql.js";
 
@@ -252,6 +262,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // another image is opened.
   let forceWhole = false;
   let resizeObserver: ResizeObserver | null = null;
+  let quizObserverDisconnect: (() => void) | null = null;
   // Last measured size of the stage's scroll box (showcase mode) — used to
   // center an image that, once fitted, is smaller than the stage on one axis.
   let stageBox = { w: 0, h: 0 };
@@ -292,6 +303,15 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // Set alongside cartItems every time a catalog (re)loads — see openBytes().
   // Null only in the instant before any catalog has ever loaded.
   let cartStorageKeyValue: string | null = null;
+  // catalog_mode "quiz" (see quiz.ts): the urls picked so far per image id,
+  // persisted per catalog like the cart so a half-finished test survives a
+  // reload. quizNow/quizStates/quizTotals are recomputed by render() and read
+  // by rowHtml/hotspotHtml/renderImageList while it builds the markup.
+  let quizPicks = new Map<number, string[]>();
+  let quizStorageKeyValue: string | null = null;
+  let quizNow: QuestionState | null = null;
+  let quizStates = new Map<number, QuestionState>();
+  let quizTotals: QuizScore | null = null;
   // Whether the toolbar's cart review panel (renderCartPanel) is open — a
   // non-blocking dropdown, same UI language as searchOpen/renderSearchPanel,
   // letting someone see exactly what a persisted cart holds before checking
@@ -595,6 +615,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       render();
       return;
     }
+    if (catalogMode === "quiz") {
+      userZoomed = false; // back to fit-to-width
+      render();
+      return;
+    }
     actionSetZoom(1);
   }
 
@@ -861,6 +886,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // catalog naturally starts from an empty cart instead.
     cartStorageKeyValue = cartStorageKey(sourceName, loadedMeta.catalogName);
     cartItems = loadPersistedCart(cartStorageKeyValue);
+    quizStorageKeyValue = quizStorageKey(sourceName, loadedMeta.catalogName);
+    quizPicks = loadQuizPicks(quizStorageKeyValue);
     cartOpen = false;
     activeImageId = listImages(db)[0]?.id ?? null;
     selectedLinkId = null;
@@ -1057,6 +1084,113 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (cartStorageKeyValue) savePersistedCart(cartStorageKeyValue, cartItems);
     if (cartItems.size === 0) cartOpen = false;
     render();
+  }
+
+  /**
+   * Records a click on an answer option (hotspot or table row) for the current
+   * question — a no-op once it is settled, so later clicks only select. The
+   * caller re-renders (it selects the clicked hotspot right after).
+   */
+  function actionQuizAnswer(url: string) {
+    if (activeImageId === null || !quizStorageKeyValue) return;
+    if (quizNow && quizNow.status !== "open") return;
+    const picks = quizPicks.get(activeImageId) ?? [];
+    if (picks.includes(url)) return;
+    quizPicks.set(activeImageId, [...picks, url]);
+    saveQuizPicks(quizStorageKeyValue, quizPicks);
+  }
+
+  /** Jumps to the next question (in list order, wrapping) that has not been answered yet. */
+  function actionQuizNext() {
+    if (!db) return;
+    const order = listImages(db).filter((i) => quizStates.get(i.id)?.isQuestion);
+    const from = order.findIndex((i) => i.id === activeImageId);
+    for (let step = 1; step <= order.length; step++) {
+      const next = order[(from + step) % order.length];
+      if (next && quizStates.get(next.id)?.status === "open") {
+        actionSelectImage(next.id);
+        return;
+      }
+    }
+  }
+
+  /** Forgets every answer for this catalog and goes back to the first question. */
+  function actionQuizReset() {
+    if (!db || !quizStorageKeyValue) return;
+    if (typeof confirm === "function" && !confirm(t("quiz.resetConfirm"))) return;
+    quizPicks = new Map();
+    saveQuizPicks(quizStorageKeyValue, quizPicks);
+    const first = listImages(db)[0];
+    if (first) actionSelectImage(first.id);
+    else render();
+  }
+
+  /** Evaluates the open image (quizNow) and every image (quizStates, quizTotals); all null/empty outside catalog_mode "quiz". */
+  function computeQuizState(images: CatalogImage[], activeId: number | null, activeRows: CatalogRow[]) {
+    quizNow = null;
+    quizStates = new Map();
+    quizTotals = null;
+    if (catalogMode !== "quiz" || !db) return;
+    for (const img of images) {
+      const imgRows = img.id === activeId ? activeRows : listRowsForImage(db, img.id);
+      quizStates.set(img.id, evaluateQuestion(imgRows, quizPicks.get(img.id) ?? []));
+    }
+    quizNow = activeId !== null ? (quizStates.get(activeId) ?? null) : null;
+    quizTotals = scoreQuiz(quizStates.values());
+  }
+
+  /** CSS classes painting an option green/red on the image and in the table. */
+  function quizClasses(url: string): string[] {
+    if (!quizNow) return [];
+    if (quizNow.red.has(url)) return ["quiz-wrong"];
+    if (quizNow.green.has(url)) return ["quiz-right"];
+    return [];
+  }
+
+  function quizBadge(imageId: number): string {
+    const s = quizStates.get(imageId);
+    if (!s?.isQuestion || s.status === "open") return "";
+    return s.status === "passed" ? ` <span class="quiz-badge quiz-right" aria-label="${te("quiz.badge.right")}">✓</span>` : ` <span class="quiz-badge quiz-wrong" aria-label="${te("quiz.badge.wrong")}">✗</span>`;
+  }
+
+  /**
+   * Under the card: the verdict and the explanation of the option just picked,
+   * so a phone (one panel at a time) need not switch to the table to learn
+   * whether it was right. Shown from the first answer on; hidden on wide
+   * layouts, where the table already says it (see style.css).
+   */
+  function renderQuizFeedback(rows: CatalogRow[]): string {
+    if (!quizNow?.isQuestion || quizNow.picked.length === 0) return "";
+    const s = quizNow;
+    const last = rows.find((r) => r.url === s.picked[s.picked.length - 1]);
+    let kind: string;
+    let headline: string;
+    if (s.status === "open") {
+      kind = "open";
+      headline = t("quiz.feedback.more", { left: s.need - s.green.size });
+    } else if (s.status === "passed") {
+      kind = "right";
+      headline = t("quiz.feedback.right");
+    } else {
+      kind = "wrong";
+      const answer = rows.filter((r) => s.green.has(r.url)).map((r) => r.name).join(" · ");
+      headline = t("quiz.feedback.wrong", { answer });
+    }
+    // While the question is still open the explanation would only cover the options still to pick.
+    const why = s.status !== "open" && last?.description ? `<div class="quiz-feedback-why">${escapeHtml(last.description)}</div>` : "";
+    return `<div class="quiz-feedback ${kind}" role="status"><div class="quiz-feedback-head">${escapeHtml(headline)}</div>${why}</div>`;
+  }
+
+  /** The toolbar's score, "next question" and restart controls. */
+  function renderQuizBar(): string {
+    if (!quizTotals || quizTotals.total === 0) return "";
+    const done = quizTotals.finished;
+    const score = done
+      ? te("quiz.final", { correct: quizTotals.correct, total: quizTotals.total, percent: quizTotals.percent })
+      : te("quiz.score", { correct: quizTotals.correct, answered: quizTotals.answered, total: quizTotals.total });
+    return `<span class="quiz-score ${done ? "done" : ""}" role="status">${score}</span>
+                 <button id="btn-quiz-next" ${done ? "disabled" : ""} title="${te("quiz.next.tip")}">${te("quiz.next")}</button>
+                 <button id="btn-quiz-reset" ${quizTotals.answered === 0 ? "disabled" : ""} title="${te("quiz.reset.tip")}">${te("quiz.reset")}</button>`;
   }
 
   /** Empties the cart entirely (panel's "Clear cart" button) — the only way to do this used to be re-finding and re-clicking every item's own Buy button one at a time. Closes the panel too, same as actionOpenCart: nothing left in it to review. */
@@ -1459,6 +1593,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const activeImage = images.find((i) => i.id === activeImageId) ?? null;
     const links = db && activeImage ? listLinksForImage(db, activeImage.id) : [];
     const rows = db && activeImage ? listRowsForImage(db, activeImage.id) : [];
+    computeQuizState(images, activeImage?.id ?? null, rows);
     // Every hotspot sharing this url is highlighted together (they're the same
     // part), while centering (see actionSelectHotspot) targets the one actually
     // clicked.
@@ -1509,6 +1644,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // the wholesale rebuild, same reasoning as applyPanelWidths()'s CSS
     // custom properties.
     container.setAttribute("data-mobile-tab", mobileTab);
+    // Styling hook for catalog_mode-specific CSS (the quiz's phone layout).
+    container.setAttribute("data-catalog-mode", catalogMode);
     container.innerHTML = `
         ${
           mode === "full"
@@ -1518,10 +1655,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                  <input type="file" id="file-open" accept=".${CATALOG_FILE_EXTENSION},.sch" style="display:none" />
                  <button id="btn-open-remote" title="${te("toolbar.openRemote.tip")}">${te("toolbar.openRemote")}</button>
                  <button id="btn-refresh" ${currentSrcUrl || openedFileHandle ? "" : "disabled"} title="${te("toolbar.refresh.tip")}">${refreshing ? te("toolbar.refreshing") : te("toolbar.refresh")}</button>
-                 <button id="btn-search" ${db ? "" : "disabled"} title="${te("toolbar.search.tip")}">${te("toolbar.search")}</button>
+                 ${catalogMode === "quiz" ? "" : `<button id="btn-search" ${db ? "" : "disabled"} title="${te("toolbar.search.tip")}">${te("toolbar.search")}</button>`}
                  ${updateAddressBar ? `<button id="btn-share-view" ${db && !isLoopbackHostname(location.hostname) ? "" : "disabled"} title="${escapeHtml(shareViewButtonTitle())}">${te("toolbar.share")}</button>` : ""}
-                 ${exportPdf ? `<button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="${te("toolbar.exportPdf.tip")}">${exportPdfBusy ? te("toolbar.exportPdf.busy") : te("toolbar.exportPdf")}</button>` : ""}
-                 ${cartMode === "accumulate" ? `<button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="${te("cart.tip")}">${cartIcon()} ${cartLabel()} (${cartItems.size})</button>` : ""}
+                 ${exportPdf && catalogMode !== "quiz" ? `<button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="${te("toolbar.exportPdf.tip")}">${exportPdfBusy ? te("toolbar.exportPdf.busy") : te("toolbar.exportPdf")}</button>` : ""}
+                 ${catalogMode === "quiz" ? renderQuizBar() : ""}
+                 ${cartMode === "accumulate" && catalogMode !== "quiz" ? `<button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="${te("cart.tip")}">${cartIcon()} ${cartLabel()} (${cartItems.size})</button>` : ""}
                  <span class="spacer"></span>
                  ${
                    options.onLocaleChange
@@ -1578,20 +1716,23 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
             // there is nothing to pan — and a scrollable box here would (a) show
             // blank scroll room past the scaled image and (b) swallow the page's
             // wheel/touch scrolling while the pointer is over the demo.
-            showcase && zoom <= fitZoom + 0.001 ? " fitted" : ""
+            showcase && zoom <= fitZoom + 0.001 ? " fitted" : catalogMode === "quiz" && !userZoomed ? " quiz-fit" : ""
           }" id="stage-scroll">
             ${
               activeImage
-                ? `<div class="stage-inner" style="${
+                ? `${catalogMode === "quiz" ? `<div class="quiz-fit-box" style="width:${Math.round(activeImage.width * zoom)}px;height:${Math.round(activeImage.height * zoom)}px">` : ""}<div class="stage-inner" style="${
                     showcase
                       ? // Centered when smaller than the stage; markers are counter-scaled
                         // (capped) so they stay legible while the whole image is shrunk to fit.
                         `transform: translate(${Math.max(0, (stageBox.w - activeImage.width * zoom) / 2)}px, ${Math.max(0, (stageBox.h - activeImage.height * zoom) / 2)}px) scale(${zoom}); --marker-scale: ${Math.max(1, Math.min(1 / zoom, 1.8))}`
-                      : `transform: scale(${zoom})`
+                      : catalogMode === "quiz"
+                        ? // Markers stay tappable when the card is shrunk to the stage's width.
+                          `transform: scale(${zoom}); --marker-scale: ${Math.max(1, Math.min(1 / zoom, 1.8))}`
+                        : `transform: scale(${zoom})`
                   }">
                      <img id="stage-img" src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
                      ${links.map((l, i) => hotspotHtml(l, selectedUrl, selectedLinkId, i === 0)).join("")}
-                   </div>`
+                   </div>${catalogMode === "quiz" ? `</div>${renderQuizFeedback(rows)}` : ""}`
                 : `<p class="hint" style="padding:2rem">${te("stage.noImage")}</p>`
             }
           </div>
@@ -1650,6 +1791,22 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         ${renderPdfOptionsDialog()}
     `;
 
+    // catalog_mode "quiz": the question card is shrunk to the stage's width
+    // (never enlarged) until the visitor zooms on purpose, so it fits a phone
+    // without sideways panning. The stage has no width while its tab is hidden
+    // (stacked layout) — the render that shows the tab measures it instead.
+    if (catalogMode === "quiz" && !showcase && !userZoomed && activeImage) {
+      const scroll = root.getElementById("stage-scroll");
+      if (scroll && scroll.clientWidth > 0) {
+        const fit = Math.min(1, (scroll.clientWidth - 16) / activeImage.width);
+        if (Math.abs(fit - zoom) > 0.005) {
+          zoom = fit;
+          render(); // second pass at the fitted zoom
+          return;
+        }
+      }
+    }
+
     if (showcase && fitPending) {
       const fit = measureFitZoom();
       if (fit !== null) {
@@ -1704,7 +1861,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         const items = group.images
           .map(
             (img) =>
-              `<li data-id="${img.id}" class="${img.id === activeImageId ? "active" : ""}">${escapeHtml(img.name)}</li>`,
+              `<li data-id="${img.id}" class="${img.id === activeImageId ? "active" : ""}">${escapeHtml(img.name)}${quizBadge(img.id)}</li>`,
           )
           .join("");
         if (group.folder === "") return `<ul class="image-list">${items}</ul>`;
@@ -2017,6 +2174,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const classes = ["hotspot"];
     if (l.url === selectedUrl) classes.push("selected");
     if (l.id === selectedLinkId) classes.push("current");
+    classes.push(...quizClasses(l.url));
     // Showcase mode: keyboard-operable (Tab to a marker, Enter/Space to select)
     // with a spoken name instead of the raw url as tooltip.
     // Roving tabindex: with dozens of markers, Tab would otherwise step through
@@ -2074,10 +2232,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   }
 
   function rowHtml(r: CatalogRow, selectedUrl: string | null): string {
-    const selected = r.url === selectedUrl ? "selected" : "";
+    const selected = [r.url === selectedUrl ? "selected" : "", ...quizClasses(r.url)].filter(Boolean).join(" ");
+    // A quiz hides everything but the option's own text until the question is
+    // settled — the description is the explanation, and extra may say why.
+    const quizHidden = quizNow !== null && quizNow.status === "open";
     const buyUrl = typeof r.extra.buy_url === "string" && r.extra.buy_url ? r.extra.buy_url : null;
     const extra = Object.entries(r.extra)
-      .filter(([k]) => k !== "buy_url")
+      .filter(([k]) => k !== "buy_url" && !(quizNow && QUIZ_HIDDEN_EXTRA_KEYS.includes(k)))
       .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(String(v))}`)
       .join(", ");
     // The copy button lives inside .cell-text (so it can center itself
@@ -2107,7 +2268,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // under the cursor while aiming straight down the Buy column.
     const extraCell = `<td class="extra-cell"><span class="cell-text">${extra}${copyCellBtn(r.url, "extra", extra)}</span></td>`;
     const buyCell = `<td class="buy-cell">${buyControl}</td>`;
-    return `<tr data-url="${escapeHtml(r.url)}" class="${selected}">${cell("name", escapeHtml(r.name))}${cell("sku", escapeHtml(r.sku))}${cell("description", escapeHtml(r.description))}${extraCell}${buyCell}</tr>`;
+    return `<tr data-url="${escapeHtml(r.url)}" class="${selected}">${cell("name", escapeHtml(r.name))}${cell("sku", escapeHtml(r.sku))}${cell("description", quizHidden ? "" : escapeHtml(r.description))}${quizHidden ? `<td class="extra-cell"></td>` : extraCell}${buyCell}</tr>`;
   }
 
   function wireEvents() {
@@ -2246,7 +2407,10 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     }
 
     root.querySelectorAll<HTMLDivElement>(".hotspot[data-id]").forEach((el) => {
-      el.addEventListener("click", () => actionSelectHotspot(Number(el.dataset.id)));
+      el.addEventListener("click", () => {
+        if (catalogMode === "quiz") actionQuizAnswer(el.dataset.url!);
+        actionSelectHotspot(Number(el.dataset.id), catalogMode === "quiz" ? "stage" : "table");
+      });
       if (mode === "showcase") {
         el.addEventListener("keydown", (evt) => {
           if (evt.key === "Enter" || evt.key === " ") {
@@ -2265,8 +2429,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     });
 
     root.querySelectorAll<HTMLTableRowElement>("tr[data-url]").forEach((tr) => {
-      tr.addEventListener("click", () => actionSelectRowByUrl(tr.dataset.url!));
+      tr.addEventListener("click", () => {
+        if (catalogMode === "quiz") actionQuizAnswer(tr.dataset.url!);
+        actionSelectRowByUrl(tr.dataset.url!);
+      });
     });
+    root.getElementById("btn-quiz-next")?.addEventListener("click", actionQuizNext);
+    root.getElementById("btn-quiz-reset")?.addEventListener("click", actionQuizReset);
 
     root.querySelectorAll<HTMLButtonElement>(".copy-cell-btn[data-copy-url]").forEach((btn) => {
       btn.addEventListener("click", (evt) => {
@@ -2328,12 +2497,27 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     resizeObserver.observe(container);
   }
 
+  // Quiz cards are fitted to the stage's width (see render()), so re-fit when
+  // the window or a rotated phone changes it.
+  if (mode === "full" && typeof ResizeObserver !== "undefined") {
+    let lastQuizW = 0;
+    const quizObserver = new ResizeObserver(() => {
+      const w = container.clientWidth;
+      if (w === lastQuizW) return;
+      lastQuizW = w;
+      if (db && catalogMode === "quiz" && !userZoomed) render();
+    });
+    quizObserver.observe(container);
+    quizObserverDisconnect = () => quizObserver.disconnect();
+  }
+
   void boot();
 
   return {
     destroy() {
       container.innerHTML = "";
       resizeObserver?.disconnect();
+      quizObserverDisconnect?.();
       container.classList.remove("ecm-viewer-app", "mode-full", "mode-lite", "mode-showcase");
     },
   };
