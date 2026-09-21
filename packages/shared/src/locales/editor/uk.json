@@ -54,7 +54,7 @@
   "column.address": "Адреса",
   "column.sku": "Артикул",
   "column.sku@education": "Код",
-  "column.sku@fitness": "№",
+  "column.sku@fitness": "Код",
   "column.description": "Опис",
   "column.extra": "Додатково",
 

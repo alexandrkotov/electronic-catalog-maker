@@ -56,7 +56,7 @@
   "column.name": "Name",
   "column.sku": "SKU",
   "column.sku@education": "Code",
-  "column.sku@fitness": "No.",
+  "column.sku@fitness": "Code",
   "column.description": "Description",
   "column.extra": "Extra",
   "value.yes": "Yes",
