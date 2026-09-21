@@ -1125,6 +1125,98 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     else render();
   }
 
+  /**
+   * "Print results": a sheet with the score and, per question the visitor has
+   * settled, their answer, the verdict and the explanation. Questions not yet
+   * settled print as "Not answered" and never reveal their right answers, so
+   * the sheet cannot double as an answer key for someone who has not taken
+   * the test. Same print sheet mechanics as actionPrintCollection.
+   */
+  function actionPrintQuizResults() {
+    if (!db || !quizTotals || quizTotals.answered === 0) return;
+    const database = db;
+    const totals = quizTotals;
+    const catalogTitle = readMeta(database).catalogName || t("catalog.untitled");
+    const names = (rows: CatalogRow[], urls: Iterable<string>) => {
+      const wanted = new Set(urls);
+      return rows.filter((r) => wanted.has(r.url)).map((r) => r.name || r.url).join(" · ");
+    };
+    const section = groupImagesByFolder(listImages(database))
+      .map((group) => {
+        const items = group.images
+          .filter((img) => quizStates.get(img.id)?.isQuestion)
+          .map((img) => {
+            const st = quizStates.get(img.id)!;
+            const rows = listRowsForImage(database, img.id);
+            const settled = st.status !== "open";
+            const kind = st.status === "passed" ? "right" : st.status === "failed" ? "wrong" : "none";
+            const mark = kind === "right" ? "✓" : kind === "wrong" ? "✗" : "–";
+            const verdict = t(kind === "right" ? "print.quiz.correct" : kind === "wrong" ? "print.quiz.wrong" : "print.quiz.none");
+            const last = rows.find((r) => r.url === st.picked[st.picked.length - 1]);
+            const lines = settled
+              ? `<div><b>${escapeHtml(t("print.quiz.yours"))}:</b> ${escapeHtml(names(rows, st.picked))}</div>
+                 ${kind === "wrong" ? `<div><b>${escapeHtml(t("print.quiz.right"))}:</b> ${escapeHtml(names(rows, st.green))}</div>` : ""}
+                 ${last?.description ? `<em>${escapeHtml(last.description)}</em>` : ""}`
+              : "";
+            return `<li class="${kind}"><div class="q-head"><span class="mark">${mark}</span><strong>${escapeHtml(img.name)}</strong><span class="verdict">${escapeHtml(verdict)}</span></div>${lines}</li>`;
+          })
+          .join("");
+        if (!items) return "";
+        return `${group.folder ? `<h2>${escapeHtml(group.folder)}</h2>` : ""}<ul>${items}</ul>`;
+      })
+      .join("");
+    const scoreLine = t("print.quiz.score", { correct: totals.correct, total: totals.total, percent: totals.percent });
+    const answeredLine = totals.finished ? "" : ` · ${t("print.quiz.answered", { answered: totals.answered, total: totals.total })}`;
+    const html = `<!doctype html>
+<html lang="${locale}"><head><meta charset="UTF-8" /><title>${escapeHtml(t("print.heading", { catalog: catalogTitle }))}</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 700px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.3rem; margin: 0 0 0.75rem; }
+  h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #555; margin: 1.5rem 0 0.25rem; }
+  .meta { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.95rem; margin: 0 0 0.5rem; }
+  .score { font-size: 1.15rem; font-weight: 700; margin: 0.5rem 0 1rem; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { padding: 0.6rem 0 0.6rem 0.75rem; border-bottom: 1px solid #ddd; border-left: 4px solid #bbb; margin: 0.35rem 0; break-inside: avoid; font-size: 0.92rem; }
+  li.right { border-left-color: #16a34a; }
+  li.wrong { border-left-color: #dc2626; }
+  .q-head { display: flex; gap: 0.5rem; align-items: baseline; }
+  .q-head strong { flex: 1; }
+  .mark { font-weight: 700; width: 1.1em; }
+  li.right .mark, li.right .verdict { color: #16a34a; }
+  li.wrong .mark, li.wrong .verdict { color: #dc2626; }
+  .verdict { font-size: 0.8rem; white-space: nowrap; }
+  li em { display: block; font-style: normal; color: #555; margin-top: 0.2rem; }
+  li div + div { margin-top: 0.1rem; }
+  /* A zero page margin is what makes the browser drop its own header/footer
+     (date, "about:blank", page count); the empty thead/tfoot repeat on every
+     printed page and stand in for the margin. */
+  @page { margin: 0; }
+  table.sheet { width: 100%; border-collapse: collapse; }
+  table.sheet td { padding: 0; }
+  .page-gap { height: 1.5cm; }
+  @media print { body { margin: 0 auto; } }
+</style>
+</head><body>
+<table class="sheet">
+  <thead><tr><td><div class="page-gap"></div></td></tr></thead>
+  <tfoot><tr><td><div class="page-gap"></div></td></tr></tfoot>
+  <tbody><tr><td>
+    <h1>${escapeHtml(t("print.heading", { catalog: catalogTitle }))}</h1>
+    <div class="meta"><span>${escapeHtml(t("print.quiz.name"))}: ______________________</span><span>${escapeHtml(t("print.quiz.date"))}: ${escapeHtml(new Date().toLocaleDateString(locale))}</span></div>
+    <div class="score">${escapeHtml(scoreLine + answeredLine)}</div>
+    ${section}
+  </td></tr></tbody>
+</table>
+</body></html>`;
+    // No "noopener": the new tab is our own trusted HTML, written in below.
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
+  }
+
   /** Evaluates the open image (quizNow) and every image (quizStates, quizTotals); all null/empty outside catalog_mode "quiz". */
   function computeQuizState(images: CatalogImage[], activeId: number | null, activeRows: CatalogRow[]) {
     quizNow = null;
@@ -1190,6 +1282,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       : te("quiz.score", { correct: quizTotals.correct, answered: quizTotals.answered, total: quizTotals.total });
     return `<span class="quiz-score ${done ? "done" : ""}" role="status">${score}</span>
                  <button id="btn-quiz-next" ${done ? "disabled" : ""} title="${te("quiz.next.tip")}">${te("quiz.next")}</button>
+                 <button id="btn-quiz-print" ${quizTotals.answered === 0 ? "disabled" : ""} title="${te("quiz.print.tip")}">${te("quiz.print")}</button>
                  <button id="btn-quiz-reset" ${quizTotals.answered === 0 ? "disabled" : ""} title="${te("quiz.reset.tip")}">${te("quiz.reset")}</button>`;
   }
 
@@ -2436,6 +2529,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     });
     root.getElementById("btn-quiz-next")?.addEventListener("click", actionQuizNext);
     root.getElementById("btn-quiz-reset")?.addEventListener("click", actionQuizReset);
+    root.getElementById("btn-quiz-print")?.addEventListener("click", actionPrintQuizResults);
 
     root.querySelectorAll<HTMLButtonElement>(".copy-cell-btn[data-copy-url]").forEach((btn) => {
       btn.addEventListener("click", (evt) => {
