@@ -72,6 +72,7 @@
   "quiz.resetConfirm": "Стерти всі відповіді й почати заново?",
   "quiz.badge.right": "Відповіли правильно",
   "quiz.badge.wrong": "Відповіли неправильно",
+  "quiz.badge.partial": "Відповіли частково: {done} з {need} правильно",
   "quiz.feedback.right": "✓ Правильно",
   "quiz.feedback.wrong": "✗ Не зовсім. Правильна відповідь: {answer}",
   "quiz.feedback.more": "✓ Поки правильно. Оберіть ще: {left}.",

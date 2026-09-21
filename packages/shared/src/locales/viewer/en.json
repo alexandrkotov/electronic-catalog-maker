@@ -72,6 +72,7 @@
   "quiz.resetConfirm": "Erase all your answers and start over?",
   "quiz.badge.right": "Answered correctly",
   "quiz.badge.wrong": "Answered incorrectly",
+  "quiz.badge.partial": "Partly answered: {done} of {need} right so far",
   "quiz.feedback.right": "✓ Correct",
   "quiz.feedback.wrong": "✗ Not quite. Right answer: {answer}",
   "quiz.feedback.more": "✓ Right so far. Choose {left} more.",

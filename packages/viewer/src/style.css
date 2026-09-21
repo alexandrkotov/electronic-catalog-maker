@@ -391,6 +391,11 @@ tbody tr.quiz-wrong:hover {
   color: #dc2626;
 }
 
+.quiz-badge.quiz-partial {
+  color: #b45309;
+  font-size: 0.85em;
+}
+
 .quiz-score {
   font-weight: 600;
   white-space: nowrap;
