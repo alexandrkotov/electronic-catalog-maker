@@ -97,6 +97,12 @@ const COL_WIDTH_LIMITS = { min: 40, max: 400 };
  * its own (overflow: visible) cell instead of sitting inside it.
  */
 const DEFAULT_COL_WIDTHS = [100, 70, 110, 120, 140];
+/**
+ * Fitness catalogs put the useful text in Name ("Bench press machine") and
+ * Description ("3 sets × 10 reps") and use a short number for the code, so
+ * give those two columns room instead of truncating them.
+ */
+const FITNESS_COL_WIDTHS = [150, 55, 180, 110, 130];
 type ShowOpenFilePicker = (options?: {
   types?: { description?: string; accept: Record<string, string[]> }[];
   multiple?: boolean;
@@ -482,6 +488,20 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     return [...DEFAULT_COL_WIDTHS];
   }
 
+  function hasSavedColWidths(): boolean {
+    try {
+      return localStorage.getItem("ecm-viewer-table-col-widths-v2") !== null;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Resets to the current catalog mode's default widths unless the person has resized columns themselves. */
+  function applyDefaultColWidths() {
+    if (hasSavedColWidths()) return;
+    colWidths = [...(catalogMode === "fitness" ? FITNESS_COL_WIDTHS : DEFAULT_COL_WIDTHS)];
+  }
+
   function saveColWidths() {
     try {
       localStorage.setItem("ecm-viewer-table-col-widths-v2", JSON.stringify(colWidths));
@@ -830,6 +850,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     }
     const loadedMeta = readMeta(db);
     catalogMode = loadedMeta.catalogMode;
+    applyDefaultColWidths();
     cartMode = loadedMeta.cartMode;
     cartIdPattern = loadedMeta.cartIdPattern;
     cartItemParam = loadedMeta.cartItemParam;
@@ -1147,11 +1168,24 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   .item-text a { font-size: 0.8rem; color: #2563eb; word-break: break-all; }
   .item-text span { font-size: 0.8rem; color: #888; }
   .item-qr { flex: none; width: 72px; height: 72px; }
-  @media print { body { margin: 0.5rem auto; } }
+  /* A zero page margin is what makes the browser drop its own header/footer
+     (date, "about:blank", page count). The empty thead/tfoot below repeat on
+     every printed page and stand in for the margin. */
+  @page { margin: 0; }
+  table.sheet { width: 100%; border-collapse: collapse; }
+  table.sheet td { padding: 0; }
+  .page-gap { height: 1.5cm; }
+  @media print { body { margin: 0 auto; } }
 </style>
 </head><body>
-<h1>${escapeHtml(t("print.heading", { catalog: catalogTitle }))}</h1>
-<ul>${items}</ul>
+<table class="sheet">
+  <thead><tr><td><div class="page-gap"></div></td></tr></thead>
+  <tfoot><tr><td><div class="page-gap"></div></td></tr></tfoot>
+  <tbody><tr><td>
+    <h1>${escapeHtml(t("print.heading", { catalog: catalogTitle }))}</h1>
+    <ul>${items}</ul>
+  </td></tr></tbody>
+</table>
 </body></html>`;
     // No "noopener" here (unlike every other window.open in this file) —
     // this tab's whole content is our own trusted HTML string, written in
@@ -1913,7 +1947,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       .map(
         (r) =>
           `<li data-image-id="${r.imageId}" data-url="${escapeHtml(r.url)}">
-             <strong>${escapeHtml(r.name || r.url)}</strong>${r.sku ? ` · ${escapeHtml(r.sku)}` : ""}<br>
+             <strong>${escapeHtml(r.name || r.url)}</strong>${r.sku ? `<span class="cart-item-code"> · ${escapeHtml(r.sku)}</span>` : ""}<br>
              <span class="hint">${escapeHtml(imageNameById.get(r.imageId) ?? "")}${r.description ? ` — ${escapeHtml(r.description)}` : ""}</span>
            </li>`,
       )
