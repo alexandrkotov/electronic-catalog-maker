@@ -254,7 +254,9 @@ body {
   position: absolute;
   inset: 0;
   overflow: auto;
-  background: repeating-conic-gradient(var(--stage-a) 0% 25%, var(--stage-b) 0% 50%) 50% / 20px 20px;
+  /* Plain themed backdrop: a fitted image rarely fills the stage, and the empty
+     margin should read as margin, not as a transparency checkerboard. */
+  background: var(--bg-panel);
 }
 
 .stage-inner {
