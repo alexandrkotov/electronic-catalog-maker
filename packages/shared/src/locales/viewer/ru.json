@@ -72,6 +72,7 @@
   "quiz.resetConfirm": "Стереть все ответы и начать заново?",
   "quiz.badge.right": "Отвечено верно",
   "quiz.badge.wrong": "Отвечено неверно",
+  "quiz.badge.partial": "Отвечено частично: {done} из {need} верно",
   "quiz.feedback.right": "✓ Верно",
   "quiz.feedback.wrong": "✗ Не совсем. Верный ответ: {answer}",
   "quiz.feedback.more": "✓ Пока верно. Выберите ещё: {left}.",
