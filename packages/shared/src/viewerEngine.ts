@@ -749,7 +749,15 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // old share (if any) is now stale.
     const isNewSource = url !== currentSrcUrl;
     try {
-      const res = await fetch(url);
+      // Ask the server whether our own catalogs changed on every open (a cheap
+      // 304 when they did not). Static hosts such as GitHub Pages send
+      // `max-age=600`, so without this a catalog updated on the site would
+      // keep showing the old copy from the browser's cache for 10 minutes.
+      // Left at the default for other hosts: a conditional request could turn
+      // their CORS request into one they did not expect, and their caching is
+      // theirs to decide.
+      const sameOrigin = new URL(url, location.href).origin === location.origin;
+      const res = await fetch(url, sameOrigin ? { cache: "no-cache" } : undefined);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const bytes = new Uint8Array(await res.arrayBuffer());
       await openBytes(bytes, baseName(new URL(url, location.href).pathname), null);
