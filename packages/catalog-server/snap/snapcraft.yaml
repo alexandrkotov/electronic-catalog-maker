@@ -41,6 +41,16 @@ apps:
       - network
       - network-bind
       - home # needs to read whatever folder of catalogs the host picks, which is typically under $HOME, not just this snap's own data dir
+      # A folder outside $HOME — e.g. a VirtualBox shared folder mounted at
+      # /media/sf_<name>, or a USB drive under /media or /mnt — isn't
+      # covered by the `home` plug at all. Confirmed live (2026-09-22):
+      # AppArmor silently denied every readdir under
+      # /media/sf_ECM-catalogs/ (denied_mask="r" on both the folder itself
+      # and its subfolders), which catalogListing.ts's walk() swallows
+      # per-subfolder rather than surfacing — so the symptom was just an
+      # empty /browse list, no error anywhere. `removable-media` is the
+      # interface scoped to exactly this: /media/**, /mnt/**, /run/media/**.
+      - removable-media
       # See collab-server's snapcraft.yaml for why this plug is needed —
       # same "open the status page in the default browser" step
       # (openInBrowser.ts spawns `xdg-open`), same fix.
