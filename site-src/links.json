@@ -15,6 +15,7 @@
   "catalogServerDlLinux": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-linux-x64",
   "catalogServerDlDeb": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-amd64.deb",
   "catalogServerReleasePage": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/catalog-server-latest",
+  "catalogServerSnap": "https://snapcraft.io/ecm-catalog-server",
   "linkedin": "https://www.linkedin.com/in/alexkotovwa/",
   "x": "https://x.com/kotov_wa",
   "github": "https://github.com/alexandrkotov/electronic-catalog-maker"
