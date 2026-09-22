@@ -148,7 +148,7 @@
   a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
   .card-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 0 0 2rem; }
   .use-cases { grid-template-columns: repeat(2, 1fr); }
-  .apps-row { grid-template-columns: repeat(3, 1fr); }
+  .apps-row { grid-template-columns: repeat(2, 1fr); }
   .card { padding: 1.25rem; border: 1px solid var(--border); border-radius: 8px; }
   .card h2, .card h3 { margin: 0 0 0.4rem; font-size: 1.1rem; }
   .card p { margin: 0 0 0.4rem; font-size: 0.9rem; color: var(--text-2); }
@@ -280,6 +280,13 @@
           <li><a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest" id="collab-other">Другие варианты загрузки (macOS, Chromebook, напрямую)</a></li>
         </ul>
       </div>
+      <div class="card">
+        <h2>Сервер каталогов</h2>
+        <p>Необязательный, запускается у вас: делитесь папкой каталогов со своего компьютера — по локальной сети или через интернет.</p>
+        <ul class="links">
+          <li><a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/catalog-server-latest" id="catalog-server-other">Загрузка (Windows, Linux, macOS, Chromebook)</a></li>
+        </ul>
+      </div>
     </div>
 
   <section class="benefits" aria-labelledby="benefits-h">
@@ -326,6 +333,23 @@
       </p>
       <p>
         <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-amd64.deb">прямая загрузка</a>, файл .deb — инструкцию по настройке смотрите на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">странице релиза</a>
+      </p>
+    </dialog>
+
+    <dialog class="collab" id="catalog-server" aria-labelledby="catalog-server-h">
+      <button type="button" class="close" aria-label="Закрыть">×</button>
+      <h2 id="catalog-server-h">Загрузка сервера каталогов</h2>
+      <p>Запустите сервер каталогов у себя, чтобы поделиться папкой каталогов прямо со своего компьютера или флешки — по локальной сети или через интернет. Чтобы создавать или просматривать один каталог самостоятельно, он не нужен.</p>      <p>
+        <strong>Windows:</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-windows-x64.exe">прямая загрузка</a> (файл .exe)
+      </p>
+      <p>
+        <strong>Linux:</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-linux-x64">прямая загрузка</a>
+      </p>
+      <p>
+        <strong>macOS:</strong> (нужна macOS 13 или новее) <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-macos-arm64.zip">прямая загрузка</a> (Apple Silicon, или <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-macos-x64.zip">Intel</a>) — распакуйте архив, затем на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/catalog-server-latest">странице релиза</a> найдите однострочную команду для Терминала, которая нужна при первом запуске
+      </p>
+      <p>
+        <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-amd64.deb">прямая загрузка</a>, файл .deb — инструкцию по настройке смотрите на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/catalog-server-latest">странице релиза</a>
       </p>
     </dialog>
   </main>
@@ -425,17 +449,24 @@
     })();
   </script>
   <script>
-    // "Other downloads" opens the full per-platform list in a dialog. Without
-    // JS the link goes to the GitHub release page, which has the same files.
+    // "Other downloads"/"Downloads" opens the full per-platform list in a
+    // dialog. Without JS the link goes to the GitHub release page, which
+    // has the same files. One wiring function, called once per app card
+    // that has this pattern (collab-server, catalog-server) rather than a
+    // copy-pasted IIFE per card.
     (function () {
-      var dlg = document.getElementById("collab");
-      var link = document.getElementById("collab-other");
-      if (!dlg || !link || typeof dlg.showModal !== "function") return;
-      link.addEventListener("click", function (e) { e.preventDefault(); dlg.showModal(); });
-      dlg.querySelector(".close").addEventListener("click", function () { dlg.close(); });
-      // click on the backdrop (outside the dialog box) closes it
-      dlg.addEventListener("click", function (e) { if (e.target === dlg) dlg.close(); });
-      dlg.addEventListener("close", function () { link.focus(); });
+      function wireDialog(dialogId, linkId) {
+        var dlg = document.getElementById(dialogId);
+        var link = document.getElementById(linkId);
+        if (!dlg || !link || typeof dlg.showModal !== "function") return;
+        link.addEventListener("click", function (e) { e.preventDefault(); dlg.showModal(); });
+        dlg.querySelector(".close").addEventListener("click", function () { dlg.close(); });
+        // click on the backdrop (outside the dialog box) closes it
+        dlg.addEventListener("click", function (e) { if (e.target === dlg) dlg.close(); });
+        dlg.addEventListener("close", function () { link.focus(); });
+      }
+      wireDialog("collab", "collab-other");
+      wireDialog("catalog-server", "catalog-server-other");
     })();
   </script>
   <!-- Privacy-friendly, cookie-free page-view counting (goatcounter.com) —

@@ -9,6 +9,12 @@
   "msViewer": "https://apps.microsoft.com/detail/9nb4shzt8fd1?hl={hl}&amp;gl=US",
   "msCollab": "https://apps.microsoft.com/detail/9nfr1svn0zf6?hl={hl}&amp;gl=US",
   "snap": "https://snapcraft.io/ecm-collab-server",
+  "catalogServerDlMacArm": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-macos-arm64.zip",
+  "catalogServerDlMacIntel": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-macos-x64.zip",
+  "catalogServerDlWin": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-windows-x64.exe",
+  "catalogServerDlLinux": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-linux-x64",
+  "catalogServerDlDeb": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-amd64.deb",
+  "catalogServerReleasePage": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/catalog-server-latest",
   "linkedin": "https://www.linkedin.com/in/alexkotovwa/",
   "x": "https://x.com/kotov_wa",
   "github": "https://github.com/alexandrkotov/electronic-catalog-maker"

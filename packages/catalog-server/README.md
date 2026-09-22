@@ -86,6 +86,22 @@ embeds `packages/viewer-embed/dist/ecm-viewer.js` (the same way, via
 `with { type: "file" }`) and serves it at `/ecm-viewer.js` for the Preview
 page.
 
+The GitHub Release build (`.github/workflows/catalog-server-release.yml`,
+`workflow_dispatch` only) also packages a `.deb` (Chromebook/Debian/Ubuntu)
+and can build + publish a Snap — same structure as collab-server's release
+workflow, see its own README for the full rationale of each piece.
+`publish_snap` defaults to **off** here (unlike collab-server's, which
+defaults on): `ecm-catalog-server` hasn't been registered as a name on the
+Snap Store yet — a one-time, human step
+(`snapcraft register ecm-catalog-server`, logged in as the Snap Store
+account that already owns `ecm-collab-server`) needs to happen before a
+publish attempt can succeed. Until then, leave `publish_snap` unchecked and
+the workflow just (re)builds the GitHub Release binaries, `.deb` included.
+
+The icon used for the `.deb`/Snap packaging
+(`assets/icons/icon-*.png`) is a placeholder — a straight copy of
+collab-server's icon, not a dedicated one designed for this app.
+
 ## Running the tests
 
 ```bash
