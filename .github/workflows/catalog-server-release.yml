@@ -265,11 +265,27 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Build snap
-        uses: snapcore/action-build@v1
+      - name: Install Snapcraft
+        run: sudo snap install --classic snapcraft
+
+      # snapcore/action-build's default path installs LXD and builds inside
+      # an LXD container — confirmed live (2026-09-22) to fail intermittently
+      # on this runner with different errors each time ("/dev/tty: No such
+      # device or address", then "page_idle/bitmap: Permission denied"),
+      # both surfacing as an opaque "Failed to execute pack in instance"
+      # from Snapcraft's own LXD exec wrapper. This is a known class of
+      # nested-virtualization flakiness on GitHub-hosted runners, not
+      # anything in this package's own build script. --destructive-mode
+      # builds directly on the runner instead of inside LXD — an ephemeral,
+      # single-use GitHub Actions VM is exactly the case Canonical's own
+      # docs call out destructive mode as fine for in CI (the "destructive"
+      # part only matters for a machine you'd otherwise want to keep clean).
+      - name: Build snap (destructive mode — skips LXD, which was crashing intermittently)
         id: build
-        with:
-          path: packages/catalog-server
+        working-directory: packages/catalog-server
+        run: |
+          sudo snapcraft pack --destructive-mode
+          echo "snap=packages/catalog-server/$(ls *.snap)" >> "$GITHUB_OUTPUT"
 
       - name: Publish to Snap Store
         uses: snapcore/action-publish@v1
