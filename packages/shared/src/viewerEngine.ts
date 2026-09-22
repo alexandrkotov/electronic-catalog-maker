@@ -113,6 +113,13 @@ const DEFAULT_COL_WIDTHS = [100, 70, 110, 120, 140];
  * give those two columns room instead of truncating them.
  */
 const FITNESS_COL_WIDTHS = [150, 55, 180, 110, 130];
+/**
+ * A quiz shows only three columns (option text, its letter, the explanation
+ * — see quizColumnCount()); the explanation is the point of the table, so it
+ * gets most of the width. The last two entries are unused but keep the array
+ * the same length as the saved-widths format.
+ */
+const QUIZ_COL_WIDTHS = [190, 60, 360, 110, 130];
 type ShowOpenFilePicker = (options?: {
   types?: { description?: string; accept: Record<string, string[]> }[];
   multiple?: boolean;
@@ -519,7 +526,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   /** Resets to the current catalog mode's default widths unless the person has resized columns themselves. */
   function applyDefaultColWidths() {
     if (hasSavedColWidths()) return;
-    colWidths = [...(catalogMode === "fitness" ? FITNESS_COL_WIDTHS : DEFAULT_COL_WIDTHS)];
+    colWidths = [...(catalogMode === "fitness" ? FITNESS_COL_WIDTHS : catalogMode === "quiz" ? QUIZ_COL_WIDTHS : DEFAULT_COL_WIDTHS)];
   }
 
   function saveColWidths() {
@@ -530,8 +537,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     }
   }
 
+  /** A quiz has no Extra or Buy column (both would be empty), so only the first three are drawn. */
+  function quizColumnCount(): number {
+    return catalogMode === "quiz" ? 3 : colWidths.length;
+  }
+
   function colTableTotalWidth(): number {
-    return colWidths.reduce((a, b) => a + b, 0);
+    return colWidths.slice(0, quizColumnCount()).reduce((a, b) => a + b, 0);
   }
 
   /**
@@ -1247,6 +1259,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     return [];
   }
 
+  /** Keeps the ✓/✗/progress badge on the same line as the name's last word instead of dropping onto a line of its own. */
+  function imageNameWithBadge(name: string, badge: string): string {
+    if (!badge) return escapeHtml(name);
+    const cut = name.lastIndexOf(" ");
+    if (cut < 0) return `<span class="nowrap">${escapeHtml(name)}${badge}</span>`;
+    return `${escapeHtml(name.slice(0, cut))} <span class="nowrap">${escapeHtml(name.slice(cut + 1))}${badge}</span>`;
+  }
+
   function quizBadge(imageId: number): string {
     const s = quizStates.get(imageId);
     if (!s?.isQuestion) return "";
@@ -1854,13 +1874,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           ${
             activeImage
               ? `<table data-col-key="rows" style="width:${colTableTotalWidth()}px">
-                   <colgroup>${colWidths.map((w) => `<col style="width:${w}px">`).join("")}</colgroup>
+                   <colgroup>${colWidths.slice(0, quizColumnCount()).map((w) => `<col style="width:${w}px">`).join("")}</colgroup>
                    <thead><tr>
                      <th>${te("column.name")}<span class="col-resize-handle" data-col="0"></span></th>
                      <th>${skuLabel()}<span class="col-resize-handle" data-col="1"></span></th>
                      <th>${te("column.description")}<span class="col-resize-handle" data-col="2"></span></th>
-                     <th>${te("column.extra")}<span class="col-resize-handle" data-col="3"></span></th>
-                     <th><span class="col-resize-handle" data-col="4"></span></th>
+                     ${catalogMode === "quiz" ? "" : `<th>${te("column.extra")}<span class="col-resize-handle" data-col="3"></span></th>
+                     <th><span class="col-resize-handle" data-col="4"></span></th>`}
                    </tr></thead>
                    <tbody>${rows.map((r) => rowHtml(r, selectedUrl)).join("")}</tbody>
                  </table>`
@@ -1966,7 +1986,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         const items = group.images
           .map(
             (img) =>
-              `<li data-id="${img.id}" class="${img.id === activeImageId ? "active" : ""}">${escapeHtml(img.name)}${quizBadge(img.id)}</li>`,
+              `<li data-id="${img.id}" class="${img.id === activeImageId ? "active" : ""}">${imageNameWithBadge(img.name, quizBadge(img.id))}</li>`,
           )
           .join("");
         if (group.folder === "") return `<ul class="image-list">${items}</ul>`;
@@ -2373,7 +2393,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // under the cursor while aiming straight down the Buy column.
     const extraCell = `<td class="extra-cell"><span class="cell-text">${extra}${copyCellBtn(r.url, "extra", extra)}</span></td>`;
     const buyCell = `<td class="buy-cell">${buyControl}</td>`;
-    return `<tr data-url="${escapeHtml(r.url)}" class="${selected}">${cell("name", escapeHtml(r.name))}${cell("sku", escapeHtml(r.sku))}${cell("description", quizHidden ? "" : escapeHtml(r.description))}${quizHidden ? `<td class="extra-cell"></td>` : extraCell}${buyCell}</tr>`;
+    return `<tr data-url="${escapeHtml(r.url)}" class="${selected}">${cell("name", escapeHtml(r.name))}${cell("sku", escapeHtml(r.sku))}${cell("description", quizHidden ? "" : escapeHtml(r.description))}${catalogMode === "quiz" ? "" : `${quizHidden ? `<td class="extra-cell"></td>` : extraCell}${buyCell}`}</tr>`;
   }
 
   function wireEvents() {
