@@ -373,6 +373,10 @@ tbody tr.quiz-wrong:hover {
   background: rgb(220 38 38 / 0.28);
 }
 
+.nowrap {
+  white-space: nowrap;
+}
+
 .quiz-badge {
   display: inline-block;
   min-width: 1.4em;
