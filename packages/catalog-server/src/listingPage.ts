@@ -1,4 +1,5 @@
 import type { CatalogEntry } from "./catalogListing";
+import { THEME_INIT_SCRIPT, THEME_TOGGLE_BUTTON_HTML, THEME_TOGGLE_SCRIPT, THEME_VARS_CSS } from "./theme";
 
 /** Never shown until a real fetch to it succeeds — see the client script below, and the conversation that settled on "check by fetching, not navigator.onLine" for exactly this kind of "is the outside world reachable" question. */
 const PROJECT_URL = "https://tapalog.com/";
@@ -36,26 +37,43 @@ function escapeHtml(s: string): string {
  */
 export function renderListingPage(entries: CatalogEntry[], baseUrl: string): string {
   // listCatalogs() already sorts by full relPath, which happens to put
-  // same-folder entries next to each other — this just adds a heading each
-  // time the folder part changes, rather than re-sorting or re-grouping.
-  let lastDir: string | null = null;
-  const rows = entries
-    .map((entry) => {
-      const lastSlash = entry.relPath.lastIndexOf("/");
-      const dir = lastSlash === -1 ? "" : entry.relPath.slice(0, lastSlash);
-      const href = `${baseUrl}/files/${entry.relPath.split("/").map(encodeURIComponent).join("/")}`;
-      const previewHref = `${baseUrl}/preview/${entry.relPath.split("/").map(encodeURIComponent).join("/")}`;
-      let heading = "";
-      if (dir !== lastDir) {
-        lastDir = dir;
-        heading = `<h2 class="folder-heading">${dir ? escapeHtml(dir) : "(root)"}</h2>`;
-      }
-      return `${heading}<div class="catalog-row">
-        <span class="name" title="${escapeHtml(entry.relPath)}">${escapeHtml(entry.name)}</span>
-        <span class="actions">
-          <button type="button" class="copy-btn" data-href="${escapeHtml(href)}">Copy URL</button>
-          <a class="preview-btn" href="${escapeHtml(previewHref)}" target="_blank" rel="noopener">Preview</a>
-        </span>
+  // same-folder entries next to each other — a Map built in that order
+  // groups them correctly without needing to re-sort.
+  const groups = new Map<string, CatalogEntry[]>();
+  for (const entry of entries) {
+    const lastSlash = entry.relPath.lastIndexOf("/");
+    const dir = lastSlash === -1 ? "" : entry.relPath.slice(0, lastSlash);
+    let group = groups.get(dir);
+    if (!group) {
+      group = [];
+      groups.set(dir, group);
+    }
+    group.push(entry);
+  }
+
+  const sections = [...groups.entries()]
+    .map(([dir, items]) => {
+      const rowsHtml = items
+        .map((entry) => {
+          const href = `${baseUrl}/files/${entry.relPath.split("/").map(encodeURIComponent).join("/")}`;
+          const previewHref = `${baseUrl}/preview/${entry.relPath.split("/").map(encodeURIComponent).join("/")}`;
+          return `<div class="catalog-row">
+            <span class="name" title="${escapeHtml(entry.relPath)}">${escapeHtml(entry.name)}</span>
+            <span class="actions">
+              <button type="button" class="copy-btn" data-href="${escapeHtml(href)}">Copy URL</button>
+              <a class="preview-btn" href="${escapeHtml(previewHref)}" target="_blank" rel="noopener">Preview</a>
+            </span>
+          </div>`;
+        })
+        .join("\n");
+
+      // Files sitting directly in the shared folder (dir === "") aren't
+      // "in" a subfolder at all — a folder tab there would be pretending a
+      // folder exists where there isn't one, so those get a plain card.
+      if (!dir) return `<div class="folder-card no-tab"><div class="folder-body">${rowsHtml}</div></div>`;
+      return `<div class="folder-card">
+        <div class="folder-tab" title="${escapeHtml(dir)}">${escapeHtml(dir)}</div>
+        <div class="folder-body">${rowsHtml}</div>
       </div>`;
     })
     .join("\n");
@@ -64,58 +82,85 @@ export function renderListingPage(entries: CatalogEntry[], baseUrl: string): str
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+${THEME_INIT_SCRIPT}
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="icon" type="image/png" href="/favicon.png" />
 <title>Catalogs</title>
 <style>
-  :root { color-scheme: light dark; }
+${THEME_VARS_CSS}
   body {
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     max-width: 40rem;
     margin: 2.5rem auto;
     padding: 0 1.5rem;
     line-height: 1.5;
+    background: var(--bg-page);
+    color: var(--text);
   }
-  h1 { font-size: 1.3rem; }
-  .catalog-list { margin: 1.5rem 0 0; }
-  .folder-heading {
+  .page-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+  h1 { font-size: 1.3rem; margin: 0; }
+  .catalog-list { margin: 1.75rem 0 0; }
+  /* A folder-tab shape: a small label sitting flush on top of a card,
+     rounded everywhere except the corner where the two meet — the same
+     silhouette as a standard OS folder icon, just built from two boxes. */
+  .folder-card { margin: 0 0 1.5rem; }
+  .folder-tab {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    position: relative;
+    top: 1px;
+    background: var(--accent-soft);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 10px 10px 0 0;
+    padding: 0.4rem 1rem;
+    font-weight: 700;
     font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    opacity: 0.65;
-    margin: 1.5rem 0 0.25rem;
   }
-  .folder-heading:first-child { margin-top: 0; }
+  .folder-body {
+    border: 1px solid var(--border);
+    border-radius: 0 12px 12px 12px;
+    background: var(--bg-panel);
+    padding: 0.25rem 1.25rem;
+  }
+  .folder-card.no-tab .folder-body { border-radius: 12px; }
   .catalog-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
     padding: 0.9rem 0;
-    border-bottom: 1px solid #8884;
+    border-bottom: 1px solid var(--border);
     flex-wrap: wrap;
   }
+  .catalog-row:last-child { border-bottom: none; }
   .name { font-weight: 600; overflow-wrap: anywhere; }
   .actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
   button, a.preview-btn {
     font-size: 0.95rem;
     padding: 0.5rem 0.9rem;
     border-radius: 8px;
-    border: 1px solid #8884;
+    border: 1px solid var(--border);
     cursor: pointer;
     background: transparent;
-    color: inherit;
+    color: var(--text);
     text-decoration: none;
   }
-  .preview-btn { background: #0969da; color: white; border-color: transparent; }
+  .preview-btn { background: var(--accent); color: var(--on-accent); border-color: transparent; }
   .empty { opacity: 0.75; margin-top: 1.5rem; }
   #app-links { display: none; margin-top: 2rem; font-size: 0.92rem; opacity: 0.85; }
-  #app-links a { color: inherit; }
+  #app-links a { color: var(--accent); }
 </style>
 </head>
 <body>
-  <h1>🗂️ Catalogs</h1>
-  ${entries.length === 0 ? '<p class="empty">No catalogs found in this folder yet.</p>' : `<div class="catalog-list">${rows}</div>`}
+  <div class="page-header">
+    <h1>🗂️ Catalogs</h1>
+    ${THEME_TOGGLE_BUTTON_HTML}
+  </div>
+  ${entries.length === 0 ? '<p class="empty">No catalogs found in this folder yet.</p>' : `<div class="catalog-list">${sections}</div>`}
   <p id="app-links">Don't have a catalog app installed yet? <a href="${escapeHtml(PROJECT_URL)}" target="_blank" rel="noopener">Get Editor/Viewer</a></p>
 <script>
   for (const btn of document.querySelectorAll(".copy-btn")) {
@@ -138,6 +183,7 @@ export function renderListingPage(entries: CatalogEntry[], baseUrl: string): str
   fetch(${JSON.stringify(PROJECT_URL)}, { mode: "no-cors", signal: AbortSignal.timeout(2500) })
     .then(() => { document.getElementById("app-links").style.display = "block"; })
     .catch(() => {});
+${THEME_TOGGLE_SCRIPT}
 </script>
 </body>
 </html>`;

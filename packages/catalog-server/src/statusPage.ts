@@ -1,3 +1,5 @@
+import { THEME_INIT_SCRIPT, THEME_TOGGLE_BUTTON_HTML, THEME_TOGGLE_SCRIPT, THEME_VARS_CSS } from "./theme";
+
 /**
  * The page main.ts auto-opens in the host's default browser on startup —
  * same reasoning as collab-server's statusPage.ts (this *is* the app's UI,
@@ -9,22 +11,27 @@ export function renderStatusPage(): string {
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+${THEME_INIT_SCRIPT}
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="icon" type="image/png" href="/favicon.png" />
 <title>Electronic Catalog Maker — Catalog Server</title>
 <style>
-  :root { color-scheme: light dark; }
+${THEME_VARS_CSS}
   body {
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     max-width: 40rem;
     margin: 3rem auto;
     padding: 0 1.5rem;
     line-height: 1.5;
+    background: var(--bg-page);
+    color: var(--text);
   }
-  h1 { font-size: 1.3rem; }
+  .page-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+  h1 { font-size: 1.3rem; margin: 0; }
   h2 { font-size: 1rem; margin-bottom: 0.5rem; }
   .card {
-    border: 1px solid #8884;
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
     border-radius: 12px;
     padding: 1.25rem;
     margin-top: 1.5rem;
@@ -37,34 +44,38 @@ export function renderStatusPage(): string {
     font-size: 0.95rem;
     padding: 0.6rem 0.8rem;
     border-radius: 8px;
-    border: 1px solid #8884;
-    background: #8881;
+    border: 1px solid var(--border);
+    background: var(--bg-elevated);
+    color: var(--text);
   }
   input[readonly] { opacity: 0.9; }
   button {
     font-size: 1rem;
     padding: 0.6rem 1rem;
     border-radius: 8px;
-    border: 1px solid #8884;
+    border: 1px solid var(--border);
     cursor: pointer;
-    background: #0969da;
-    color: white;
+    background: var(--accent);
+    color: var(--on-accent);
     white-space: nowrap;
   }
-  button.secondary { background: transparent; color: inherit; }
+  button.secondary { background: transparent; color: var(--text); }
   button:disabled { opacity: 0.5; cursor: default; }
   .hint { opacity: 0.75; font-size: 0.92rem; }
-  .error { color: #b91c1c; }
+  .error { color: var(--danger); }
   .card-actions { display: flex; justify-content: space-between; margin-top: 1rem; gap: 0.5rem; flex-wrap: wrap; }
-  #stop { background: #b91c1c; }
+  #stop { background: var(--danger); }
   #stopped-banner { display: none; }
   #stopped-banner.show { display: block; }
   .mode-row label { display: flex; align-items: center; gap: 0.35rem; font-weight: normal; }
-  a.browse-link { font-weight: 600; }
+  a.browse-link { font-weight: 600; color: var(--accent); }
 </style>
 </head>
 <body>
-  <h1>🗂️ Electronic Catalog Maker — Catalog Server</h1>
+  <div class="page-header">
+    <h1>🗂️ Electronic Catalog Maker — Catalog Server</h1>
+    ${THEME_TOGGLE_BUTTON_HTML}
+  </div>
   <p id="intro">This server shares the catalogs in a folder on your computer with anyone who visits its address below — on your local network, or (if you switch to Internet mode) anywhere.</p>
 
   <div id="stopped-banner" class="card">
@@ -240,6 +251,7 @@ export function renderStatusPage(): string {
     setTimeout(poll, 1000);
   }
   poll();
+${THEME_TOGGLE_SCRIPT}
 </script>
 </body>
 </html>`;
