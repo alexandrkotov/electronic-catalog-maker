@@ -90,7 +90,13 @@ ${THEME_INIT_SCRIPT}
 ${THEME_VARS_CSS}
   body {
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    max-width: 40rem;
+    /* Shrink-wraps to the widest row instead of a fixed 40rem — a long
+       filename used to hit that cap and wrap onto its own line, pushing
+       Copy URL/Preview below it instead of staying on one row (confirmed
+       live, 2026-09-22). min() caps it so it can't overflow a narrow
+       viewport; below that width, rows are still free to wrap normally. */
+    width: fit-content;
+    max-width: 94vw;
     margin: 2.5rem auto;
     padding: 0 1.5rem;
     line-height: 1.5;
@@ -157,7 +163,7 @@ ${THEME_VARS_CSS}
 </head>
 <body>
   <div class="page-header">
-    <h1>🗂️ Catalogs</h1>
+    <h1>Catalogs</h1>
     ${THEME_TOGGLE_BUTTON_HTML}
   </div>
   ${entries.length === 0 ? '<p class="empty">No catalogs found in this folder yet.</p>' : `<div class="catalog-list">${sections}</div>`}
