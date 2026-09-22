@@ -8,6 +8,7 @@
     "dev:viewer": "pnpm --filter @ecm/viewer dev",
     "dev:embed": "pnpm --filter @ecm/viewer-embed dev",
     "dev:collab-server": "pnpm --filter @ecm/collab-server dev",
+    "dev:catalog-server": "pnpm --filter @ecm/catalog-server dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "generate:site": "bun scripts/generate-site.ts"
