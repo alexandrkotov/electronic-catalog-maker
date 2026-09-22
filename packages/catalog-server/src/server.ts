@@ -246,17 +246,23 @@ export function startServer(port: number): ServerHandle {
         const relPath = decodeURIComponent(parts.slice(1).join("/"));
         const resolved = resolveCatalogPath(config.folderPath, relPath);
         if (!resolved) return new Response("Not found.", { status: 404 });
-        // Passing a BunFile straight into Response lets Bun serve it via a
-        // zero-copy sendfile() syscall — which breaks on network-ish
-        // filesystems. Confirmed live (2026-09-22): a VirtualBox shared
-        // folder (vboxsf) served a ~800KB file fine but reset the
-        // connection mid-transfer on a ~1.3MB one, every time — curl showed
-        // correct headers (200, right Content-Length) followed by "Recv
-        // failure: Connection reset by peer". `.stream()` makes Bun read it
-        // in ordinary chunks instead, sidestepping sendfile() entirely.
+        // Neither passing a BunFile straight into Response (zero-copy
+        // sendfile()) nor Bun's own chunked file.stream() survives reading a
+        // >~1MB file back off a VirtualBox shared folder (vboxsf) — both
+        // reset the connection mid-transfer with the right headers already
+        // sent (confirmed live, 2026-09-22: curl got 200 + correct
+        // Content-Length, then "Recv failure: Connection reset by peer").
+        // Ruled out as an AppArmor/confinement issue (dmesg showed nothing
+        // at the moment of failure) and as vboxsf itself being unable to
+        // deliver the file (a plain `cp` through the same mount succeeds
+        // byte-for-byte) — it's specifically Bun's async/chunked read
+        // hitting something vboxsf doesn't handle right. Reading the whole
+        // file into memory in one synchronous-from-JS's-perspective await,
+        // instead of any kind of streamed read, sidesteps it.
         const file = Bun.file(resolved);
-        return new Response(file.stream(), {
-          headers: { ...CORS_HEADERS, "Content-Type": file.type, "Content-Length": String(file.size) },
+        const buffer = await file.arrayBuffer();
+        return new Response(buffer, {
+          headers: { ...CORS_HEADERS, "Content-Type": file.type },
         });
       }
 
