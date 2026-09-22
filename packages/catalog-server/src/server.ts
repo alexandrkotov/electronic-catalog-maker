@@ -7,6 +7,7 @@ import { renderListingPage } from "./listingPage";
 import { renderPreviewPage } from "./previewPage";
 import { renderStatusPage } from "./statusPage";
 import ecmViewerJsPath from "../../viewer-embed/dist/ecm-viewer.js" with { type: "file" };
+import faviconPath from "../assets/icons/icon-192.png" with { type: "file" };
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -158,6 +159,10 @@ export function startServer(port: number): ServerHandle {
 
       if (url.pathname === "/ecm-viewer.js") {
         return new Response(Bun.file(ecmViewerJsPath), { headers: { "Content-Type": "application/javascript; charset=utf-8" } });
+      }
+
+      if (url.pathname === "/favicon.png") {
+        return new Response(Bun.file(faviconPath), { headers: { "Content-Type": "image/png" } });
       }
 
       if (url.pathname === "/browse") {
