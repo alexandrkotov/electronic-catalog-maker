@@ -103,9 +103,9 @@ account that already owns `ecm-collab-server`) needs to happen before a
 publish attempt can succeed. Until then, leave `publish_snap` unchecked and
 the workflow just (re)builds the GitHub Release binaries, `.deb` included.
 
-The icon used for the `.deb`/Snap packaging
-(`assets/icons/icon-*.png`) is a placeholder — a straight copy of
-collab-server's icon, not a dedicated one designed for this app.
+The icon used for the `.deb`/Snap packaging (`assets/icons/icon-*.png`) is
+collab-server's icon with its badge letter changed from "S" to "C" — same
+placeholder design, not a dedicated one designed for this app.
 
 ## Running the tests
 
