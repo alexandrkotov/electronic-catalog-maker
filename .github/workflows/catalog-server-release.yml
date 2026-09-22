@@ -1,16 +1,31 @@
-name: Release catalog-server (GitHub Release)
+name: Release catalog-server (Snap Store + GitHub Release)
 
 # Manual only, on purpose — same philosophy as collab-server's release
 # process (see feedback-collab-server-binary-release-process in project
 # memory): rebuilding/republishing binaries is a deliberate, occasional
 # action, not something that should fire on every push.
 #
-# Deliberately trimmed compared to collab-server-release.yml for this first
-# version: no .deb/Snap Store packaging, no GitLab disaster-recovery backup
-# yet — those were added to collab-server iteratively after its base release
-# was live and confirmed working; same path planned here, not done upfront.
+# No GitLab disaster-recovery backup yet, unlike collab-server — that was
+# added well after collab-server's base release had already been live for a
+# while; worth doing the same here once this one has some real mileage too.
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      snap_channel:
+        description: "Snap Store channel to release to"
+        required: true
+        default: "stable"
+        type: choice
+        options:
+          - stable
+          - candidate
+          - beta
+          - edge
+      publish_snap:
+        description: "Also publish to the Snap Store (uncheck to only refresh the GitHub Release binaries). First run needs `ecm-catalog-server` registered on the Snap Store first — see this package's README."
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -130,9 +145,143 @@ jobs:
           wait "$SERVER_PID" 2>/dev/null || true
           echo "Smoke test passed: started, served /status.json, shut down cleanly."
 
+  build-deb:
+    name: Package Linux binary as .deb (Chromebook/Crostini, Debian, Ubuntu)
+    needs: [build-linux]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ecm-catalog-server-linux-x64
+          path: dist
+
+      - name: Read catalog-server version
+        id: version
+        run: echo "version=$(node -p "require('./packages/catalog-server/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # Same structure as collab-server-release.yml's build-deb — see its
+      # comment for the full "why" (Crostini install-by-double-click, no
+      # systemd unit / auto-start).
+      - name: Build .deb package
+        run: |
+          set -e
+          VERSION="${{ steps.version.outputs.version }}"
+          PKGROOT=pkgroot
+          mkdir -p "$PKGROOT/DEBIAN" "$PKGROOT/usr/bin" "$PKGROOT/usr/share/applications" "$PKGROOT/usr/share/pixmaps"
+
+          install -m 755 dist/ecm-catalog-server-linux-x64 "$PKGROOT/usr/bin/ecm-catalog-server"
+          install -m 644 packages/catalog-server/assets/icons/icon-512.png "$PKGROOT/usr/share/pixmaps/ecm-catalog-server.png"
+
+          printf '%s\n' \
+            '[Desktop Entry]' \
+            'Type=Application' \
+            'Name=ECM Catalog Server' \
+            'Comment=Share a folder of Electronic Catalog Maker catalogs from your computer' \
+            'Exec=/usr/bin/ecm-catalog-server' \
+            'Icon=/usr/share/pixmaps/ecm-catalog-server.png' \
+            'Terminal=false' \
+            'Categories=Network;Utility;' \
+            > "$PKGROOT/usr/share/applications/ecm-catalog-server.desktop"
+
+          printf '%s\n' \
+            'Package: ecm-catalog-server' \
+            "Version: $VERSION" \
+            'Section: net' \
+            'Priority: optional' \
+            'Architecture: amd64' \
+            'Maintainer: Alexander Kotov <alexandrkotov@users.noreply.github.com>' \
+            'Homepage: https://tapalog.com/' \
+            'Description: Share a folder of Electronic Catalog Maker catalogs from your computer' \
+            ' Runs a small local server that shares a folder of Electronic Catalog' \
+            ' Maker (.ecatm) catalog files with anyone who visits its address, on' \
+            ' your local network or over the internet (via a temporary Cloudflare' \
+            ' Quick Tunnel). Launch it from the Linux apps menu; stop it again from' \
+            ' its own browser status page.' \
+            > "$PKGROOT/DEBIAN/control"
+
+          dpkg-deb --build --root-owner-group "$PKGROOT" ecm-catalog-server-amd64.deb
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ecm-catalog-server-amd64.deb
+          path: ecm-catalog-server-amd64.deb
+          if-no-files-found: error
+
+  smoke-test-deb:
+    name: Smoke-test the .deb (install, run, remove)
+    needs: [build-deb]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ecm-catalog-server-amd64.deb
+          path: dist
+
+      - name: Install via dpkg
+        run: sudo dpkg -i dist/ecm-catalog-server-amd64.deb
+
+      - name: Confirm the files landed where the .desktop entry expects
+        run: |
+          test -x /usr/bin/ecm-catalog-server
+          test -f /usr/share/applications/ecm-catalog-server.desktop
+          test -f /usr/share/pixmaps/ecm-catalog-server.png
+          grep -q '^Exec=/usr/bin/ecm-catalog-server$' /usr/share/applications/ecm-catalog-server.desktop
+
+      - name: Run it and confirm the status endpoint answers
+        run: |
+          ecm-catalog-server &
+          SERVER_PID=$!
+          ok=false
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:8899/status.json -o status.json 2>/dev/null; then
+              ok=true
+              break
+            fi
+            sleep 1
+          done
+          echo "--- /status.json ---"
+          cat status.json 2>/dev/null || echo "(no response)"
+          if [ "$ok" != true ] || ! grep -q '"port"' status.json; then
+            echo "The server never answered /status.json with the expected shape" >&2
+            kill "$SERVER_PID" 2>/dev/null || true
+            exit 1
+          fi
+          curl -fsS -X POST http://localhost:8899/shutdown || true
+          wait "$SERVER_PID" 2>/dev/null || true
+          echo "Smoke test passed: installed via dpkg, started, served /status.json, shut down cleanly."
+
+      - name: Remove cleanly via dpkg
+        run: |
+          sudo dpkg -r ecm-catalog-server
+          test ! -e /usr/bin/ecm-catalog-server
+          test ! -e /usr/share/applications/ecm-catalog-server.desktop
+
+  publish-snap:
+    name: Build + publish Snap (Snap Store / Ubuntu App Center)
+    if: ${{ github.event.inputs.publish_snap == 'true' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build snap
+        uses: snapcore/action-build@v1
+        id: build
+        with:
+          path: packages/catalog-server
+
+      - name: Publish to Snap Store
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: ${{ steps.build.outputs.snap }}
+          release: ${{ github.event.inputs.snap_channel }}
+
   github-release:
     name: Update the catalog-server-latest GitHub Release
-    needs: [build-linux, build-windows, smoke-test-macos-arm64, build-macos-x64]
+    needs: [build-linux, build-windows, smoke-test-macos-arm64, build-macos-x64, smoke-test-deb]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -157,6 +306,11 @@ jobs:
           name: ecm-catalog-server-macos-x64
           path: dist
 
+      - uses: actions/download-artifact@v8
+        with:
+          name: ecm-catalog-server-amd64.deb
+          path: dist
+
       - name: Read catalog-server version
         id: version
         run: echo "version=$(node -p "require('./packages/catalog-server/package.json').version")" >> "$GITHUB_OUTPUT"
@@ -178,8 +332,14 @@ jobs:
 
             - `ecm-catalog-server-windows-x64.exe` — Windows, portable, no installer
             - `ecm-catalog-server-linux-x64` — Linux, portable, no installer
+            - `ecm-catalog-server-amd64.deb` — Debian/Ubuntu/Chromebook (Linux/Crostini), installable package
             - `ecm-catalog-server-macos-arm64.zip` — macOS, Apple Silicon, portable, no installer
             - `ecm-catalog-server-macos-x64.zip` — macOS, Intel, portable, no installer
+
+            Ubuntu users can instead install from the
+            [Snap Store](https://snapcraft.io/ecm-catalog-server) (`sudo snap install ecm-catalog-server`), once published there.
+
+            On a Chromebook, [turn on Linux (Crostini)](https://support.google.com/chromebook/answer/9145439?hl=en) once in Settings, then download the `.deb` file and double-click it in the Files app — ChromeOS offers to install it, and afterward it shows up as "ECM Catalog Server" in the Linux apps folder of your app launcher.
 
             None of these are code-signed. Windows will show a SmartScreen warning on first run ("More info" → "Run anyway").
 
@@ -191,5 +351,6 @@ jobs:
           files: |
             dist/ecm-catalog-server-linux-x64
             dist/ecm-catalog-server-windows-x64.exe
+            dist/ecm-catalog-server-amd64.deb
             dist/ecm-catalog-server-macos-arm64.zip
             dist/ecm-catalog-server-macos-x64.zip

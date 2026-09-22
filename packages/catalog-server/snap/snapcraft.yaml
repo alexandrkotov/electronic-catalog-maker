@@ -1,0 +1,72 @@
+name: ecm-catalog-server
+title: ECM Catalog Server
+base: core22
+version: '0.1.0'
+summary: Share a folder of Electronic Catalog Maker catalogs from your computer
+description: |
+  Shares a folder of Electronic Catalog Maker (.ecatm) catalog files from
+  your own computer with anyone who visits its address — on your local
+  network, or (optionally) over the internet via a temporary Cloudflare
+  Quick Tunnel, no router configuration or account needed.
+
+  Launch it and a status page opens in your browser: pick the folder to
+  share, choose local-network or internet mode, and copy the address to
+  hand out. Visitors see a list of the catalogs in that folder, each with
+  a Copy URL button and an instant in-browser Preview — no app install
+  required on their end.
+
+  This is a companion tool for the free Electronic Catalog Maker editor and
+  viewer (https://tapalog.com/), for distributing catalogs straight from a
+  local disk or flash drive.
+
+  No files are ever written to disk by this app beyond a small settings
+  file remembering the last folder/mode you picked
+  (~/.ecm-catalog-server/config.json) — catalog files themselves are only
+  ever read, never modified.
+
+website: https://tapalog.com/
+contact: https://github.com/alexandrkotov/electronic-catalog-maker/issues
+issues: https://github.com/alexandrkotov/electronic-catalog-maker/issues
+source-code: https://github.com/alexandrkotov/electronic-catalog-maker
+license: MIT
+icon: assets/icons/icon-512.png
+
+grade: stable
+confinement: strict
+
+apps:
+  ecm-catalog-server:
+    command: bin/ecm-catalog-server-linux-x64
+    plugs:
+      - network
+      - network-bind
+      - home # needs to read whatever folder of catalogs the host picks, which is typically under $HOME, not just this snap's own data dir
+      # See collab-server's snapcraft.yaml for why this plug is needed —
+      # same "open the status page in the default browser" step
+      # (openInBrowser.ts spawns `xdg-open`), same fix.
+      - desktop
+
+parts:
+  catalog-server:
+    plugin: nil
+    # The whole repo, not just this package (source: ".." twice, up from
+    # packages/catalog-server/snap/snapcraft.yaml's own directory to the
+    # repo root) — server.ts embeds packages/viewer-embed/dist/ecm-viewer.js
+    # via a relative `with { type: "file" }` import that reaches outside
+    # this package, unlike collab-server (whose snapcraft.yaml this is
+    # otherwise modeled on) which never needs a sibling package's files.
+    source: ../..
+    build-packages:
+      - curl
+      - ca-certificates
+      - unzip
+    override-build: |
+      curl -fsSL https://bun.sh/install | bash
+      export BUN_INSTALL="$HOME/.bun"
+      export PATH="$BUN_INSTALL/bin:$PATH"
+      cd "$SNAPCRAFT_PART_SRC/packages/catalog-server"
+      bun run scripts/fetch-cloudflared.ts linux-x64
+      mkdir -p "$SNAPCRAFT_PART_INSTALL/bin"
+      bun build --compile --target=bun-linux-x64 \
+        src/main.compiled.linux-x64.ts \
+        --outfile "$SNAPCRAFT_PART_INSTALL/bin/ecm-catalog-server-linux-x64"
