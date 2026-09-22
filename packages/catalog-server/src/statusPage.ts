@@ -121,15 +121,27 @@ export function renderStatusPage(): string {
 
   pickFolderBtn.addEventListener("click", async () => {
     pickFolderBtn.disabled = true;
-    pickFolderBtn.textContent = "Waiting for dialog…";
+    pickFolderBtn.textContent = "Check your taskbar for the dialog…";
     try {
       const res = await fetch("/folder/pick", { method: "POST" });
+      if (res.status === 409) {
+        // Someone already clicked this and a dialog is still open — a
+        // second click must not spawn a second one (see server.ts's
+        // pickInProgress guard). On Windows especially, the dialog can open
+        // without stealing focus from this browser tab, so it's easy to
+        // miss — the button label above already points at the taskbar.
+        folderHint.textContent = "A folder dialog is already open — look for it in your taskbar (it may not have popped to the front).";
+        return;
+      }
       const data = await res.json();
       if (!data.path) {
         // Native dialog unavailable or cancelled — offer the manual fallback rather than doing nothing.
         manualRow.style.display = "flex";
         folderHint.textContent = "Couldn't open a folder dialog here — paste the full path instead.";
       }
+    } catch {
+      folderHint.textContent = "Couldn't reach the server to open a dialog — try again, or paste the path instead.";
+      manualRow.style.display = "flex";
     } finally {
       pickFolderBtn.disabled = false;
       pickFolderBtn.textContent = "Browse…";
