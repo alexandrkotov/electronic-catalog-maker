@@ -24,7 +24,17 @@ function escapeHtml(s: string): string {
  *   the file itself, so it always works — LAN or Internet, online or
  *   fully offline, no app installed required.
  */
-export function renderListingPage(entries: CatalogEntry[]): string {
+/**
+ * `baseUrl` is the shareable address this session's status page is
+ * currently showing (LAN address, or the tunnel's public URL in Internet
+ * mode) — NOT necessarily the host this /browse request itself arrived on.
+ * Building an absolute URL from it (rather than a page-relative one resolved
+ * against location.href) is what keeps "Copy URL" correct even when this
+ * page is viewed via http://localhost:<port> on the server's own machine:
+ * a relative link would resolve to that same "localhost" address, which
+ * means nothing to anyone else it gets shared with.
+ */
+export function renderListingPage(entries: CatalogEntry[], baseUrl: string): string {
   // listCatalogs() already sorts by full relPath, which happens to put
   // same-folder entries next to each other — this just adds a heading each
   // time the folder part changes, rather than re-sorting or re-grouping.
@@ -33,8 +43,8 @@ export function renderListingPage(entries: CatalogEntry[]): string {
     .map((entry) => {
       const lastSlash = entry.relPath.lastIndexOf("/");
       const dir = lastSlash === -1 ? "" : entry.relPath.slice(0, lastSlash);
-      const href = `/files/${entry.relPath.split("/").map(encodeURIComponent).join("/")}`;
-      const previewHref = `/preview/${entry.relPath.split("/").map(encodeURIComponent).join("/")}`;
+      const href = `${baseUrl}/files/${entry.relPath.split("/").map(encodeURIComponent).join("/")}`;
+      const previewHref = `${baseUrl}/preview/${entry.relPath.split("/").map(encodeURIComponent).join("/")}`;
       let heading = "";
       if (dir !== lastDir) {
         lastDir = dir;
