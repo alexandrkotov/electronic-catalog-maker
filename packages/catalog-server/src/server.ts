@@ -48,6 +48,43 @@ function isDirectory(path: string): boolean {
   }
 }
 
+/**
+ * True only for the machine that actually started this process — the
+ * browser tab main.ts opens always talks to it via `localhost`/`127.0.0.1`,
+ * so its connections arrive from the loopback interface no matter what
+ * hostname or port the server itself is bound to. A LAN peer's connection
+ * always arrives from their own real address instead, even if they type the
+ * exact same URL the owner uses — unlike a header, this can't be forged
+ * from the browser, since it's read straight off the accepted TCP
+ * connection.
+ *
+ * Internet mode needs its own check: every visitor's request arrives via
+ * the local `cloudflared` process proxying to `http://localhost:<port>`
+ * (see tunnel.ts), so `server.requestIP()` would see EVERY tunnel visitor
+ * as loopback too, incorrectly granting them owner access — the opposite of
+ * what this function is for. Cloudflare's edge (including on a free Quick
+ * Tunnel — confirmed, this isn't a paid-plan feature) adds a
+ * `Cf-Connecting-Ip` header carrying the actual visitor's address, which it
+ * sets itself and strips/overwrites any client-supplied value for, so it
+ * can't be spoofed either. Its mere presence already means "this request
+ * came through the tunnel, not a direct connection" — enough on its own to
+ * say "not the owner", regardless of what IP it names.
+ *
+ * `@ecm/collab-server` was checked for a precedent here (its own "host
+ * starts/stops it, guests just get links" story) and turned out to have no
+ * server-side enforcement at all — anyone with its base URL sees the same
+ * Stop button the host does. Confirmed live-request test (2026-09-22): Bun
+ * reports the loopback address as "127.0.0.1"/"::1" (sometimes
+ * IPv4-mapped as "::ffff:127.0.0.1"), and a real LAN address for anyone
+ * else — this is what actually distinguishes them here.
+ */
+function isOwnerRequest(server: Bun.Server<unknown>, request: Request): boolean {
+  if (request.headers.has("cf-connecting-ip")) return false;
+  const ip = server.requestIP(request);
+  if (!ip) return false;
+  return ip.address === "127.0.0.1" || ip.address === "::1" || ip.address === "::ffff:127.0.0.1";
+}
+
 export interface ServerHandle {
   port: number;
   /** Set by main.ts once the tunnel reports its address — mirrors collab-server's ServerHandle. */
@@ -104,19 +141,26 @@ export function startServer(port: number): ServerHandle {
   const bunServer = Bun.serve({
     port,
     idleTimeout: 255,
-    async fetch(request) {
+    async fetch(request, server) {
       const url = new URL(request.url);
       const parts = url.pathname.split("/").filter(Boolean);
+      const isOwner = isOwnerRequest(server, request);
 
       if (url.pathname === "/") {
-        return Response.redirect("/status", 302);
+        // The address the status page tells the owner to share is this
+        // same base URL — so anyone who opens it needs to land somewhere
+        // safe. Only the owner's own loopback connection gets the control
+        // page; everyone else goes straight to the read-only catalog list.
+        return Response.redirect(isOwner ? "/status" : "/browse", 302);
       }
 
       if (url.pathname === "/status") {
+        if (!isOwner) return Response.redirect("/browse", 302);
         return new Response(renderStatusPage(), { headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
 
       if (url.pathname === "/status.json") {
+        if (!isOwner) return json({ ok: false, error: "Owner only." }, 403);
         return json({
           folderPath: config.folderPath,
           mode: config.mode,
@@ -128,6 +172,7 @@ export function startServer(port: number): ServerHandle {
       }
 
       if (url.pathname === "/folder/pick" && request.method === "POST") {
+        if (!isOwner) return json({ ok: false, error: "Owner only." }, 403);
         // A second click (or a retried request) while one dialog is still
         // open must not spawn a second native process — that's exactly how
         // the dialogs-piling-up bug above happened. Reject outright rather
@@ -149,6 +194,7 @@ export function startServer(port: number): ServerHandle {
       }
 
       if (url.pathname === "/folder" && request.method === "POST") {
+        if (!isOwner) return json({ ok: false, error: "Owner only." }, 403);
         const body = (await request.json().catch(() => null)) as { path?: string } | null;
         const path = body?.path?.trim();
         if (!path) return json({ ok: false, error: "Missing path." }, 400);
@@ -159,6 +205,7 @@ export function startServer(port: number): ServerHandle {
       }
 
       if (url.pathname === "/mode" && request.method === "POST") {
+        if (!isOwner) return json({ ok: false, error: "Owner only." }, 403);
         const body = (await request.json().catch(() => null)) as { mode?: string } | null;
         if (body?.mode !== "lan" && body?.mode !== "internet") return json({ ok: false, error: "Bad mode." }, 400);
         config = { ...config, mode: body.mode };
@@ -168,6 +215,7 @@ export function startServer(port: number): ServerHandle {
       }
 
       if (url.pathname === "/shutdown" && request.method === "POST") {
+        if (!isOwner) return json({ ok: false, error: "Owner only." }, 403);
         setTimeout(() => handle.onShutdownRequested?.(), 50);
         return json({ ok: true });
       }
