@@ -18,3 +18,11 @@ declare module "../../viewer-embed/dist/*" {
   const path: string;
   export default path;
 }
+
+// server.ts also embeds its own committed favicon this way, for the
+// same reason — TypeScript doesn't understand what `with { type: "file" }`
+// does to the resolved type.
+declare module "../assets/icons/*" {
+  const path: string;
+  export default path;
+}
