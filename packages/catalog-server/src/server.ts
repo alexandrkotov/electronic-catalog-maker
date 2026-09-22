@@ -12,6 +12,23 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
+/**
+ * "Copy URL" is meant to be pasted into an already-installed/hosted
+ * Editor/Viewer's "Open remote catalog…" — that's a cross-origin fetch from
+ * whatever origin the app is served from (e.g. https://tapalog.com) to this
+ * server's own origin, so it needs real CORS. It also needs to survive
+ * Chrome's Private Network Access check, which preflights a request from a
+ * public site to a private/loopback target (localhost or a LAN IP) and
+ * blocks it unless the preflight response explicitly allows it. Confirmed
+ * live (2026-09-22): every "Open remote catalog" attempt failed with
+ * "Failed to fetch" — localhost, LAN IP, and the cloudflared tunnel URL
+ * alike — because /files/* sent no CORS headers at all.
+ */
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Private-Network": "true",
+};
+
 /** First non-internal IPv4 address this machine has — what a LAN visitor would actually type in, as opposed to "localhost" which only means something on this machine. Falls back to "localhost" (still correct for same-machine use) if none is found, e.g. no network adapter at all. */
 function getLanAddress(): string {
   for (const iface of Object.values(networkInterfaces())) {
@@ -148,12 +165,19 @@ export function startServer(port: number): ServerHandle {
         return new Response(renderListingPage(listCatalogs(config.folderPath)), { headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
 
+      if (parts[0] === "files" && request.method === "OPTIONS") {
+        // The preflight Private Network Access itself sends before the real
+        // GET — must be answered for a cross-origin "Open remote catalog"
+        // fetch (see CORS_HEADERS above) to get anywhere at all.
+        return new Response(null, { status: 204, headers: CORS_HEADERS });
+      }
+
       if (parts[0] === "files" && request.method === "GET") {
         if (!config.folderPath) return new Response("No folder selected.", { status: 404 });
         const relPath = decodeURIComponent(parts.slice(1).join("/"));
         const resolved = resolveCatalogPath(config.folderPath, relPath);
         if (!resolved) return new Response("Not found.", { status: 404 });
-        return new Response(Bun.file(resolved));
+        return new Response(Bun.file(resolved), { headers: CORS_HEADERS });
       }
 
       if (parts[0] === "preview" && request.method === "GET") {

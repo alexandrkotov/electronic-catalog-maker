@@ -25,17 +25,28 @@ function escapeHtml(s: string): string {
  *   fully offline, no app installed required.
  */
 export function renderListingPage(entries: CatalogEntry[]): string {
+  // listCatalogs() already sorts by full relPath, which happens to put
+  // same-folder entries next to each other — this just adds a heading each
+  // time the folder part changes, rather than re-sorting or re-grouping.
+  let lastDir: string | null = null;
   const rows = entries
     .map((entry) => {
+      const lastSlash = entry.relPath.lastIndexOf("/");
+      const dir = lastSlash === -1 ? "" : entry.relPath.slice(0, lastSlash);
       const href = `/files/${entry.relPath.split("/").map(encodeURIComponent).join("/")}`;
       const previewHref = `/preview/${entry.relPath.split("/").map(encodeURIComponent).join("/")}`;
-      return `<li class="catalog-row">
+      let heading = "";
+      if (dir !== lastDir) {
+        lastDir = dir;
+        heading = `<h2 class="folder-heading">${dir ? escapeHtml(dir) : "(root)"}</h2>`;
+      }
+      return `${heading}<div class="catalog-row">
         <span class="name" title="${escapeHtml(entry.relPath)}">${escapeHtml(entry.name)}</span>
         <span class="actions">
           <button type="button" class="copy-btn" data-href="${escapeHtml(href)}">Copy URL</button>
           <a class="preview-btn" href="${escapeHtml(previewHref)}" target="_blank" rel="noopener">Preview</a>
         </span>
-      </li>`;
+      </div>`;
     })
     .join("\n");
 
@@ -55,7 +66,15 @@ export function renderListingPage(entries: CatalogEntry[]): string {
     line-height: 1.5;
   }
   h1 { font-size: 1.3rem; }
-  ul { list-style: none; padding: 0; margin: 1.5rem 0 0; }
+  .catalog-list { margin: 1.5rem 0 0; }
+  .folder-heading {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    opacity: 0.65;
+    margin: 1.5rem 0 0.25rem;
+  }
+  .folder-heading:first-child { margin-top: 0; }
   .catalog-row {
     display: flex;
     align-items: center;
@@ -85,7 +104,7 @@ export function renderListingPage(entries: CatalogEntry[]): string {
 </head>
 <body>
   <h1>🗂️ Catalogs</h1>
-  ${entries.length === 0 ? '<p class="empty">No catalogs found in this folder yet.</p>' : `<ul>${rows}</ul>`}
+  ${entries.length === 0 ? '<p class="empty">No catalogs found in this folder yet.</p>' : `<div class="catalog-list">${rows}</div>`}
   <p id="app-links">Don't have a catalog app installed yet? <a href="${escapeHtml(PROJECT_URL)}" target="_blank" rel="noopener">Get Editor/Viewer</a></p>
 <script>
   for (const btn of document.querySelectorAll(".copy-btn")) {

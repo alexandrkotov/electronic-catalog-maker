@@ -20,7 +20,13 @@ export async function pickFolderNative(): Promise<string | null> {
             "powershell",
             "-NoProfile",
             "-Command",
-            "Add-Type -AssemblyName System.Windows.Forms; " +
+            // Windows PowerShell writes redirected stdout using the console's
+            // OEM codepage by default (not UTF-8), which mangles a
+            // non-ASCII folder name (e.g. Cyrillic) before it ever reaches
+            // this process — this must be set before Write-Output runs.
+            "$OutputEncoding = [System.Text.UTF8Encoding]::new($false); " +
+              "[Console]::OutputEncoding = $OutputEncoding; " +
+              "Add-Type -AssemblyName System.Windows.Forms; " +
               "$f = New-Object System.Windows.Forms.FolderBrowserDialog; " +
               "if ($f.ShowDialog() -eq 'OK') { Write-Output $f.SelectedPath }",
           ]

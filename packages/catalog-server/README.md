@@ -23,7 +23,12 @@ upload to any hosting service, no account.
    buttons:
    - **Copy URL** — the catalog file's own direct address, for pasting into
      an already-installed Editor/Viewer's "Open remote catalog…", or
-     anywhere else.
+     anywhere else. `/files/*` sends CORS + Private Network Access headers
+     (`Access-Control-Allow-Origin: *`, `Access-Control-Allow-Private-Network:
+     true`) so this works even when the app fetching it is served from a
+     different origin (e.g. the hosted `tapalog.com` Editor/Viewer fetching
+     from `localhost`/a LAN IP/the tunnel) — without these, every such fetch
+     fails silently with "Failed to fetch" (confirmed live).
    - **Preview** — opens the catalog right there in a new tab, using the
      same [`<ecm-viewer>`](../viewer-embed) component the project's own
      embedding feature ships, pointed at this same server's copy of the
