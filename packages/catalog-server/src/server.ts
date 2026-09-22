@@ -57,8 +57,20 @@ export function startServer(port: number): ServerHandle {
     },
   };
 
+  // Picking a folder is a slow, human-driven step (the user can sit in the
+  // native dialog for a while) — without this, Bun's default ~10s idle
+  // timeout can kill the connection mid-pick. 255 is Bun's own hard max for
+  // this option, not an arbitrary choice. Confirmed live (2026-09-22): the
+  // default caused the Windows folder dialog to appear to "not work",
+  // leading to repeated clicks that each spawned another native dialog
+  // (each dialog opens without stealing focus from the browser — a normal
+  // Windows background-process restriction, not a bug in this app — so the
+  // earlier ones were invisible, not actually gone).
+  let pickInProgress = false;
+
   const bunServer = Bun.serve({
     port,
+    idleTimeout: 255,
     async fetch(request) {
       const url = new URL(request.url);
       const parts = url.pathname.split("/").filter(Boolean);
@@ -83,13 +95,24 @@ export function startServer(port: number): ServerHandle {
       }
 
       if (url.pathname === "/folder/pick" && request.method === "POST") {
-        const path = await pickFolderNative();
-        if (path && isDirectory(path)) {
-          config = { ...config, folderPath: path };
-          saveConfig(config);
-          return json({ ok: true, path });
+        // A second click (or a retried request) while one dialog is still
+        // open must not spawn a second native process — that's exactly how
+        // the dialogs-piling-up bug above happened. Reject outright rather
+        // than queuing, so the page can tell the person a dialog is already
+        // open instead of silently waiting behind it.
+        if (pickInProgress) return json({ ok: false, path: null, alreadyPicking: true }, 409);
+        pickInProgress = true;
+        try {
+          const path = await pickFolderNative();
+          if (path && isDirectory(path)) {
+            config = { ...config, folderPath: path };
+            saveConfig(config);
+            return json({ ok: true, path });
+          }
+          return json({ ok: false, path: null });
+        } finally {
+          pickInProgress = false;
         }
-        return json({ ok: false, path: null });
       }
 
       if (url.pathname === "/folder" && request.method === "POST") {
