@@ -86,6 +86,21 @@ export function startServer(port: number): ServerHandle {
   // earlier ones were invisible, not actually gone).
   let pickInProgress = false;
 
+  /**
+   * The address to build shareable file/preview links from — NOT whatever
+   * host the current request happened to arrive on. Confirmed live
+   * (2026-09-22): a person browsing /browse via http://localhost:8899 (the
+   * address this app opens on its own machine) got "Copy URL" results with
+   * "localhost" baked in, which means nothing on any other device. Mirrors
+   * the same mode-driven fallback the status page already shows in its own
+   * "address to share" field: the tunnel's public URL once Internet mode is
+   * actually connected, otherwise the LAN address, always.
+   */
+  function getShareableBaseUrl(): string {
+    if (config.mode === "internet" && handle.publicUrl) return handle.publicUrl;
+    return `http://${getLanAddress()}:${handle.port}`;
+  }
+
   const bunServer = Bun.serve({
     port,
     idleTimeout: 255,
@@ -166,8 +181,9 @@ export function startServer(port: number): ServerHandle {
       }
 
       if (url.pathname === "/browse") {
-        if (!config.folderPath) return new Response(renderListingPage([]), { headers: { "Content-Type": "text/html; charset=utf-8" } });
-        return new Response(renderListingPage(listCatalogs(config.folderPath)), { headers: { "Content-Type": "text/html; charset=utf-8" } });
+        const baseUrl = getShareableBaseUrl();
+        if (!config.folderPath) return new Response(renderListingPage([], baseUrl), { headers: { "Content-Type": "text/html; charset=utf-8" } });
+        return new Response(renderListingPage(listCatalogs(config.folderPath), baseUrl), { headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
 
       if (parts[0] === "files" && request.method === "OPTIONS") {
