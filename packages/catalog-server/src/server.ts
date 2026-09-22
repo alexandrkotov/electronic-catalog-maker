@@ -246,7 +246,18 @@ export function startServer(port: number): ServerHandle {
         const relPath = decodeURIComponent(parts.slice(1).join("/"));
         const resolved = resolveCatalogPath(config.folderPath, relPath);
         if (!resolved) return new Response("Not found.", { status: 404 });
-        return new Response(Bun.file(resolved), { headers: CORS_HEADERS });
+        // Passing a BunFile straight into Response lets Bun serve it via a
+        // zero-copy sendfile() syscall — which breaks on network-ish
+        // filesystems. Confirmed live (2026-09-22): a VirtualBox shared
+        // folder (vboxsf) served a ~800KB file fine but reset the
+        // connection mid-transfer on a ~1.3MB one, every time — curl showed
+        // correct headers (200, right Content-Length) followed by "Recv
+        // failure: Connection reset by peer". `.stream()` makes Bun read it
+        // in ordinary chunks instead, sidestepping sendfile() entirely.
+        const file = Bun.file(resolved);
+        return new Response(file.stream(), {
+          headers: { ...CORS_HEADERS, "Content-Type": file.type, "Content-Length": String(file.size) },
+        });
       }
 
       if (parts[0] === "preview" && request.method === "GET") {
