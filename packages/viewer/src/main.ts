@@ -30,6 +30,10 @@ const params = new URLSearchParams(location.search);
 // sharer was looking at, not just the catalog's cover.
 const initialImageId = params.has("image") ? Number(params.get("image")) : undefined;
 const initialLinkId = params.has("link") ? Number(params.get("link")) : undefined;
+// A protected catalog's password, when the sharer chose to put it into the
+// link ("Share view…" → include the password). It lives in the fragment, so
+// it is never sent to the server that hosts the catalog.
+const initialKey = new URLSearchParams(location.hash.slice(1)).get("key") ?? undefined;
 
 // The font bytes are only ever needed once someone actually clicks
 // "Export PDF…" — fetched lazily and cached, same reasoning as the dynamic
@@ -74,6 +78,7 @@ mountViewer({
   initialSrc: params.get("src") ?? undefined,
   initialImageId: Number.isFinite(initialImageId) ? initialImageId : undefined,
   initialLinkId: Number.isFinite(initialLinkId) ? initialLinkId : undefined,
+  initialKey,
   updateAddressBar: true,
   wasmUrl,
   exportPdf,

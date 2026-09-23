@@ -134,6 +134,7 @@
   "lock.unlocking": "Unlocking…",
   "lock.wrongPassword": "Wrong password, or the file was modified. Check the password and try again.",
   "lock.exportTip": "Unlock the catalog first",
+  "lock.linkKeyFailed": "The key in this link did not work (the password may have changed). Enter the password instead.",
 
   "search.placeholder": "Search every row…",
   "search.allFields": "All fields",
@@ -147,6 +148,9 @@
   "share.retry": "Try again",
   "share.explain": "Anyone with this link — or who scans this code — sees exactly what's on screen right now, this image and this hotspot. It's a snapshot, not a live feed: it won't update as you keep browsing here.",
   "share.explainRoom": "This link only works while your computer and its sharing server stay on — use \"Stop sharing\" below when you're done, or it'll just stop working on its own once either does.",
+  "share.explainProtected": "This catalog is password-protected, and the link keeps it that way: whoever opens it needs the password.",
+  "share.includeKey": "Include the password in the link and QR code",
+  "share.includeKeyWarning": "Anyone with this link or code can open the catalog without typing the password. The link stays in browser history and in the chats where you send it.",
   "share.linkLabel": "Link",
   "share.copied": "Copied!",
   "share.copy": "Copy link",
