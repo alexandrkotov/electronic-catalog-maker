@@ -35,7 +35,7 @@ function escapeHtml(s: string): string {
  * a relative link would resolve to that same "localhost" address, which
  * means nothing to anyone else it gets shared with.
  */
-export function renderListingPage(entries: CatalogEntry[], baseUrl: string): string {
+export function renderListingPage(entries: CatalogEntry[], baseUrl: string, mode: "lan" | "internet"): string {
   // listCatalogs() already sorts by full relPath, which happens to put
   // same-folder entries next to each other — a Map built in that order
   // groups them correctly without needing to re-sort.
@@ -170,6 +170,8 @@ ${THEME_VARS_CSS}
   }
   .preview-btn { background: var(--accent); color: var(--on-accent); border-color: transparent; }
   .empty { opacity: 0.75; margin-top: 1.5rem; }
+  #ios-lan-notice { display: none; opacity: 0.8; font-size: 0.85rem; margin: 0.5rem 0 0; }
+  .copy-btn:disabled { opacity: 0.5; cursor: default; }
   #app-links { display: none; margin-top: 2rem; font-size: 0.92rem; opacity: 0.85; }
   #app-links a { color: var(--accent); }
 </style>
@@ -179,6 +181,7 @@ ${THEME_VARS_CSS}
     <h1>Catalogs</h1>
     ${THEME_TOGGLE_BUTTON_HTML}
   </div>
+  <p id="ios-lan-notice">Copy URL won't open on iPhone/iPad over a Local network server — tap Preview instead.</p>
   ${entries.length === 0 ? '<p class="empty">No catalogs found in this folder yet.</p>' : `<div class="catalog-list">${sections}</div>`}
   <p id="app-links">Don't have a catalog app installed yet? <a href="${escapeHtml(PROJECT_URL)}" target="_blank" rel="noopener">Get Editor/Viewer</a></p>
 <script>
@@ -203,6 +206,23 @@ ${THEME_VARS_CSS}
       document.body.removeChild(ta);
       ok ? resolve() : reject(new Error("execCommand(copy) failed"));
     });
+  }
+
+  // iOS/iPadOS (any browser there — they're all WebKit under the hood) has
+  // no working path from a copied Local-network URL to a hosted Editor/
+  // Viewer at all: pasting it in always fails with mixed-content, since
+  // Safari — unlike Chromium — doesn't treat a private LAN address as
+  // trustworthy enough for an HTTPS page to fetch from. Confirmed live
+  // (2026-09-23): same copied link opened fine on Windows, failed every
+  // time on an iPhone, worked again once this server switched to Internet
+  // mode (HTTPS via the tunnel, so no mixed content either way). Disabling
+  // the button here — rather than letting people hit that dead end — is
+  // only correct because Preview (same-origin, no fetch involved) always
+  // works instead, on this exact same device.
+  var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (isIOS && ${JSON.stringify(mode)} !== "internet") {
+    document.getElementById("ios-lan-notice").style.display = "block";
+    for (const btn of document.querySelectorAll(".copy-btn")) btn.disabled = true;
   }
 
   for (const btn of document.querySelectorAll(".copy-btn")) {
