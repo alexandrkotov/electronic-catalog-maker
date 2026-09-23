@@ -97,8 +97,11 @@
     gap: 1rem;
     margin: 2.25rem 0;
   }
+  .points > div:last-child { grid-column: 1 / -1; }
   @media (min-width: 820px) {
-    .points { grid-template-columns: repeat(4, 1fr); }
+    .points { grid-template-columns: repeat(6, 1fr); }
+    .points > div { grid-column: span 2; }
+    .points > div:nth-last-child(-n+2) { grid-column: span 3; }
   }
   @media (max-width: 640px) {
     .points { grid-template-columns: 1fr; }
@@ -220,6 +223,11 @@
       <h3>Бесплатные приложения, без подписки</h3>
       <p>Те же Редактор и Просмотрщик, что и у всех, — просто переключённые в режим «Учебный», в котором «Купить» и «Корзина» превращаются в «Подробнее» и «Коллекция».</p>
     </div>
+    <div>
+      <div class="point-icon">📝</div>
+      <h3>Тесты для самопроверки</h3>
+      <p>Тот же рисунок превращается в тест: ученик нажимает на ответ — он сразу становится зелёным или красным с коротким пояснением, а результаты можно распечатать. Это тренировка, а не экзамен под надзором.</p>
+    </div>
   </div>
 
   <div class="demo-section">
@@ -231,6 +239,18 @@
     <p class="demo-links">
       <a href="../viewer/?src=..%2Fdemo%2Fcell-biology.ecatm&lang=ru">Открыть в Просмотрщике</a>
       <a href="../editor/?src=..%2Fdemo%2Fcell-biology.ecatm&lang=ru">Открыть в Редакторе</a>
+    </p>
+  </div>
+
+  <div class="demo-section">
+    <h2>📝 Попробуйте тест — восемь вопросов о клетке</h2>
+    <p class="hint">
+      Нажмите на ответ: он сразу станет зелёным или красным, с коротким пояснением. В седьмом вопросе нужно выбрать два ответа. Счёт растёт по ходу. Это самопроверка для тренировки — ответы лежат внутри файла, так что это не экзамен под надзором. Тест на английском.
+    </p>
+    <ecm-viewer mode="full" src="../demo/quiz-cell-biology-en.ecatm"></ecm-viewer>
+    <p class="demo-links">
+      <a href="../viewer/?src=..%2Fdemo%2Fquiz-cell-biology-en.ecatm&lang=ru">Открыть в Просмотрщике</a>
+      <a href="../editor/?src=..%2Fdemo%2Fquiz-cell-biology-en.ecatm&lang=ru">Открыть в Редакторе</a>
     </p>
   </div>
 

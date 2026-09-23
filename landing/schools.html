@@ -97,8 +97,11 @@
     gap: 1rem;
     margin: 2.25rem 0;
   }
+  .points > div:last-child { grid-column: 1 / -1; }
   @media (min-width: 820px) {
-    .points { grid-template-columns: repeat(4, 1fr); }
+    .points { grid-template-columns: repeat(6, 1fr); }
+    .points > div { grid-column: span 2; }
+    .points > div:nth-last-child(-n+2) { grid-column: span 3; }
   }
   @media (max-width: 640px) {
     .points { grid-template-columns: 1fr; }
@@ -220,6 +223,11 @@
       <h3>Free apps, no subscription</h3>
       <p>The same Editor and Viewer everyone else uses — just switched to "Education" mode, which relabels Buy/Cart into Learn more/Collection.</p>
     </div>
+    <div>
+      <div class="point-icon">📝</div>
+      <h3>Self-check quizzes</h3>
+      <p>Turn the same diagram into a self-check quiz: students tap an answer, it turns green or red at once with a short explanation, and they can print their results. Practice, not a proctored exam.</p>
+    </div>
   </div>
 
   <div class="demo-section">
@@ -231,6 +239,18 @@
     <p class="demo-links">
       <a href="viewer/?src=..%2Fdemo%2Fcell-biology.ecatm">Open in Viewer</a>
       <a href="editor/?src=..%2Fdemo%2Fcell-biology.ecatm">Open in Editor</a>
+    </p>
+  </div>
+
+  <div class="demo-section">
+    <h2>📝 Try a quiz — eight questions about the cell</h2>
+    <p class="hint">
+      Tap an answer: it turns green or red at once, with a short explanation. Question 7 needs two answers. The score builds up as you go. It's a self-check for practice — the answers live inside the file, so it isn't a proctored exam.
+    </p>
+    <ecm-viewer mode="full" src="demo/quiz-cell-biology-en.ecatm"></ecm-viewer>
+    <p class="demo-links">
+      <a href="viewer/?src=..%2Fdemo%2Fquiz-cell-biology-en.ecatm">Open in Viewer</a>
+      <a href="editor/?src=..%2Fdemo%2Fquiz-cell-biology-en.ecatm">Open in Editor</a>
     </p>
   </div>
 
