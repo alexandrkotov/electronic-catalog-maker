@@ -89,7 +89,11 @@ body {
      element itself (packages/shared/src/viewerEngine.ts, applyPanelWidths())
      — that element is never touched by render()'s innerHTML rebuild, so a
      user's resize survives every re-render, not just this one. */
-  grid-template-columns: var(--images-w, 220px) 6px 1fr 6px var(--table-w, 380px);
+  /* The saved px widths come from localStorage, which is shared by every page
+     on the origin: widths dragged wide in the full-page viewer would squeeze
+     the stage to nothing in a narrower embed. So each side panel is also
+     capped to a share of the container, which keeps the stage at >= ~40%. */
+  grid-template-columns: min(var(--images-w, 220px), 24%) 6px minmax(0, 1fr) 6px min(var(--table-w, 380px), 34%);
   height: 100%;
   /* Redundant with `body` above for the standalone page, but load-bearing
      for the embeddable viewer: its shadow tree has no <body> for that rule
