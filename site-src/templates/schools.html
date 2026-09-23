@@ -93,8 +93,11 @@
     gap: 1rem;
     margin: 2.25rem 0;
   }
+  .points > div:last-child { grid-column: 1 / -1; }
   @media (min-width: 820px) {
-    .points { grid-template-columns: repeat(4, 1fr); }
+    .points { grid-template-columns: repeat(6, 1fr); }
+    .points > div { grid-column: span 2; }
+    .points > div:nth-last-child(-n+2) { grid-column: span 3; }
   }
   @media (max-width: 640px) {
     .points { grid-template-columns: 1fr; }
@@ -216,6 +219,11 @@
       <h3>{{schools.points.free.title}}</h3>
       <p>{{schools.points.free.text}}</p>
     </div>
+    <div>
+      <div class="point-icon">📝</div>
+      <h3>{{schools.points.quiz.title}}</h3>
+      <p>{{schools.points.quiz.text}}</p>
+    </div>
   </div>
 
   <div class="demo-section">
@@ -227,6 +235,18 @@
     <p class="demo-links">
       <a href="{{@base}}viewer/?src=..%2Fdemo%2Fcell-biology.ecatm{{@a}}">{{schools.demo.openViewer}}</a>
       <a href="{{@base}}editor/?src=..%2Fdemo%2Fcell-biology.ecatm{{@a}}">{{schools.demo.openEditor}}</a>
+    </p>
+  </div>
+
+  <div class="demo-section">
+    <h2>{{schools.quiz.title}}</h2>
+    <p class="hint">
+      {{schools.quiz.hint}}
+    </p>
+    <ecm-viewer mode="full" src="{{@base}}demo/quiz-cell-biology-en.ecatm"></ecm-viewer>
+    <p class="demo-links">
+      <a href="{{@base}}viewer/?src=..%2Fdemo%2Fquiz-cell-biology-en.ecatm{{@a}}">{{schools.demo.openViewer}}</a>
+      <a href="{{@base}}editor/?src=..%2Fdemo%2Fquiz-cell-biology-en.ecatm{{@a}}">{{schools.demo.openEditor}}</a>
     </p>
   </div>
 
