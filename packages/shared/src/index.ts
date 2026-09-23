@@ -11,6 +11,7 @@ export * from "./legacySch.js";
 export * from "./qrcode.js";
 export * from "./cart.js";
 export * from "./quiz.js";
+export * from "./protect.js";
 export * from "./pdfExportOptions.js";
 // pdfExport.ts (and its pdf-lib/@pdf-lib/fontkit dependencies, well over a
 // MB combined) is deliberately NOT re-exported here — every consumer of
