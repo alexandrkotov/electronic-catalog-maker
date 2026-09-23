@@ -1334,3 +1334,53 @@ button:disabled {
 .ecm-viewer-app.mode-showcase .hotspot {
   transform: translate(-50%, -50%) scale(var(--marker-scale, 1));
 }
+
+/* Lock screen for a password-protected catalog (see protect.ts): stands in for
+   the panels until unlocked. Spans everything under the toolbar in the full
+   viewer, and the whole box in the toolbar-less widget modes. */
+.lock-screen {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  min-height: 0;
+  overflow: auto;
+}
+
+.ecm-viewer-app.mode-full .lock-screen {
+  grid-row: 2 / -1;
+}
+
+.lock-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  width: 22rem;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+}
+
+.lock-card h2 {
+  font-size: 1.1rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.lock-card .hint {
+  margin: 0;
+}
+
+.lock-cover {
+  display: block;
+  width: 100%;
+  max-height: 14rem;
+  object-fit: contain;
+  border-radius: 4px;
+  background: var(--bg-panel);
+}

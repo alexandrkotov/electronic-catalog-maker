@@ -16,6 +16,7 @@ import {
   readMeta,
 } from "./db.js";
 import { detectFileKind, importSchCatalog } from "./legacySch.js";
+import { ProtectedCatalogError, isProtectedCatalog, readProtectedInfo, unlockCatalog, type ProtectedCatalogInfo } from "./protect.js";
 import { groupImagesByFolder } from "./images.js";
 import { collectExtraKeys, searchRows, type SearchField } from "./search.js";
 import { applyTheme, currentTheme, resolveInitialTheme, toggleTheme } from "./theme.js";
@@ -392,6 +393,20 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // clears the other.
   let openedFileHandle: EcmFileSystemFileHandle | null = null;
   let refreshing = false;
+  // A password-protected catalog (see protect.ts) that was opened but not yet
+  // unlocked: the lock screen replaces the panels until the right password is
+  // entered, and `db` stays null meanwhile — which is also what keeps Export
+  // PDF / Share view (and its QR) disabled, so nothing leaves a locked catalog.
+  // `sessionPassword` (memory only, never persisted) lets Refresh re-open the
+  // same catalog without asking again.
+  let locked: { bytes: Uint8Array; sourceName: string; info: ProtectedCatalogInfo } | null = null;
+  let lockPassword = "";
+  let lockBusy = false;
+  let lockError: string | null = null;
+  let sessionPassword: string | null = null;
+  // A deep link's image/hotspot ids (see boot) wait here while the catalog they
+  // point into is still locked, and are applied once it is unlocked.
+  let initialSelectionPending = false;
   // "Share view…" — see the OneDrive backlog's QR-viewer item. Only offered
   // when updateAddressBar is true (see its own doc) — this whole feature is
   // about producing a link to *this page's* own current address, which an
@@ -692,28 +707,41 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     container.style.setProperty("--showcase-details-min", `${tall}px`);
   }
 
+  /**
+   * The other half of a deep link (see MountViewerOptions' own doc) —
+   * applied after the catalog's own openBytes() has already reset
+   * activeImageId/selectedLinkId to "first image, none selected", and
+   * only once each id is confirmed to still exist in what actually
+   * loaded (a stale link from an edited-since catalog silently falls
+   * back to that same default instead of throwing).
+   */
+  function applyInitialSelection() {
+    if (!db) return;
+    if (options.initialImageId !== undefined && listImages(db).some((i) => i.id === options.initialImageId)) {
+      activeImageId = options.initialImageId;
+    }
+    if (activeImageId !== null && options.initialLinkId !== undefined && listLinksForImage(db, activeImageId).some((l) => l.id === options.initialLinkId)) {
+      selectedLinkId = options.initialLinkId;
+    }
+    syncAddressBar();
+    render();
+    if (selectedLinkId !== null) centerSelection();
+  }
+
   async function boot() {
     container.innerHTML = `<p style="padding:1rem">${escapeHtml(t("boot.loading"))}</p>`;
     SQL = await initSqlite(options.wasmUrl);
 
     if (options.initialSrc) {
+      // Set before loading so a protected catalog's lock screen keeps the deep
+      // link in the address bar (see currentDeepLinkParams).
+      initialSelectionPending = true;
       await loadFromUrl(options.initialSrc);
-      // The other half of a deep link (see MountViewerOptions' own doc) —
-      // applied after loadFromUrl's own openBytes() has already reset
-      // activeImageId/selectedLinkId to "first image, none selected", and
-      // only once each id is confirmed to still exist in what actually
-      // loaded (a stale link from an edited-since catalog silently falls
-      // back to that same default instead of throwing).
-      if (db) {
-        if (options.initialImageId !== undefined && listImages(db).some((i) => i.id === options.initialImageId)) {
-          activeImageId = options.initialImageId;
-        }
-        if (activeImageId !== null && options.initialLinkId !== undefined && listLinksForImage(db, activeImageId).some((l) => l.id === options.initialLinkId)) {
-          selectedLinkId = options.initialLinkId;
-        }
-        syncAddressBar();
-        render();
-        if (selectedLinkId !== null) centerSelection();
+      // A protected catalog has no images to validate ids against yet: keep
+      // the deep link until it is unlocked (see actionUnlock).
+      if (!locked) {
+        initialSelectionPending = false;
+        applyInitialSelection();
       }
     } else {
       render();
@@ -874,6 +902,22 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     sourceName = t("legacy.sourceName"),
     handle: EcmFileSystemFileHandle | null,
   ) {
+    if (isProtectedCatalog(bytes)) {
+      let unlocked: Uint8Array | null = null;
+      // Refresh of a catalog already unlocked this session must not ask again.
+      if (refreshing && sessionPassword) {
+        try {
+          unlocked = await unlockCatalog(bytes, sessionPassword);
+        } catch {
+          // The seller changed the password: fall through to the lock screen.
+        }
+      }
+      if (!unlocked) {
+        lockCatalog(bytes, sourceName, handle);
+        return;
+      }
+      bytes = unlocked;
+    }
     const kind = detectFileKind(SQL, bytes);
     if (kind === "legacy-sch") {
       statusMessage = t("status.converting");
@@ -923,6 +967,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     mobileTab = loadedMeta.defaultView === "diagram" ? "stage" : loadedMeta.defaultView === "table" ? "table" : "images";
     tableAutoScrolledForBuy = false; // this catalog's table hasn't had its first-display Buy-reveal scroll yet
     remoteDialogOpen = false;
+    locked = null;
+    lockPassword = "";
+    lockError = null;
     openedFileHandle = handle;
     if (handle) {
       currentSrcUrl = null;
@@ -934,6 +981,61 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       resetShareViewState();
     }
     render();
+  }
+
+  /**
+   * Shows the lock screen for a protected file instead of opening it. Throws
+   * (a ProtectedCatalogError) when the file's header is damaged, which the
+   * callers report like any other failed open.
+   */
+  function lockCatalog(bytes: Uint8Array, sourceName: string, handle: EcmFileSystemFileHandle | null) {
+    const info = readProtectedInfo(bytes);
+    // The previously open catalog (if any) is replaced, exactly as opening
+    // another file would — and dropping it is what disables Export/Share.
+    db = null;
+    activeImageId = null;
+    selectedLinkId = null;
+    searchOpen = false;
+    cartOpen = false;
+    cartItems = new Set();
+    catalogMode = "commercial";
+    locked = { bytes, sourceName, info };
+    lockPassword = "";
+    lockError = null;
+    lockBusy = false;
+    remoteDialogOpen = false;
+    openedFileHandle = handle;
+    if (handle) {
+      currentSrcUrl = null;
+      resetShareViewState();
+    }
+    statusMessage = t("status.locked", { name: info.name });
+    render();
+  }
+
+  async function actionUnlock() {
+    if (!locked || lockBusy || !lockPassword) return;
+    const { bytes, sourceName } = locked;
+    const password = lockPassword;
+    lockBusy = true;
+    lockError = null;
+    render();
+    try {
+      const plain = await unlockCatalog(bytes, password);
+      sessionPassword = password;
+      lockBusy = false;
+      await openBytes(plain, sourceName, openedFileHandle);
+      if (initialSelectionPending) {
+        initialSelectionPending = false;
+        applyInitialSelection();
+      }
+    } catch (err) {
+      lockBusy = false;
+      lockError = err instanceof ProtectedCatalogError && err.code === "wrong-password" ? t("lock.wrongPassword") : (err as Error).message;
+      lockPassword = "";
+      render();
+      root.getElementById("lock-password")?.focus();
+    }
   }
 
   function baseName(nameOrPath: string): string {
@@ -1531,8 +1633,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function currentDeepLinkParams(): URLSearchParams | null {
     if (!currentSrcUrl) return null;
     const params = new URLSearchParams({ src: currentSrcUrl });
-    if (activeImageId !== null) params.set("image", String(activeImageId));
-    if (selectedLinkId !== null) params.set("link", String(selectedLinkId));
+    // While a protected catalog is still locked the deep link's own ids are the
+    // only ones there are; keep them so a reload before unlocking loses nothing.
+    const keepInitial = locked !== null && initialSelectionPending;
+    const imageId = keepInitial ? (options.initialImageId ?? null) : activeImageId;
+    const linkId = keepInitial ? (options.initialLinkId ?? null) : selectedLinkId;
+    if (imageId !== null) params.set("image", String(imageId));
+    if (linkId !== null) params.set("link", String(linkId));
     return params;
   }
 
@@ -1709,6 +1816,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     return s.replace(/["\\]/g, "\\$&");
   }
 
+  function bytesToBase64(bytes: Uint8Array): string {
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(binary);
+  }
+
   function escapeHtml(s: string): string {
     return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
   }
@@ -1781,8 +1894,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                  <button id="btn-open-remote" title="${te("toolbar.openRemote.tip")}">${te("toolbar.openRemote")}</button>
                  <button id="btn-refresh" ${currentSrcUrl || openedFileHandle ? "" : "disabled"} title="${te("toolbar.refresh.tip")}">${refreshing ? te("toolbar.refreshing") : te("toolbar.refresh")}</button>
                  ${catalogMode === "quiz" ? "" : `<button id="btn-search" ${db ? "" : "disabled"} title="${te("toolbar.search.tip")}">${te("toolbar.search")}</button>`}
-                 ${updateAddressBar ? `<button id="btn-share-view" ${db && !isLoopbackHostname(location.hostname) ? "" : "disabled"} title="${escapeHtml(shareViewButtonTitle())}">${te("toolbar.share")}</button>` : ""}
-                 ${exportPdf && catalogMode !== "quiz" ? `<button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="${te("toolbar.exportPdf.tip")}">${exportPdfBusy ? te("toolbar.exportPdf.busy") : te("toolbar.exportPdf")}</button>` : ""}
+                 ${updateAddressBar ? `<button id="btn-share-view" ${db && !isLoopbackHostname(location.hostname) ? "" : "disabled"} title="${escapeHtml(locked ? t("lock.exportTip") : shareViewButtonTitle())}">${te("toolbar.share")}</button>` : ""}
+                 ${exportPdf && catalogMode !== "quiz" ? `<button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="${locked ? te("lock.exportTip") : te("toolbar.exportPdf.tip")}">${exportPdfBusy ? te("toolbar.exportPdf.busy") : te("toolbar.exportPdf")}</button>` : ""}
                  ${catalogMode === "quiz" ? renderQuizBar() : ""}
                  ${cartMode === "accumulate" && catalogMode !== "quiz" ? `<button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="${te("cart.tip")}">${cartIcon()} ${cartLabel()} (${cartItems.size})</button>` : ""}
                  <span class="spacer"></span>
@@ -1802,6 +1915,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         }
 
         ${
+          locked
+            ? renderLockScreen(locked)
+            : `        ${
           showcase
             ? ""
             : `<div class="mobile-tabs">
@@ -1887,6 +2003,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
               : ""
           }
         </div>`
+        }`
         }
 
         ${
@@ -2100,6 +2217,31 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         <button id="btn-instance-next" title="${te("instance.next")}">›</button>
       </div>
     `;
+  }
+
+  /**
+   * Lock screen for a password-protected catalog: the public name and cover
+   * (readable without the password), a password field, and the unlock button.
+   * Sits in the panels' place rather than in a page-level overlay so an
+   * embedded widget never covers the host page.
+   */
+  function renderLockScreen(l: { info: ProtectedCatalogInfo }): string {
+    const cover = l.info.cover && /^image\/(jpeg|png|webp|gif)$/.test(l.info.cover.mime) ? l.info.cover : null;
+    return `<div class="lock-screen">
+      <form class="lock-card" id="lock-form" autocomplete="off">
+        ${cover ? `<img class="lock-cover" src="data:${cover.mime};base64,${bytesToBase64(cover.bytes)}" alt="" />` : ""}
+        <h2>${escapeHtml(l.info.name)}</h2>
+        <p class="hint">${te("lock.intro")}</p>
+        <div class="field">
+          <label for="lock-password">${te("lock.passwordLabel")}</label>
+          <input type="password" id="lock-password" value="${escapeHtml(lockPassword)}" autocomplete="off" autocapitalize="off" spellcheck="false" ${lockBusy ? "disabled" : ""} />
+        </div>
+        ${lockError ? `<p class="error" role="alert">${escapeHtml(lockError)}</p>` : ""}
+        <div class="open-actions">
+          <button type="submit" id="lock-submit" ${lockBusy || !lockPassword ? "disabled" : ""}>${lockBusy ? te("lock.unlocking") : te("lock.unlock")}</button>
+        </div>
+      </form>
+    </div>`;
   }
 
   /** "Share view…" popup — link+QR once ready, a busy/error state while getting there. See actionShareView's own doc for the two paths into it. */
@@ -2445,6 +2587,22 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       openUrlInput?.focus();
       openUrlInput?.setSelectionRange(openUrlInput.value.length, openUrlInput.value.length);
     }
+
+    const lockForm = root.getElementById("lock-form");
+    const lockInput = root.getElementById("lock-password") as HTMLInputElement | null;
+    const lockSubmit = root.getElementById("lock-submit") as HTMLButtonElement | null;
+    lockInput?.addEventListener("input", () => {
+      lockPassword = lockInput.value;
+      if (lockSubmit) lockSubmit.disabled = !lockPassword;
+    });
+    lockForm?.addEventListener("submit", (evt) => {
+      evt.preventDefault();
+      void actionUnlock();
+    });
+    // Only the standalone viewer grabs focus: an embedded widget must not
+    // steal focus or scroll its host page on load. After a wrong password the
+    // field is refocused by actionUnlock in every mode.
+    if (lockInput && mode === "full" && !lockBusy && !lockError) lockInput.focus();
 
     root.getElementById("btn-share-view")?.addEventListener("click", () => void actionShareView());
     root.getElementById("btn-export-pdf")?.addEventListener("click", actionOpenPdfOptions);
