@@ -38,7 +38,9 @@ No catalog file of your own yet? Try a demo, no install or download
 needed — [Auto parts](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fauto-spare-parts.ecatm)
 (an anonymized catalog of exploded-view truck-part diagrams) or
 [Furniture](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Ffurniture.ecatm)
-(real photos, a smaller catalog to browse).
+(real photos, a smaller catalog to browse), or a
+[password-protected one](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fdiy-stool-en.ecatm)
+(a DIY guide; the password, `stool-2026`, is public on purpose).
 
 To develop the project instead (or run it without depending on that
 hosted copy), it needs two ordinary developer tools installed once:
@@ -194,6 +196,53 @@ All of this is saved into the catalog file itself (new `meta` keys — see
 `.ecatm` in a different browser, or hand it to someone else, and the Buy
 button behaves the same way for them too.
 
+## Password-protected catalogs
+
+To sell a catalog, or to keep some of your catalogs for a limited circle of
+people, export a protected copy: in the editor click **Export protected…**,
+type a password twice, and download `<name>_protected.ecatm`. Your working
+file stays as it is — keep it, because a protected file can only be opened
+in the viewer, not edited. The password cannot be recovered; if it is lost,
+export a new copy from the working file with a different password.
+
+- **What is encrypted.** The whole catalog (images, hotspots, data, Buy
+  settings) is sealed with AES-256-GCM, with the key derived from the
+  password (PBKDF2-SHA256, 600,000 iterations), all in the browser — there
+  is no server and no account. Only the catalog **name** and an optional
+  **cover picture** stay readable without the password; the dialog lets you
+  pick no cover, one of the catalog's own images (the first by default) or a
+  picture of your own, shrunk automatically to at most 400 KB.
+- **Opening it.** The viewer (and the `<ecm-viewer>` embed) shows a lock
+  screen with the cover and title; the right password opens the catalog with
+  every feature. While it is locked, **Export PDF…** and **Share view…** are
+  disabled. A wrong password, or a file that was changed after export, is
+  reported as "wrong password". Decryption needs a secure context: HTTPS or
+  `localhost`, not a plain `http://` address on your network.
+- **Links.** A link to a protected file keeps it protected — whoever opens
+  it needs the password. Appending `#key=<password>` to a viewer link
+  (the part after `#` is never sent to a server) unlocks it automatically;
+  **Share view…** offers this as an opt-in checkbox, with a warning that the
+  link then works without a password and stays in browser history and chats.
+  The embed widget deliberately has no `key` attribute, so a password never
+  ends up written into a page's HTML.
+- **Selling one.** Sell the protected `.ecatm` as a digital product (for
+  example on Payhip) and put the password in the purchase confirmation or
+  the thank-you text; the buyer opens the file in the viewer at
+  [tapalog.com](https://tapalog.com/viewer/) or the Store app. The buy
+  links inside the catalog still work as usual.
+- **Access levels.** Give each file its own password: publish some catalogs
+  openly and protect others, and hand the password only to the people who
+  should see those.
+
+This is password protection of a file, not per-user access control: anyone
+who has the file and the password can open it and can pass both on, and
+there is no way to revoke access from one person short of exporting a new
+copy with a new password.
+
+A live example is on the landing page's **Password-protected** tab (the
+demo password, `stool-2026`, is public on purpose); the sample files are
+`demo/diy-stool-{en,ru,uk}.ecatm`.
+
 ## Exporting to PDF
 
 Both the viewer and the editor have an **Export PDF…** toolbar button that
@@ -280,6 +329,12 @@ One `.ecatm` file (a SQLite database under the hood) = one catalog. Tables:
 - `rows` — one row of data per link, joined by `url`. Fixed columns (`name`,
   `sku`, `description`) plus a free-form `extra` JSON column for whatever
   characteristics a given catalog needs (including `buy_url`, above).
+
+A password-protected copy (see "Password-protected catalogs") is not a
+SQLite file: it starts with the magic bytes `ECMPROT\0`, followed by a
+version, the key-derivation parameters, the public name/cover, and the
+encrypted `.ecatm`. The format lives in
+[`packages/shared/src/protect.ts`](packages/shared/src/protect.ts).
 
 See [`packages/shared/src/schema.ts`](packages/shared/src/schema.ts) for
 the exact DDL.
