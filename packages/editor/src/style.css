@@ -1009,3 +1009,32 @@ td.extra-cell {
     overflow-x: auto;
   }
 }
+
+/* "Export protected…" dialog: the public-cover preview and the password
+   strength line (see renderProtectDialog). */
+.protect-box {
+  width: 24rem;
+}
+
+.protect-box .hint {
+  font-size: 0.75rem;
+}
+
+.protect-cover-preview {
+  display: block;
+  max-width: 100%;
+  max-height: 10rem;
+  object-fit: contain;
+  margin: 0.25rem 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-panel);
+}
+
+.protect-strength-weak {
+  color: var(--danger);
+}
+
+.protect-strength-strong {
+  color: #15803d;
+}

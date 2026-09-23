@@ -45,6 +45,12 @@ import {
   listRowsForImage,
   openCatalog,
   isListMode,
+  isProtectedCatalog,
+  makeCoverThumbnail,
+  passwordStrength,
+  PROTECT_MAX_COVER_BYTES,
+  PROTECT_MIN_PASSWORD_LENGTH,
+  protectCatalog,
   readCatalogMode,
   readMeta,
   type CatalogMode,
@@ -187,6 +193,25 @@ let pdfFontBytesPromise: Promise<Uint8Array> | null = null;
 let pdfOptionsDialogOpen = false;
 let pdfQrPlacement: QrPlacement = DEFAULT_PDF_EXPORT_OPTIONS.qrPlacement;
 let pdfDiagramPageMode: DiagramPageMode = DEFAULT_PDF_EXPORT_OPTIONS.diagramPageMode;
+// "Export protected…" dialog (see renderProtectDialog): the password, and the
+// public cover shown on the lock screen before it is entered. `protectCoverChoice`
+// is "none", "file" (the seller's own picture) or "image:<id>" (one of this
+// catalog's images); `protectCover` is the ready-to-embed thumbnail for it and
+// `protectCoverUrl` its preview. `protectCoverToken` drops a stale thumbnail
+// when the choice changes while an earlier one is still being prepared.
+let protectDialogOpen = false;
+let protectPassword = "";
+let protectRepeat = "";
+let protectCoverChoice = "none";
+let protectCustomFile: File | null = null;
+let protectCover: { mime: string; bytes: Uint8Array } | null = null;
+let protectCoverUrl: string | null = null;
+let protectCoverBusy = false;
+let protectCoverError: string | null = null;
+let protectCoverToken = 0;
+let protectBusy = false;
+let protectFocusPending = false;
+let protectError: string | null = null;
 // Set when the catalog was opened (or first saved) via the File System
 // Access API, so subsequent Save calls can overwrite it in place.
 let openedFileHandle: FileSystemFileHandle | null = null;
@@ -720,6 +745,12 @@ async function openCatalogFromBytes(
   // session edits meant for this new one — leave it instead of guessing.
   if (collab) actionLeaveCollaboration();
   try {
+    if (isProtectedCatalog(bytes)) {
+      // The editor works on the plain catalog; a protected copy is only for
+      // handing out (see actionOpenProtectDialog), so say so instead of failing obscurely.
+      setStatus(t("status.protectedNotEditable"));
+      return;
+    }
     const kind = detectFileKind(SQL, bytes);
     if (kind === "legacy-sch") {
       setStatus(t("status.converting"));
@@ -892,11 +923,11 @@ function suggestedFileName(): string {
   return `${base}.${CATALOG_FILE_EXTENSION}`;
 }
 
-function downloadBytes(bytes: Uint8Array) {
+function downloadBytes(bytes: Uint8Array, fileName = suggestedFileName()) {
   const blob = new Blob([bytes as BlobPart], { type: "application/x-sqlite3" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = suggestedFileName();
+  a.download = fileName;
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -905,6 +936,113 @@ function downloadBytes(bytes: Uint8Array) {
 function actionExportCatalog() {
   if (!db) return;
   downloadBytes(exportCatalog(db));
+}
+
+/** The protected copy gets its own name so it can never overwrite the editable file saved next to it. */
+function suggestedProtectedFileName(): string {
+  const meta = db ? readMeta(db) : null;
+  const base = meta?.catalogName.replace(/[^\w\-]+/g, "_") || "catalog";
+  return `${base}_protected.${CATALOG_FILE_EXTENSION}`;
+}
+
+function setProtectCoverUrl(url: string | null) {
+  if (protectCoverUrl) URL.revokeObjectURL(protectCoverUrl);
+  protectCoverUrl = url;
+}
+
+/** Opens "Export protected…" with the catalog's first image preselected as the cover — the seller can change or drop it. */
+function actionOpenProtectDialog() {
+  if (!db) return;
+  protectDialogOpen = true;
+  protectPassword = "";
+  protectRepeat = "";
+  protectCustomFile = null;
+  protectError = null;
+  protectFocusPending = true;
+  const first = currentImages()[0];
+  protectCoverChoice = first ? `image:${first.id}` : "none";
+  render();
+  void refreshProtectCover();
+}
+
+function actionCloseProtectDialog() {
+  if (protectBusy) return;
+  protectDialogOpen = false;
+  protectCoverToken++; // an in-flight thumbnail must not repaint a closed dialog
+  protectCoverBusy = false;
+  setProtectCoverUrl(null);
+  protectCover = null;
+  render();
+}
+
+/** Prepares the thumbnail for whatever `protectCoverChoice` currently points at. */
+async function refreshProtectCover() {
+  const token = ++protectCoverToken;
+  protectCoverError = null;
+  let source: Blob | null = null;
+  if (protectCoverChoice.startsWith("image:") && db) {
+    const img = currentImages().find((i) => i.id === Number(protectCoverChoice.slice("image:".length)));
+    if (img) source = await (await fetch(`data:${img.mimeType};base64,${img.imageData}`)).blob();
+  } else if (protectCoverChoice === "file") {
+    source = protectCustomFile;
+  }
+  if (!source) {
+    protectCover = null;
+    setProtectCoverUrl(null);
+    protectCoverBusy = false;
+    if (protectDialogOpen) render();
+    return;
+  }
+  protectCoverBusy = true;
+  protectCover = null;
+  setProtectCoverUrl(null);
+  render();
+  try {
+    const cover = await makeCoverThumbnail(source);
+    if (token !== protectCoverToken) return;
+    protectCover = cover;
+    setProtectCoverUrl(URL.createObjectURL(new Blob([cover.bytes as BlobPart], { type: cover.mime })));
+  } catch (err) {
+    if (token !== protectCoverToken) return;
+    protectCoverError = t("protect.cover.failed", { message: err instanceof Error ? err.message : String(err) });
+  }
+  protectCoverBusy = false;
+  if (protectDialogOpen) render();
+}
+
+/** Whether the dialog's fields allow submitting; also drives the live-patched button state. */
+function protectFormProblem(): "short" | "mismatch" | "cover" | null {
+  if ([...protectPassword].length < PROTECT_MIN_PASSWORD_LENGTH) return "short";
+  if (protectPassword !== protectRepeat) return "mismatch";
+  if (protectCoverBusy || (protectCoverChoice === "file" && !protectCover)) return "cover";
+  return null;
+}
+
+async function actionConfirmProtect() {
+  if (!db || protectBusy || protectFormProblem()) return;
+  protectBusy = true;
+  protectError = null;
+  render();
+  try {
+    const bytes = await protectCatalog(exportCatalog(db), protectPassword, {
+      name: readMeta(db).catalogName,
+      cover: protectCoverChoice === "none" ? null : protectCover,
+    });
+    const fileName = suggestedProtectedFileName();
+    downloadBytes(bytes, fileName);
+    protectBusy = false;
+    protectDialogOpen = false;
+    protectCoverToken++;
+    setProtectCoverUrl(null);
+    protectCover = null;
+    protectPassword = "";
+    protectRepeat = "";
+    setStatus(t("protect.done", { name: fileName }));
+  } catch (err) {
+    protectBusy = false;
+    protectError = t("protect.failed", { message: err instanceof Error ? err.message : String(err) });
+    render();
+  }
 }
 
 function suggestedPdfFileName(): string {
@@ -2475,6 +2613,7 @@ function render() {
       <input type="file" id="file-image" accept="image/*" style="display:none" />
       <button id="btn-save" ${db ? "" : "disabled"} title="${te("toolbar.save.tip")}">${te("toolbar.save")}</button>
       <button id="btn-export" ${db ? "" : "disabled"} title="${te("toolbar.export.tip")}">${te("toolbar.export", { ext: CATALOG_FILE_EXTENSION })}</button>
+      <button id="btn-export-protected" ${db ? "" : "disabled"} title="${te("toolbar.exportProtected.tip")}">${te("toolbar.exportProtected")}</button>
       <button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="${te("toolbar.exportPdf.tip")}">${exportPdfBusy ? te("toolbar.exportPdf.busy") : te("toolbar.exportPdf")}</button>
       <button id="btn-search" ${db ? "" : "disabled"} title="${te("toolbar.search.tip")}">${te("toolbar.search")}</button>
       <button id="btn-store-settings" ${db ? "" : "disabled"} title="${te("toolbar.storeSettings.tip")}">${te("toolbar.storeSettings")}</button>
@@ -2543,6 +2682,7 @@ function render() {
     ${renderRemoteDialog()}
     ${renderStoreSettingsDialog()}
     ${renderPdfOptionsDialog()}
+    ${renderProtectDialog()}
     ${renderCollabNotFoundDialog()}
     ${renderCollabNameDialog()}
     ${renderCollabShareDialog()}
@@ -2999,6 +3139,125 @@ function renderPdfOptionsDialog(): string {
   `;
 }
 
+/** "Export protected…": password (twice), the public cover, and what the seller must know before handing the file out. */
+function renderProtectDialog(): string {
+  if (!protectDialogOpen || !db) return "";
+  const images = currentImages();
+  const strength = passwordStrength(protectPassword);
+  const problem = protectFormProblem();
+  return `
+    <div class="confirm-overlay">
+      <form class="confirm-box protect-box" id="protect-form" autocomplete="off">
+        <h2>${te("protect.title")}</h2>
+        <p class="hint">${te("protect.intro")}</p>
+        <div class="field">
+          <label for="protect-password">${te("protect.password")}</label>
+          <input type="password" id="protect-password" value="${escapeHtml(protectPassword)}" autocomplete="new-password" spellcheck="false" ${protectBusy ? "disabled" : ""} />
+          <span class="hint protect-strength protect-strength-${strength}" id="protect-strength">${protectStrengthText(strength)}</span>
+        </div>
+        <div class="field">
+          <label for="protect-repeat">${te("protect.repeat")}</label>
+          <input type="password" id="protect-repeat" value="${escapeHtml(protectRepeat)}" autocomplete="new-password" spellcheck="false" ${protectBusy ? "disabled" : ""} />
+          <span class="hint error" id="protect-mismatch">${protectMismatchText()}</span>
+        </div>
+        <div class="field">
+          <label for="protect-cover-select">${te("protect.cover.label")}</label>
+          <select id="protect-cover-select" ${protectBusy ? "disabled" : ""}>
+            <option value="none" ${protectCoverChoice === "none" ? "selected" : ""}>${te("protect.cover.none")}</option>
+            ${images
+              .map(
+                (i) =>
+                  `<option value="image:${i.id}" ${protectCoverChoice === `image:${i.id}` ? "selected" : ""}>${escapeHtml(i.name)}</option>`,
+              )
+              .join("")}
+            <option value="file" ${protectCoverChoice === "file" ? "selected" : ""}>${te("protect.cover.upload")}</option>
+          </select>
+          ${
+            protectCoverChoice === "file"
+              ? `<input type="file" id="protect-cover-file" accept="image/*" ${protectBusy ? "disabled" : ""} />`
+              : ""
+          }
+          ${
+            protectCoverBusy
+              ? `<span class="hint">${te("protect.cover.preparing")}</span>`
+              : protectCoverError
+                ? `<span class="hint error">${escapeHtml(protectCoverError)}</span>`
+                : protectCoverUrl && protectCover
+                  ? `<img class="protect-cover-preview" src="${protectCoverUrl}" alt="" />
+                     <span class="hint">${te("protect.cover.size", { kb: Math.max(1, Math.round(protectCover.bytes.length / 1024)), max: Math.round(PROTECT_MAX_COVER_BYTES / 1024) })}</span>`
+                  : ""
+          }
+          <span class="hint">${te("protect.cover.public")}</span>
+        </div>
+        <p class="hint">${te("protect.warn")}</p>
+        ${protectError ? `<p class="error" role="alert">${escapeHtml(protectError)}</p>` : ""}
+        <div class="confirm-actions">
+          <button type="button" id="protect-cancel" ${protectBusy ? "disabled" : ""}>${te("action.cancel")}</button>
+          <button type="submit" id="protect-submit" ${problem || protectBusy ? "disabled" : ""}>${protectBusy ? te("protect.busy") : te("protect.submit")}</button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+function protectStrengthText(strength: ReturnType<typeof passwordStrength>): string {
+  if (strength === "empty") return te("protect.tooShort", { min: PROTECT_MIN_PASSWORD_LENGTH });
+  if ([...protectPassword].length < PROTECT_MIN_PASSWORD_LENGTH) return te("protect.tooShort", { min: PROTECT_MIN_PASSWORD_LENGTH });
+  return strength === "strong" ? te("protect.strength.strong") : strength === "fair" ? te("protect.strength.fair") : te("protect.strength.weak");
+}
+
+function protectMismatchText(): string {
+  return protectRepeat && protectPassword !== protectRepeat ? te("protect.mismatch") : "";
+}
+
+/** Typing patches the hint lines and the button in place — a full render() would drop focus from the password field on every key. */
+function wireProtectDialog() {
+  const password = document.getElementById("protect-password") as HTMLInputElement | null;
+  const repeat = document.getElementById("protect-repeat") as HTMLInputElement | null;
+  if (!password || !repeat) return;
+  const patch = () => {
+    const strength = passwordStrength(protectPassword);
+    const strengthEl = document.getElementById("protect-strength");
+    if (strengthEl) {
+      strengthEl.textContent = protectStrengthText(strength);
+      strengthEl.className = `hint protect-strength protect-strength-${strength}`;
+    }
+    const mismatchEl = document.getElementById("protect-mismatch");
+    if (mismatchEl) mismatchEl.textContent = protectMismatchText();
+    const submit = document.getElementById("protect-submit") as HTMLButtonElement | null;
+    if (submit) submit.disabled = protectFormProblem() !== null || protectBusy;
+  };
+  password.addEventListener("input", () => {
+    protectFocusPending = false;
+    protectPassword = password.value;
+    patch();
+  });
+  repeat.addEventListener("input", () => {
+    protectFocusPending = false;
+    protectRepeat = repeat.value;
+    patch();
+  });
+  document.getElementById("protect-form")?.addEventListener("submit", (evt) => {
+    evt.preventDefault();
+    void actionConfirmProtect();
+  });
+  document.getElementById("protect-cancel")?.addEventListener("click", actionCloseProtectDialog);
+  document.getElementById("protect-cover-select")?.addEventListener("change", (evt) => {
+    protectFocusPending = false;
+    protectCoverChoice = (evt.target as HTMLSelectElement).value;
+    protectCustomFile = null;
+    void refreshProtectCover();
+  });
+  document.getElementById("protect-cover-file")?.addEventListener("change", (evt) => {
+    protectFocusPending = false;
+    protectCustomFile = (evt.target as HTMLInputElement).files?.[0] ?? null;
+    void refreshProtectCover();
+  });
+  // Held until the seller touches something: the first renders after opening
+  // (the cover thumbnail finishing) would otherwise take the focus away again.
+  if (protectFocusPending) password.focus();
+}
+
 function renderCollabNotFoundDialog(): string {
   if (!collabNotFoundOpen) return "";
   return `
@@ -3364,6 +3623,8 @@ function wireEvents(links: CatalogLink[]) {
   document.getElementById("btn-save")?.addEventListener("click", () => void actionSave());
   document.getElementById("btn-export")?.addEventListener("click", actionExportCatalog);
   document.getElementById("btn-export-pdf")?.addEventListener("click", actionOpenPdfOptions);
+  document.getElementById("btn-export-protected")?.addEventListener("click", actionOpenProtectDialog);
+  wireProtectDialog();
   document.getElementById("pdf-options-cancel")?.addEventListener("click", actionCancelPdfOptions);
   document.getElementById("pdf-options-submit")?.addEventListener("click", () => void actionConfirmExportPdf());
   document.querySelectorAll<HTMLInputElement>('input[name="pdf-qr-placement"]').forEach((input) => {
