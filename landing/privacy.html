@@ -114,6 +114,27 @@
   <a href="https://github.com/alexandrkotov/electronic-catalog-maker/tree/main/packages/collab-server#readme">that
   package's own documentation</a> for the full technical detail.</p>
 
+  <h2>Sharing catalogs from your computer (optional)</h2>
+  <p>There's a separate, optional tool,
+  <a href="https://github.com/alexandrkotov/electronic-catalog-maker/tree/main/packages/catalog-server">
+  <code>@ecm/catalog-server</code></a>, that shares a folder of
+  <code>.ecatm</code> files from your own computer with other devices — on
+  your local network by default, or over the internet if you switch it to
+  Internet mode. It's a separate app you run yourself; the Editor and Viewer
+  don't talk to it unless you point them at an address it's showing.</p>
+  <p>It remembers the folder you picked and whether you last used local-network
+  or Internet mode in a small file on your own computer
+  (<code>~/.ecm-catalog-server/config.json</code>) so you don't have to
+  reselect them next time — that file never leaves your device. The catalog
+  files themselves are only read, never modified, and are served as-is to
+  whoever has the address it shows; anyone with that address can download
+  them for as long as the app keeps running.</p>
+  <p>Internet mode uses the same Cloudflare "quick tunnel" mechanism as
+  real-time collaboration above (see that section for the technical detail
+  and Cloudflare's own privacy policy) to give the shared address a public
+  <code>https://*.trycloudflare.com</code> URL instead of a local-network-only
+  one.</p>
+
   <h2>Opening a catalog from a URL</h2>
   <p>If you open a catalog via a remote link (for example, one of the demo
   catalogs, or a link someone shared with you), your browser makes a
@@ -147,7 +168,7 @@
     <li><a href="https://www.goatcounter.com/">GoatCounter</a> — anonymous page-view counting on the public website (see "Analytics" above).</li>
     <li>Whatever host serves a catalog file you open by URL (e.g. GitHub Pages for the demo catalogs).</li>
     <li>Whatever store a catalog's "Buy" button links to, if you choose to use it.</li>
-    <li><a href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a> — only if you start or join a real-time collaboration session (see that section above); routes that session's traffic, run by whoever started it, not by this project.</li>
+    <li><a href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a> — only if you start or join a real-time collaboration session, or someone uses catalog-server's Internet mode (see those sections above); routes that traffic, run by whoever started it, not by this project.</li>
   </ul>
   <p>None of these are things the Editor or Viewer apps themselves run,
   operate, or receive data from beyond what's described above.</p>
