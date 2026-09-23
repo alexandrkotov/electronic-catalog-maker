@@ -6,6 +6,7 @@ import {
   DEFAULT_CART_ID_PATTERN,
   DEFAULT_CART_ITEM_PARAM,
 } from "./schema.js";
+import { ProtectedCatalogError, isProtectedCatalog } from "./protect.js";
 import { readCatalogMode } from "./types.js";
 import type { CatalogImage, CatalogLink, CatalogMeta, CatalogMode, CatalogRow, LinkConflict } from "./types.js";
 
@@ -40,8 +41,15 @@ export function createEmptyCatalog(SQL: SqlJsStatic, catalogName = "Untitled cat
   return db;
 }
 
-/** Opens an existing catalog file (bytes from disk/fetch). */
+/**
+ * Opens an existing catalog file (bytes from disk/fetch). A password-protected
+ * file must be unlocked first (`unlockCatalog` in protect.ts); passing one here
+ * throws a `locked` error instead of sql.js's opaque "file is not a database".
+ */
 export function openCatalog(SQL: SqlJsStatic, bytes: Uint8Array): Database {
+  if (isProtectedCatalog(bytes)) {
+    throw new ProtectedCatalogError("locked", "This catalog is password-protected and must be unlocked first.");
+  }
   const db = new SQL.Database(bytes);
   migrateLegacySchema(db);
   return db;
