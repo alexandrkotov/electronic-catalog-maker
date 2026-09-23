@@ -101,7 +101,7 @@
   .demo { margin: 1.5rem 0 2.5rem; }
   .demo h2 { margin: 0 0 0.25rem; }
   .demo .intro { margin: 0 0 0.75rem; color: var(--text-2); }
-  .tabs { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
   .tabs button {
     color: var(--text);
     font: inherit;
@@ -235,13 +235,15 @@
       <div class="tabs" role="group" aria-label="{{index.demo.tabsLabel}}">
         <button type="button" data-cat="auto-spare-parts" aria-pressed="true">{{index.demo.tabs.autoParts}}</button>
         <button type="button" data-cat="furniture" aria-pressed="false">{{index.demo.tabs.furniture}}</button>
+        <button type="button" data-cat="diy-stool-{{@lang}}" aria-pressed="false">{{index.demo.tabs.protected}}</button>
       </div>
       <div class="frame" id="frame"></div>
       <p class="demo-links">
         <a id="open-full" href="{{@base}}viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm{{@a}}">{{index.demo.openFull}}</a>
         <a id="edit-this" href="{{@base}}editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm{{@a}}">{{index.demo.editThis}}</a>
       </p>
-      <p class="demo-note">{{index.demo.note}}</p>
+      <p class="demo-note" id="demo-note">{{index.demo.note}}</p>
+      <p class="demo-note" id="demo-note-protected" hidden>{{index.demo.noteProtected}}</p>
       <p class="steps-line">{{index.demo.steps}}</p>
       <noscript><p>{{index.demo.noscript}}</p></noscript>
     </section>
@@ -250,6 +252,7 @@
     <div class="card-row use-cases">
       <div class="card"><h3>{{index.who.parts.title}}</h3><p>{{index.who.parts.text}}</p></div>
       <div class="card"><h3>{{index.who.furniture.title}}</h3><p>{{index.who.furniture.text}}</p></div>
+      <div class="card"><h3>{{index.who.protected.title}}</h3><p>{{index.who.protected.text}} <a href="{{@base}}viewer/?src=..%2Fdemo%2Fdiy-stool-{{@lang}}.ecatm{{@a}}">{{index.who.protected.link}}</a></p></div>
       <div class="card"><h3>{{index.who.teaching.title}}</h3><p>{{index.who.teaching.text}}</p></div>
       <div class="card"><h3>{{index.who.fitness.title}}</h3><p>{{index.who.fitness.text}} <a href="{{@base}}viewer/?src=..%2Fdemo%2Ffitness-{{@lang}}.ecatm{{@a}}">{{index.who.fitness.link}}</a></p></div>
       <div class="card"><h3>{{index.who.quiz.title}}</h3><p>{{index.who.quiz.text}} <a href="{{@base}}viewer/?src=..%2Fdemo%2Fquiz-citizenship-en.ecatm{{@a}}">{{index.who.quiz.link}}</a></p></div>
@@ -369,7 +372,10 @@
       var buttons = document.querySelectorAll(".tabs button");
       var scriptLoaded = false;
       // [image id, hotspot id] to show selected on load, per example catalog.
-      var START = { "auto-spare-parts": [9, 580], "furniture": [1, 1] };
+      var START = { "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-{{@lang}}": [1, 1] };
+      // Password-protected demo: it opens on a lock screen (the password is printed
+      // under the frame), and a protected file cannot be opened in the editor.
+      var LOCKED = "diy-stool-{{@lang}}";
       var BUNDLE = "https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js";
       function loadScript(cb) {
         if (scriptLoaded) return cb();
@@ -396,6 +402,9 @@
         buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.cat === cat)); });
         document.getElementById("open-full").href = "{{@base}}viewer/?src=..%2Fdemo%2F" + cat + ".ecatm{{@a}}";
         document.getElementById("edit-this").href = "{{@base}}editor/?src=..%2Fdemo%2F" + cat + ".ecatm{{@a}}";
+        document.getElementById("edit-this").style.display = cat === LOCKED ? "none" : "";
+        document.getElementById("demo-note").hidden = cat === LOCKED;
+        document.getElementById("demo-note-protected").hidden = cat !== LOCKED;
         loadScript(function () {
           frame.textContent = "";
           var el = document.createElement("ecm-viewer");

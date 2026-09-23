@@ -105,7 +105,7 @@
   .demo { margin: 1.5rem 0 2.5rem; }
   .demo h2 { margin: 0 0 0.25rem; }
   .demo .intro { margin: 0 0 0.75rem; color: var(--text-2); }
-  .tabs { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
   .tabs button {
     color: var(--text);
     font: inherit;
@@ -239,13 +239,15 @@
       <div class="tabs" role="group" aria-label="Приклад каталогу">
         <button type="button" data-cat="auto-spare-parts" aria-pressed="true">Автозапчастини</button>
         <button type="button" data-cat="furniture" aria-pressed="false">Меблі</button>
+        <button type="button" data-cat="diy-stool-uk" aria-pressed="false">Під паролем</button>
       </div>
       <div class="frame" id="frame"></div>
       <p class="demo-links">
         <a id="open-full" href="../viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm&lang=uk">Відкрити повне демо</a>
         <a id="edit-this" href="../editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm&lang=uk">Редагувати цей приклад</a>
       </p>
-      <p class="demo-note">Кнопка «Купити» веде на оформлення замовлення в нашому демонстраційному магазині, де будь-яка позиція коштує $0.</p>
+      <p class="demo-note" id="demo-note">Кнопка «Купити» веде на оформлення замовлення в нашому демонстраційному магазині, де будь-яка позиція коштує $0.</p>
+      <p class="demo-note" id="demo-note-protected" hidden>Демо-пароль: <strong>stool-2026</strong> — він публічний навмисно. Введіть його на екрані блокування вище; обкладинка й назва видимі й без пароля.</p>
       <p class="steps-line"><strong>Створіть свій каталог:</strong> додайте зображення → позначте деталі точками → збережіть файл каталогу та відкрийте його в Переглядачі.</p>
       <noscript><p>Для живого демо потрібен JavaScript — скористайтеся посиланням «Відкрити повне демо» вище.</p></noscript>
     </section>
@@ -254,6 +256,7 @@
     <div class="card-row use-cases">
       <div class="card"><h3>Запчастини та обладнання</h3><p>Пов’яжіть деталі на схемі з артикулами й описами.</p></div>
       <div class="card"><h3>Меблі та товари</h3><p>Додайте відомості до предметів або їхніх частин на фотографії.</p></div>
+      <div class="card"><h3>Платні та закриті каталоги</h3><p>Продавайте посібник або курс, чи діліться одними каталогами з усіма, а іншими — лише з тими, кому дали пароль. Один пароль на файл — без облікових записів і сервера; відкрити може будь-хто, у кого є пароль. Захищену копію ви створюєте в редакторі. <a href="../viewer/?src=..%2Fdemo%2Fdiy-stool-uk.ecatm&lang=uk">Відкрити демо (пароль: stool-2026) →</a></p></div>
       <div class="card"><h3>Навчання</h3><p>Схеми, які можна досліджувати, для уроків і шкільних проєктів — без облікових записів учнів і без хмари. <a href="schools.html">Сторінка для шкіл →</a></p></div>
       <div class="card"><h3>Зали та фітнес</h3><p>Оберіть групу м’язів, знайдіть тренажер, дізнайтеся, як його налаштувати, і роздрукуйте тренування — без застосунку й облікового запису. <a href="../viewer/?src=..%2Fdemo%2Ffitness-uk.ecatm&lang=uk">Відкрити демо →</a></p></div>
       <div class="card"><h3>Тести й самоперевірка</h3><p>Варіанти відповіді прямо на картинці: натисніть — стане зеленим або червоним, рахунок рахується сам. Демо англійською. <a href="../viewer/?src=..%2Fdemo%2Fquiz-citizenship-en.ecatm&lang=uk">Відкрити демо →</a></p></div>
@@ -373,7 +376,10 @@
       var buttons = document.querySelectorAll(".tabs button");
       var scriptLoaded = false;
       // [image id, hotspot id] to show selected on load, per example catalog.
-      var START = { "auto-spare-parts": [9, 580], "furniture": [1, 1] };
+      var START = { "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-uk": [1, 1] };
+      // Password-protected demo: it opens on a lock screen (the password is printed
+      // under the frame), and a protected file cannot be opened in the editor.
+      var LOCKED = "diy-stool-uk";
       var BUNDLE = "https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js";
       function loadScript(cb) {
         if (scriptLoaded) return cb();
@@ -400,6 +406,9 @@
         buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.cat === cat)); });
         document.getElementById("open-full").href = "../viewer/?src=..%2Fdemo%2F" + cat + ".ecatm&lang=uk";
         document.getElementById("edit-this").href = "../editor/?src=..%2Fdemo%2F" + cat + ".ecatm&lang=uk";
+        document.getElementById("edit-this").style.display = cat === LOCKED ? "none" : "";
+        document.getElementById("demo-note").hidden = cat === LOCKED;
+        document.getElementById("demo-note-protected").hidden = cat !== LOCKED;
         loadScript(function () {
           frame.textContent = "";
           var el = document.createElement("ecm-viewer");

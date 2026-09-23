@@ -105,7 +105,7 @@
   .demo { margin: 1.5rem 0 2.5rem; }
   .demo h2 { margin: 0 0 0.25rem; }
   .demo .intro { margin: 0 0 0.75rem; color: var(--text-2); }
-  .tabs { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
   .tabs button {
     color: var(--text);
     font: inherit;
@@ -239,13 +239,15 @@
       <div class="tabs" role="group" aria-label="Example catalog">
         <button type="button" data-cat="auto-spare-parts" aria-pressed="true">Auto parts</button>
         <button type="button" data-cat="furniture" aria-pressed="false">Furniture</button>
+        <button type="button" data-cat="diy-stool-en" aria-pressed="false">Password-protected</button>
       </div>
       <div class="frame" id="frame"></div>
       <p class="demo-links">
         <a id="open-full" href="viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Open full demo</a>
         <a id="edit-this" href="editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Edit this example</a>
       </p>
-      <p class="demo-note">Buy opens our demo store checkout, where every item costs $0.</p>
+      <p class="demo-note" id="demo-note">Buy opens our demo store checkout, where every item costs $0.</p>
+      <p class="demo-note" id="demo-note-protected" hidden>Demo password: <strong>stool-2026</strong> — it is public on purpose. Type it on the lock screen above; the cover and title are visible without it.</p>
       <p class="steps-line"><strong>Build your own:</strong> add an image → mark the details with hotspots → save the catalog file and open it in Viewer.</p>
       <noscript><p>The live demo needs JavaScript — use “Open full demo” above.</p></noscript>
     </section>
@@ -254,6 +256,7 @@
     <div class="card-row use-cases">
       <div class="card"><h3>Parts and equipment</h3><p>Connect items in a diagram with part numbers and descriptions.</p></div>
       <div class="card"><h3>Furniture and products</h3><p>Add details to objects or components in a photograph.</p></div>
+      <div class="card"><h3>Paid and members-only catalogs</h3><p>Sell a guide or a course, or share some catalogs with everyone and keep others for the people you give the password to. One password per file — no accounts, no server; anyone who has the password can open it. You create the protected copy in the Editor. <a href="viewer/?src=..%2Fdemo%2Fdiy-stool-en.ecatm">Open the demo (password: stool-2026) →</a></p></div>
       <div class="card"><h3>Teaching and learning</h3><p>Explorable diagrams for lessons and class projects — no student accounts, no cloud. <a href="schools.html">See the schools page →</a></p></div>
       <div class="card"><h3>Gyms and fitness</h3><p>Pick a muscle group, find the machine, see how to set it up and print a workout — no app, no account. <a href="viewer/?src=..%2Fdemo%2Ffitness-en.ecatm">Open the demo →</a></p></div>
       <div class="card"><h3>Tests and self-check</h3><p>Answer options sit on the picture — tap one and it turns green or red, with a running score. <a href="viewer/?src=..%2Fdemo%2Fquiz-citizenship-en.ecatm">Try the demo →</a></p></div>
@@ -373,7 +376,10 @@
       var buttons = document.querySelectorAll(".tabs button");
       var scriptLoaded = false;
       // [image id, hotspot id] to show selected on load, per example catalog.
-      var START = { "auto-spare-parts": [9, 580], "furniture": [1, 1] };
+      var START = { "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-en": [1, 1] };
+      // Password-protected demo: it opens on a lock screen (the password is printed
+      // under the frame), and a protected file cannot be opened in the editor.
+      var LOCKED = "diy-stool-en";
       var BUNDLE = "https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js";
       function loadScript(cb) {
         if (scriptLoaded) return cb();
@@ -400,6 +406,9 @@
         buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.cat === cat)); });
         document.getElementById("open-full").href = "viewer/?src=..%2Fdemo%2F" + cat + ".ecatm";
         document.getElementById("edit-this").href = "editor/?src=..%2Fdemo%2F" + cat + ".ecatm";
+        document.getElementById("edit-this").style.display = cat === LOCKED ? "none" : "";
+        document.getElementById("demo-note").hidden = cat === LOCKED;
+        document.getElementById("demo-note-protected").hidden = cat !== LOCKED;
         loadScript(function () {
           frame.textContent = "";
           var el = document.createElement("ecm-viewer");
