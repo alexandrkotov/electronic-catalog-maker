@@ -280,6 +280,7 @@
         <h2>{{index.apps.catalogServer.title}}</h2>
         <p>{{index.apps.catalogServer.text}}</p>
         <ul class="links">
+          <li><a href="{url_msCatalogServer}">{{index.apps.catalogServer.win}}</a></li>
           <li><a href="{url_catalogServerSnap}">{{index.apps.catalogServer.linux}}</a></li>
           <li><a href="{url_catalogServerReleasePage}" id="catalog-server-other">{{index.apps.catalogServer.more}}</a></li>
         </ul>
@@ -337,9 +338,6 @@
       <button type="button" class="close" aria-label="{{index.dialog.close}}">×</button>
       <h2 id="catalog-server-h">{{index.catalogServerDialog.title}}</h2>
       <p>{{index.catalogServerDialog.intro}}</p>      <p>
-        <!-- TODO: once the Microsoft Store submission is certified, lead
-             this line with the Store link, same pattern as the
-             Collaboration Server dialog above (index.dialog.windows). -->
         {{index.catalogServerDialog.windows}}
       </p>
       <p>
