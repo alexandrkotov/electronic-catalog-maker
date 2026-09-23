@@ -181,9 +181,30 @@ ${THEME_VARS_CSS}
     });
   }
 
+  // navigator.clipboard only exists in a secure context (HTTPS, or
+  // localhost) — this page usually opens on localhost, but the owner can
+  // still land here via the LAN address (e.g. after following a link back
+  // from elsewhere), where plain http:// isn't one. See listingPage.ts's
+  // copy-button fallback for the live-confirmed case this covers.
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+    return new Promise((resolve, reject) => {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      ok ? resolve() : reject(new Error("execCommand(copy) failed"));
+    });
+  }
+
   copyBtn.addEventListener("click", async () => {
     try {
-      await navigator.clipboard.writeText(urlInput.value);
+      await copyText(urlInput.value);
       copyBtn.textContent = "Copied!";
       setTimeout(() => { copyBtn.textContent = "Copy"; }, 1500);
     } catch {
