@@ -58,7 +58,10 @@ export function renderListingPage(entries: CatalogEntry[], baseUrl: string): str
           const href = `${baseUrl}/files/${entry.relPath.split("/").map(encodeURIComponent).join("/")}`;
           const previewHref = `${baseUrl}/preview/${entry.relPath.split("/").map(encodeURIComponent).join("/")}`;
           return `<div class="catalog-row">
-            <span class="name" title="${escapeHtml(entry.relPath)}">${escapeHtml(entry.name)}</span>
+            <span class="name-block">
+              <span class="name" title="${escapeHtml(entry.relPath)}">${escapeHtml(entry.name)}</span>
+              <span class="url">${escapeHtml(href)}</span>
+            </span>
             <span class="actions">
               <button type="button" class="copy-btn" data-href="${escapeHtml(href)}">Copy URL</button>
               <a class="preview-btn" href="${escapeHtml(previewHref)}" target="_blank" rel="noopener">Preview</a>
@@ -143,7 +146,17 @@ ${THEME_VARS_CSS}
     flex-wrap: wrap;
   }
   .catalog-row:last-child { border-bottom: none; }
+  .name-block { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
   .name { font-weight: 600; overflow-wrap: anywhere; }
+  /* Always-visible fallback for "Copy URL": Clipboard-API copying needs a
+     secure context (HTTPS or localhost), which a plain http://<lan-ip>
+     page — how every guest opens this one — isn't. Confirmed live
+     (2026-09-23): copying failed silently for every non-owner machine on
+     the LAN. Rather than only surfacing the raw URL after the button
+     fails, it's always shown, muted so it doesn't compete with the
+     filename. user-select: all makes a single click select the whole
+     thing, so copying it by hand (Ctrl/Cmd+C) needs no careful dragging. */
+  .url { font-size: 0.78rem; color: var(--muted); font-family: ui-monospace, monospace; overflow-wrap: anywhere; user-select: all; }
   .actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
   button, a.preview-btn {
     font-size: 0.95rem;
@@ -169,11 +182,34 @@ ${THEME_VARS_CSS}
   ${entries.length === 0 ? '<p class="empty">No catalogs found in this folder yet.</p>' : `<div class="catalog-list">${sections}</div>`}
   <p id="app-links">Don't have a catalog app installed yet? <a href="${escapeHtml(PROJECT_URL)}" target="_blank" rel="noopener">Get Editor/Viewer</a></p>
 <script>
+  // navigator.clipboard only exists in a secure context (HTTPS, or
+  // localhost) — a plain http://<lan-ip> page, which is exactly how every
+  // guest on the network opens this one, is not one. Confirmed live
+  // (2026-09-23): the owner's own localhost tab copied fine, every other
+  // machine on the LAN got "Couldn't copy" instantly. execCommand("copy") is
+  // deprecated but still works in an insecure context in every browser that
+  // matters here, so it's the fallback rather than just failing.
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+    return new Promise((resolve, reject) => {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      ok ? resolve() : reject(new Error("execCommand(copy) failed"));
+    });
+  }
+
   for (const btn of document.querySelectorAll(".copy-btn")) {
     btn.addEventListener("click", async () => {
       const url = new URL(btn.dataset.href, location.href).href;
       try {
-        await navigator.clipboard.writeText(url);
+        await copyText(url);
         btn.textContent = "Copied!";
       } catch {
         btn.textContent = "Couldn't copy";
