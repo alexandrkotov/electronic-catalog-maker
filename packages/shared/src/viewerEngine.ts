@@ -170,6 +170,14 @@ export interface MountViewerOptions {
   initialImageId?: number;
   initialLinkId?: number;
   /**
+   * The password of a protected catalog (see protect.ts), taken from a share
+   * link's `#key=` fragment. Tried once, on `initialSrc` only, so the link's
+   * receiver opens the catalog without typing anything; a wrong or outdated
+   * key falls back to the ordinary lock screen. A widget must not be given
+   * one from its own HTML — that would publish the password with the page.
+   */
+  initialKey?: string;
+  /**
    * Showcase mode, narrow (stacked) layout only: instead of fitting a large
    * diagram whole — which on a phone shrinks dense hotspots into an
    * unreadable pile — open each image at this zoom (e.g. 0.75) centered on
@@ -407,6 +415,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // A deep link's image/hotspot ids (see boot) wait here while the catalog they
   // point into is still locked, and are applied once it is unlocked.
   let initialSelectionPending = false;
+  // The link's key, only alive while `initialSrc` is loading (see boot).
+  let pendingLinkKey: string | null = null;
+  // The still-encrypted bytes of the open catalog when it was unlocked with a
+  // password. "Share view…" uploads these — never the decrypted catalog — so a
+  // shared copy stays locked for whoever receives it.
+  let protectedSource: Uint8Array | null = null;
+  // "Share view…": put the password into the link's `#key=` (opt-in, every time).
+  let shareViewIncludeKey = false;
   // "Share view…" — see the OneDrive backlog's QR-viewer item. Only offered
   // when updateAddressBar is true (see its own doc) — this whole feature is
   // about producing a link to *this page's* own current address, which an
@@ -736,7 +752,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       // Set before loading so a protected catalog's lock screen keeps the deep
       // link in the address bar (see currentDeepLinkParams).
       initialSelectionPending = true;
-      await loadFromUrl(options.initialSrc);
+      pendingLinkKey = options.initialKey ?? null;
+      try {
+        await loadFromUrl(options.initialSrc);
+      } finally {
+        pendingLinkKey = null;
+      }
       // A protected catalog has no images to validate ids against yet: keep
       // the deep link until it is unlocked (see actionUnlock).
       if (!locked) {
@@ -778,7 +799,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (!updateAddressBar) return;
     const params = currentDeepLinkParams();
     if (!params) return;
-    history.replaceState(null, "", `?${params.toString()}`);
+    // Keep the fragment: it may carry a share link's `#key=` (see initialKey).
+    history.replaceState(null, "", `?${params.toString()}${location.hash}`);
   }
 
   /** Never throws — returns an error message on failure, or null on success. */
@@ -902,20 +924,35 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     sourceName = t("legacy.sourceName"),
     handle: EcmFileSystemFileHandle | null,
   ) {
+    protectedSource = null;
     if (isProtectedCatalog(bytes)) {
       let unlocked: Uint8Array | null = null;
-      // Refresh of a catalog already unlocked this session must not ask again.
-      if (refreshing && sessionPassword) {
+      // Refresh of a catalog already unlocked this session must not ask again,
+      // and a share link's key opens it straight away.
+      const candidate = refreshing && sessionPassword ? sessionPassword : pendingLinkKey;
+      let keyProblem: string | null = null;
+      if (candidate) {
         try {
-          unlocked = await unlockCatalog(bytes, sessionPassword);
-        } catch {
-          // The seller changed the password: fall through to the lock screen.
+          unlocked = await unlockCatalog(bytes, candidate);
+          sessionPassword = candidate;
+        } catch (err) {
+          // A changed password or a stale link: fall through to the lock
+          // screen and, for a link's key, say why it did not open by itself.
+          // Any other failure (e.g. no WebCrypto outside HTTPS) is reported as is.
+          if (candidate === pendingLinkKey) {
+            keyProblem = err instanceof ProtectedCatalogError && err.code === "wrong-password" ? t("lock.linkKeyFailed") : (err as Error).message;
+          }
         }
       }
       if (!unlocked) {
         lockCatalog(bytes, sourceName, handle);
+        if (keyProblem) {
+          lockError = keyProblem;
+          render();
+        }
         return;
       }
+      protectedSource = bytes;
       bytes = unlocked;
     }
     const kind = detectFileKind(SQL, bytes);
@@ -1025,6 +1062,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       sessionPassword = password;
       lockBusy = false;
       await openBytes(plain, sourceName, openedFileHandle);
+      protectedSource = bytes;
       if (initialSelectionPending) {
         initialSelectionPending = false;
         applyInitialSelection();
@@ -1646,7 +1684,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   /** The full link (and, rendered as a QR, the code) that "Share view…" hands out — this page's own address plus currentDeepLinkParams(). */
   function shareViewLink(): string | null {
     const params = currentDeepLinkParams();
-    return params ? `${location.origin}${location.pathname}?${params.toString()}` : null;
+    if (!params) return null;
+    const key = shareViewIncludeKey && sessionPassword ? `#key=${encodeURIComponent(sessionPassword)}` : "";
+    return `${location.origin}${location.pathname}?${params.toString()}${key}`;
   }
 
   /**
@@ -1669,6 +1709,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     shareViewDialogOpen = true;
     shareViewError = null;
     shareViewCopyFeedback = false;
+    shareViewIncludeKey = false;
     render();
     if (!currentSrcUrl) {
       shareViewBusy = true;
@@ -1681,7 +1722,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           render();
           return;
         }
-        const room = await createRoom(detected.url, exportCatalog(db));
+        const room = await createRoom(detected.url, protectedSource ?? exportCatalog(db));
         shareRoomServerUrl = detected.url;
         shareRoomId = room.roomId;
         shareRoomOwnerToken = room.ownerToken;
@@ -2268,6 +2309,16 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                          ? `<p class="hint">${te("share.explainRoom")}</p>`
                          : ""
                      }
+                     ${
+                       protectedSource
+                         ? `<p class="hint">${te("share.explainProtected")}</p>
+                            <label class="radio-option">
+                              <input type="checkbox" id="share-view-include-key" ${shareViewIncludeKey ? "checked" : ""} />
+                              ${te("share.includeKey")}
+                            </label>
+                            ${shareViewIncludeKey ? `<p class="hint error">${te("share.includeKeyWarning")}</p>` : ""}`
+                         : ""
+                     }
                      <div class="share-view-qr">${renderQrCodeSvg(link)}</div>
                      <div class="field">
                        <label for="share-view-link-input">${te("share.linkLabel")}</label>
@@ -2617,6 +2668,10 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       input.addEventListener("change", () => {
         if (input.checked) pdfDiagramPageMode = input.value as DiagramPageMode;
       });
+    });
+    root.getElementById("share-view-include-key")?.addEventListener("change", (evt) => {
+      shareViewIncludeKey = (evt.target as HTMLInputElement).checked;
+      render();
     });
     root.getElementById("share-view-retry")?.addEventListener("click", () => void actionShareView());
     root.getElementById("share-view-close")?.addEventListener("click", actionCloseShareViewDialog);
