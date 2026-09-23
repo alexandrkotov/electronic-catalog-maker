@@ -230,8 +230,8 @@ export function startServer(port: number): ServerHandle {
 
       if (url.pathname === "/browse") {
         const baseUrl = getShareableBaseUrl();
-        if (!config.folderPath) return new Response(renderListingPage([], baseUrl), { headers: { "Content-Type": "text/html; charset=utf-8" } });
-        return new Response(renderListingPage(listCatalogs(config.folderPath), baseUrl), { headers: { "Content-Type": "text/html; charset=utf-8" } });
+        if (!config.folderPath) return new Response(renderListingPage([], baseUrl, config.mode), { headers: { "Content-Type": "text/html; charset=utf-8" } });
+        return new Response(renderListingPage(listCatalogs(config.folderPath), baseUrl, config.mode), { headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
 
       if (parts[0] === "files" && request.method === "OPTIONS") {
