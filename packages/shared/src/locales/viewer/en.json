@@ -116,6 +116,7 @@
   "showcase.region": "Selected item details",
   "showcase.hint": "Select a marker on the image to see its details.",
   "showcase.navHint": "Select a marker on the image to go to that item.",
+  "showcase.navListHint": "Select a marker on the image or an item below.",
   "showcase.prev": "Previous item",
   "showcase.next": "Next item",
   "hotspot.aria": "{name} — show details",
