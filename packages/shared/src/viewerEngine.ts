@@ -186,6 +186,15 @@ export interface MountViewerOptions {
    */
   compactZoom?: number;
   /**
+   * Opening proportions of the side panels as fractions of the widget's width,
+   * e.g. {images: 0.17, table: 0.26} (the stage takes the rest). For an embed
+   * that knows its own catalog: it then ignores the panel widths saved in
+   * localStorage (shared by every page on the origin) and never writes them, so
+   * each widget keeps its own proportions. Dragging a divider still works for
+   * the session.
+   */
+  panelFractions?: { images: number; table: number };
+  /**
    * Whether a successful load — and every image/hotspot selection after it
    * — should sync `?src=&image=&link=` into the browser's address bar, so
    * the resulting page is itself a shareable deep link (see README,
@@ -487,8 +496,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // makes every browser start from the new default exactly once, same as
   // someone opening the widget for the very first time; an actual manual
   // resize under the new key still persists normally from then on.
-  let imagesPanelWidth = loadPanelWidth("ecm-viewer-images-width-v2", defaultPanelWidth(0.2, 220));
-  let tablePanelWidth = loadPanelWidth("ecm-viewer-table-width-v2", defaultPanelWidth(0.3, 380));
+  const panelFractions = options.panelFractions ? { ...options.panelFractions } : null;
+  let imagesPanelWidth = panelFractions ? 0 : loadPanelWidth("ecm-viewer-images-width-v2", defaultPanelWidth(0.2, 220));
+  let tablePanelWidth = panelFractions ? 0 : loadPanelWidth("ecm-viewer-table-width-v2", defaultPanelWidth(0.3, 380));
   let colWidths = loadColWidths();
   applyPanelWidths(); // before the first render — avoids a flash of the default width
 
@@ -522,6 +532,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // `container.innerHTML`), so a resize survives render()'s wholesale
   // innerHTML rebuild without needing to be reapplied on every call.
   function applyPanelWidths() {
+    if (panelFractions) {
+      // Percentages, so the proportions hold as the widget is resized; the
+      // px caps in style.css are skipped for these (data-panels-fixed).
+      container.dataset.panelsFixed = "";
+      container.style.setProperty("--images-w", `${panelFractions.images * 100}%`);
+      container.style.setProperty("--table-w", `${panelFractions.table * 100}%`);
+      return;
+    }
     container.style.setProperty("--images-w", `${imagesPanelWidth}px`);
     container.style.setProperty("--table-w", `${tablePanelWidth}px`);
   }
@@ -587,7 +605,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     evt.preventDefault();
     const divider = evt.currentTarget as HTMLElement;
     const startX = evt.clientX;
-    const startWidth = side === "images" ? imagesPanelWidth : tablePanelWidth;
+    const startWidth = panelFractions ? panelFractions[side] * container.clientWidth : side === "images" ? imagesPanelWidth : tablePanelWidth;
     divider.classList.add("dragging");
 
     function onMove(moveEvt: MouseEvent) {
@@ -595,7 +613,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       // The table panel sits on the right, so dragging its divider left (dx < 0) should grow it.
       const raw = side === "images" ? startWidth + dx : startWidth - dx;
       const width = Math.min(PANEL_WIDTH_LIMITS.max, Math.max(PANEL_WIDTH_LIMITS.min, raw));
-      if (side === "images") imagesPanelWidth = width;
+      if (panelFractions) panelFractions[side] = width / Math.max(1, container.clientWidth);
+      else if (side === "images") imagesPanelWidth = width;
       else tablePanelWidth = width;
       applyPanelWidths();
     }
@@ -603,6 +622,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       divider.classList.remove("dragging");
+      if (panelFractions) return; // this widget's proportions are its own, not the shared saved ones
       try {
         localStorage.setItem(side === "images" ? "ecm-viewer-images-width-v2" : "ecm-viewer-table-width-v2", String(side === "images" ? imagesPanelWidth : tablePanelWidth));
       } catch {

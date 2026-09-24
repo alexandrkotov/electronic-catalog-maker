@@ -308,6 +308,12 @@ Two attributes:
   "Sharing a catalog via link" above — the file's host needs to allow it).
 - `mode` — `"lite"` (default) or `"full"`, as in the two examples above.
 
+Optional: `panels="17,26"` sets the opening widths of the image list and the
+row table as a percentage of the widget (the diagram gets the rest). With it,
+the widget ignores the panel widths a visitor saved in their browser — those
+are shared by every page on the site — so each widget keeps its own
+proportions.
+
 Sizing and appearance are ordinary CSS on the element itself — it defaults
 to `height: 600px` with a light border, but any style/CSS rule your page
 applies to `ecm-viewer` (or a matching id/class) overrides that.
