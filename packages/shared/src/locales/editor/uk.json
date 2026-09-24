@@ -89,6 +89,8 @@
   "image.delete.tip": "Видалити «{name}»",
   "image.title": "Зображення",
   "image.folder": "Тека (залиште порожньою, якщо теки немає)",
+  "image.fitOnOpen": "Вписати у вікно під час відкриття",
+  "image.fitOnOpen.hint": "Переглядач покаже це зображення повністю, а не в масштабі 100%.",
   "image.folder.placeholder": "наприклад, Шафа",
 
   "link.new.title": "Нове посилання (точка)",
@@ -98,6 +100,9 @@
   "link.reuse.none": "— нова деталь —",
   "link.name": "Назва посилання",
   "link.address": "Адреса",
+  "link.target.label": "Перехід на зображення",
+  "link.target.none": "— ні: позиція з рядком таблиці —",
+  "link.target.missing": "зображення видалено",
   "link.add": "Додати посилання",
   "link.placeHint": "Клацніть по зображенню, щоб поставити точку.",
   "link.edit.title": "Змінити посилання",

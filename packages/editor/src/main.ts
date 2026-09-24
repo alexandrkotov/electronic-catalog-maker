@@ -15,6 +15,9 @@ import {
   addImage,
   addLink,
   addRow,
+  isNavLink,
+  navLinkUrl,
+  navTargetImageId,
   CATALOG_FILE_EXTENSION,
   catalogHasAnyBuyUrl,
   collectExtraKeys,
@@ -1866,14 +1869,15 @@ async function actionAddImage(file: File) {
   setStatus(t("image.added", { name: file.name }));
 }
 
-/** Renames the active image and/or moves it into a different (or no) folder. */
+/** Renames the active image, moves it into a different (or no) folder, and/or sets "fit when opened". */
 function actionUpdateImageMeta() {
   if (!db || activeImageId === null) return;
   const nameInput = document.getElementById("image-name-input") as HTMLInputElement | null;
   const folderInput = document.getElementById("image-folder-input") as HTMLInputElement | null;
+  const fitInput = document.getElementById("image-fit-input") as HTMLInputElement | null;
   const name = nameInput?.value.trim() || t("image.untitled");
   const folder = folderInput?.value.trim() ?? "";
-  applyAndBroadcast("updateImage", updateImage, activeImageId, { name, folder });
+  applyAndBroadcast("updateImage", updateImage, activeImageId, { name, folder, fitOnOpen: fitInput?.checked ?? false });
   setStatus(t("image.updated", { name }));
 }
 
@@ -2253,7 +2257,7 @@ function actionAddLink(name: string, url: string) {
   const imageId = activeImageId;
   const top = pendingHotspot.top;
   const left = pendingHotspot.left;
-  const conflicts = findLinkConflicts(db, name, url);
+  const conflicts = navTargetImageId(url) === null ? findLinkConflicts(db, name, url) : [];
 
   const doAdd = () => {
     if (!db) return;
@@ -2276,7 +2280,7 @@ function actionAddLink(name: string, url: string) {
 function actionUpdateLink(name: string, url: string) {
   if (!db || editingLinkId === null) return;
   const linkId = editingLinkId;
-  const conflicts = findLinkConflicts(db, name, url, linkId);
+  const conflicts = navTargetImageId(url) === null ? findLinkConflicts(db, name, url, linkId) : [];
 
   const doUpdate = () => {
     if (!db) return;
@@ -2542,7 +2546,8 @@ function render() {
   const links = db && activeImage ? listLinksForImage(db, activeImage.id) : [];
   const rows = db && activeImage ? listRowsForImage(db, activeImage.id) : [];
   const usedUrls = new Set(rows.map((r) => r.url));
-  const availableLinks = links.filter((l) => !usedUrls.has(l.url));
+  // Navigation hotspots (#image=<id>, see navLink.ts) never get a row.
+  const availableLinks = links.filter((l) => !usedUrls.has(l.url) && !isNavLink(l));
   const editingLink = links.find((l) => l.id === editingLinkId) ?? null;
   const editingRow = rows.find((r) => r.id === editingRowId) ?? null;
   // The url of whichever's being edited (link or row) — feeds the hotspot
@@ -2669,9 +2674,9 @@ function render() {
     <div class="inspector" id="inspector">
       <datalist id="extra-key-options">${extraKeys.map((k) => `<option value="${escapeHtml(k)}"></option>`).join("")}</datalist>
       ${activeImage ? renderImageForm(activeImage, images) : ""}
-      ${activeImage ? renderLinkForm(links) : ""}
-      ${activeImage ? renderEditLinkForm(editingLink) : ""}
-      ${activeImage ? renderLinksSection(links, editingLinkId) : ""}
+      ${activeImage ? renderLinkForm(links, images) : ""}
+      ${activeImage ? renderEditLinkForm(editingLink, images) : ""}
+      ${activeImage ? renderLinksSection(links, editingLinkId, images) : ""}
       ${activeImage ? renderRowForm(availableLinks) : ""}
       ${activeImage ? renderEditRowForm(editingRow) : ""}
       ${activeImage ? renderRowsSection(rows, editingRowId, editingUrl) : ""}
@@ -2757,6 +2762,10 @@ function renderImageForm(image: CatalogImage, allImages: CatalogImage[]): string
         <label for="image-folder-input">${te("image.folder")}</label>
         <input type="text" id="image-folder-input" list="folder-options" value="${escapeHtml(image.folder)}" placeholder="${te("image.folder.placeholder")}" />
         <datalist id="folder-options">${folders.map((f) => `<option value="${escapeHtml(f)}"></option>`).join("")}</datalist>
+      </div>
+      <div class="field">
+        <label style="display:flex; gap:0.4rem; align-items:center"><input type="checkbox" id="image-fit-input" ${image.fitOnOpen ? "checked" : ""} /> ${te("image.fitOnOpen")}</label>
+        <p class="hint">${te("image.fitOnOpen.hint")}</p>
       </div>
       <button id="btn-save-image">${te("action.save")}</button>
     </section>
@@ -3397,10 +3406,27 @@ function hotspotHtml(l: CatalogLink, highlightUrl: string | null): string {
   return `<div class="${classes.join(" ")}" data-id="${l.id}" style="top:${l.top}px;left:${l.left}px" title="${te("hotspot.tip", { url: l.url })}">${escapeHtml(l.name)}</div>`;
 }
 
-function renderLinkForm(links: CatalogLink[]): string {
+/**
+ * "Goes to image" select: picking an image turns the hotspot into a
+ * navigation link (address `#image=<id>`, no table row) — room overview →
+ * close-up → ⌂ back. The first option keeps it an ordinary item hotspot.
+ */
+function renderNavTargetField(images: CatalogImage[], currentUrl: string): string {
+  const target = navTargetImageId(currentUrl);
+  const others = images.filter((img) => img.id !== activeImageId || img.id === target);
+  if (others.length === 0) return "";
+  return `<div class="field"><label>${te("link.target.label")}</label>
+      <select class="nav-target-select">
+        <option value="">${te("link.target.none")}</option>
+        ${others.map((img) => `<option value="${img.id}" ${img.id === target ? "selected" : ""}>${escapeHtml(img.name)}</option>`).join("")}
+      </select>
+    </div>`;
+}
+
+function renderLinkForm(links: CatalogLink[], images: CatalogImage[]): string {
   // One option per distinct url already on this image — for pointing a new
   // hotspot at a part that's already drawn elsewhere (same bolt, another spot).
-  const reusable = Array.from(new Map(links.map((l) => [l.url, l])).values());
+  const reusable = Array.from(new Map(links.filter((l) => !isNavLink(l)).map((l) => [l.url, l])).values());
   return `
     <section>
       <h2>${te("link.new.title")}</h2>
@@ -3419,6 +3445,7 @@ function renderLinkForm(links: CatalogLink[]): string {
                       </div>`
                    : ""
                }
+               ${renderNavTargetField(images, "")}
                <div class="field"><label>${te("link.name")}</label><input name="name" required /></div>
                <div class="field"><label>${te("link.address")}</label><input name="url" required /></div>
                <button type="submit">${te("link.add")}</button>
@@ -3429,13 +3456,14 @@ function renderLinkForm(links: CatalogLink[]): string {
   `;
 }
 
-function renderEditLinkForm(link: CatalogLink | null): string {
+function renderEditLinkForm(link: CatalogLink | null, images: CatalogImage[]): string {
   if (!link) return "";
   return `
     <section>
       <h2>${te("link.edit.title")}</h2>
       <p class="hint">${te("link.edit.position", { top: link.top, left: link.left })}</p>
       <form id="form-edit-link">
+        ${renderNavTargetField(images, link.url)}
         <div class="field"><label>${te("link.name")}</label><input name="name" value="${escapeHtml(link.name)}" required /></div>
         <div class="field"><label>${te("link.edit.address")}</label><input name="url" value="${escapeHtml(link.url)}" required /></div>
         <div style="display:flex; gap:0.5rem; align-items:center">
@@ -3448,7 +3476,13 @@ function renderEditLinkForm(link: CatalogLink | null): string {
   `;
 }
 
-function renderLinksSection(links: CatalogLink[], editingLinkId: number | null): string {
+function renderLinksSection(links: CatalogLink[], editingLinkId: number | null, images: CatalogImage[]): string {
+  const imageName = (url: string) => {
+    const target = navTargetImageId(url);
+    if (target === null) return "";
+    const name = images.find((img) => img.id === target)?.name;
+    return ` → ${escapeHtml(name ?? te("link.target.missing"))}`;
+  };
   const [nameW, urlW] = colWidths.links;
   return `
     <section>
@@ -3464,7 +3498,7 @@ function renderLinksSection(links: CatalogLink[], editingLinkId: number | null):
             ${links
               .map(
                 (l) =>
-                  `<tr data-link-id="${l.id}" class="clickable-row${l.id === editingLinkId ? " editing" : ""}"><td>${escapeHtml(l.name)}</td><td>${escapeHtml(l.url)}</td></tr>`,
+                  `<tr data-link-id="${l.id}" class="clickable-row${l.id === editingLinkId ? " editing" : ""}"><td>${escapeHtml(l.name)}</td><td>${escapeHtml(l.url)}${imageName(l.url)}</td></tr>`,
               )
               .join("")}
           </tbody>
@@ -3853,6 +3887,23 @@ function wireEvents(links: CatalogLink[]) {
       }
     });
   }
+  // "Goes to image" select (renderNavTargetField): sets the address to
+  // #image=<id>; back to "—" clears a navigation address so a new one can be typed.
+  document.querySelectorAll<HTMLSelectElement>(".nav-target-select").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      const form = sel.closest("form");
+      const urlInput = form?.querySelector<HTMLInputElement>('input[name="url"]');
+      const nameInput = form?.querySelector<HTMLInputElement>('input[name="name"]');
+      if (!urlInput) return;
+      if (sel.value) {
+        urlInput.value = navLinkUrl(Number(sel.value));
+        urlInput.dispatchEvent(new Event("input")); // stops the name→address auto-slug
+        if (nameInput && !nameInput.value) nameInput.value = sel.selectedOptions[0]?.textContent ?? "";
+      } else if (navTargetImageId(urlInput.value) !== null) {
+        urlInput.value = "";
+      }
+    });
+  });
   linkForm?.addEventListener("submit", (evt) => {
     evt.preventDefault();
     const fd = new FormData(evt.target as HTMLFormElement);

@@ -70,6 +70,7 @@ import { PDFDocument, PDFFont, PDFPage, rgb, type PDFImage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import type { Database } from "sql.js";
 import { listImages, listLinksForImage, listRowsForImage, readMeta } from "./db.js";
+import { isNavLink } from "./navLink.js";
 import { groupImagesByFolder } from "./images.js";
 import { buildInstantBuyUrl } from "./cart.js";
 import { buildQrMatrix, type QrMatrix } from "./qrcode.js";
@@ -898,7 +899,8 @@ export async function exportCatalogPdf(
     };
 
     for (const image of group.images) {
-      const links = listLinksForImage(db, image.id);
+      // Navigation hotspots (#image=<id>) only move between images on screen — nothing to print.
+      const links = listLinksForImage(db, image.id).filter((l) => !isNavLink(l));
       const rows = listRowsForImage(db, image.id);
 
       if (links.length <= 1) {

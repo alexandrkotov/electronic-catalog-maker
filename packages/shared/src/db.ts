@@ -65,6 +65,7 @@ export function openCatalog(SQL: SqlJsStatic, bytes: Uint8Array): Database {
 function migrateLegacySchema(db: Database): void {
   migrateLinksUniqueConstraint(db);
   migrateImagesFolderColumn(db);
+  migrateImagesFitOnOpenColumn(db);
 }
 
 /**
@@ -105,6 +106,14 @@ function migrateImagesFolderColumn(db: Database): void {
   const ddl = ddlRows[0]?.values[0]?.[0];
   if (typeof ddl === "string" && /\bfolder\b/i.test(ddl)) return; // already on the current schema
   db.run("ALTER TABLE images ADD COLUMN folder TEXT NOT NULL DEFAULT ''");
+}
+
+/** Catalogs created before the per-image "fit when opened" setting are missing `images.fit_on_open`. */
+function migrateImagesFitOnOpenColumn(db: Database): void {
+  const ddlRows = db.exec("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'images'");
+  const ddl = ddlRows[0]?.values[0]?.[0];
+  if (typeof ddl === "string" && /\bfit_on_open\b/i.test(ddl)) return; // already on the current schema
+  db.run("ALTER TABLE images ADD COLUMN fit_on_open INTEGER NOT NULL DEFAULT 0");
 }
 
 /** Serializes the catalog back to bytes, ready to download or fetch elsewhere. */
@@ -169,7 +178,7 @@ export function updateStoreSettings(db: Database, input: StoreSettingsInput): vo
 
 export function listImages(db: Database): CatalogImage[] {
   const stmt = db.prepare(
-    "SELECT id, name, mime_type, image_data, width, height, sort_order, folder FROM images ORDER BY sort_order, id",
+    "SELECT id, name, mime_type, image_data, width, height, sort_order, folder, fit_on_open FROM images ORDER BY sort_order, id",
   );
   const out: CatalogImage[] = [];
   while (stmt.step()) {
@@ -183,6 +192,7 @@ export function listImages(db: Database): CatalogImage[] {
       height: Number(r.height),
       sortOrder: Number(r.sort_order),
       folder: String(r.folder ?? ""),
+      fitOnOpen: Number(r.fit_on_open ?? 0) === 1,
     });
   }
   stmt.free();
@@ -301,16 +311,17 @@ export interface AddImageInput {
   height: number;
   sortOrder?: number;
   folder?: string;
+  fitOnOpen?: boolean;
 }
 
 export function addImage(db: Database, input: AddImageInput): number {
   const stmt =
     input.id === undefined
       ? db.prepare(
-          "INSERT INTO images (name, mime_type, image_data, width, height, sort_order, folder) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO images (name, mime_type, image_data, width, height, sort_order, folder, fit_on_open) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         )
       : db.prepare(
-          "INSERT INTO images (id, name, mime_type, image_data, width, height, sort_order, folder) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO images (id, name, mime_type, image_data, width, height, sort_order, folder, fit_on_open) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         );
   stmt.run([
     ...(input.id === undefined ? [] : [input.id]),
@@ -321,6 +332,7 @@ export function addImage(db: Database, input: AddImageInput): number {
     input.height,
     input.sortOrder ?? 0,
     input.folder ?? "",
+    input.fitOnOpen ? 1 : 0,
   ]);
   stmt.free();
   return input.id ?? lastInsertRowId(db);
@@ -330,13 +342,16 @@ export interface UpdateImageInput {
   name: string;
   /** "" clears the folder (the image becomes ungrouped). */
   folder: string;
+  /** Left unchanged when omitted (an older editor in the same collaboration session doesn't send it). */
+  fitOnOpen?: boolean;
 }
 
-/** Renames an image and/or moves it into a different (or no) folder. */
+/** Renames an image, moves it into a different (or no) folder, and/or changes its "fit when opened" setting. */
 export function updateImage(db: Database, imageId: number, input: UpdateImageInput): void {
   const stmt = db.prepare("UPDATE images SET name = ?, folder = ? WHERE id = ?");
   stmt.run([input.name, input.folder, imageId]);
   stmt.free();
+  if (input.fitOnOpen !== undefined) db.run("UPDATE images SET fit_on_open = ? WHERE id = ?", [input.fitOnOpen ? 1 : 0, imageId]);
 }
 
 /**
