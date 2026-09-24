@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Go Liquidation Appliances — concept demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600&family=Playfair+Display:wght@400&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #000; color: #fff; font-family: "Source Sans 3", "Source Sans Pro", system-ui, sans-serif; }
+  .demo-bar {
+    background: #fff7e6; color: #6b5100; border-bottom: 3px solid #1a9aa0;
+    font-size: 14px; line-height: 1.4; text-align: center; padding: 10px 16px;
+  }
+  .demo-bar b { color: #4a3800; }
+  .demo-bar a { color: #6b5100; }
+  .hero {
+    position: relative; min-height: 560px; display: flex; flex-direction: column; align-items: center;
+    background: linear-gradient(rgba(0,0,0,.35), rgba(0,0,0,.45)), url("../hero.jpg") center / cover no-repeat;
+    padding: 32px 16px 0;
+  }
+  .brand {
+    font-family: Montserrat, sans-serif; font-weight: 600; letter-spacing: .18em; text-transform: uppercase;
+    font-size: clamp(22px, 3.2vw, 30px); text-align: center; margin: 0;
+  }
+  .hero h1 {
+    font-family: "Playfair Display", serif; font-weight: 400; font-size: clamp(40px, 6.5vw, 76px);
+    text-align: center; margin: auto 0; padding-bottom: 40px; line-height: 1.15;
+  }
+  .hero .cta {
+    position: absolute; bottom: 36px; left: 50%; transform: translateX(-50%);
+    background: #fff; color: #000; text-decoration: none; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; font-size: 14px; padding: 14px 28px; white-space: nowrap;
+  }
+  section { padding: 64px 16px; }
+  h2 {
+    font-family: "Playfair Display", serif; font-weight: 400; font-size: clamp(34px, 4.5vw, 48px);
+    text-align: center; margin: 0; color: #fff;
+  }
+  h2 + hr { width: 50px; border: 0; border-top: 1px solid #555; margin: 28px auto; }
+  .lead { text-align: center; font-size: 20px; margin: 0 auto 28px; max-width: 720px; color: #ddd; }
+  .catalog { background: #111; }
+  .catalog .wrap { max-width: 1400px; margin: 0 auto; }
+  ecm-viewer { display: block; height: 820px; max-height: 88vh; border-radius: 8px; overflow: hidden; background: #fff; }
+  .how { max-width: 900px; margin: 24px auto 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  .how div { border: 1px solid #333; border-radius: 8px; padding: 14px 16px; color: #ccc; font-size: 15px; line-height: 1.45; }
+  .how b { color: #fff; }
+  .contact form { max-width: 726px; margin: 0 auto; display: grid; gap: 24px; }
+  .contact input, .contact textarea {
+    width: 100%; background: #000; color: #fff; border: 1px solid #aaa; border-radius: 4px;
+    font: inherit; font-size: 16px; padding: 14px 16px;
+  }
+  .contact textarea { height: 200px; resize: vertical; }
+  .contact label.chk { display: flex; gap: 10px; align-items: center; justify-content: center; color: #aaa; }
+  .contact label.chk input { width: 18px; height: 18px; }
+  .contact button { justify-self: center; background: #fff; color: #000; border: 0; font-weight: 600; letter-spacing: .08em; padding: 18px 32px; cursor: not-allowed; }
+  footer { padding: 48px 16px 64px; text-align: center; color: #aaa; font-size: 15px; }
+  footer a { color: #aaa; }
+  @media (max-width: 640px) {
+    .hero { min-height: 400px; }
+    ecm-viewer { height: 86vh; max-height: none; }
+    section { padding: 48px 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="demo-bar">
+  <b>Concept demo</b> for Go Liquidation, made by Alexander (Alec) Kotov with
+  <a href="https://tapalog.com/" target="_blank" rel="noopener">Tapalog</a> — not the live store site.
+  Photos and prices are illustrative. Version A: printed QR codes open the item right here on this page.
+</div>
+
+<header class="hero">
+  <p class="brand">Go Liquidation Appliances</p>
+  <h1>Great Deals Every Day</h1>
+  <a class="cta" href="#in-stock">See what's in stock</a>
+</header>
+
+<section class="catalog" id="in-stock">
+  <div class="wrap">
+    <h2>In Stock Now</h2>
+    <hr />
+    <p class="lead">Brand-new, one of a kind, 40–80% off retail. Tap a number to see the price and exactly what the scratch or dent is.</p>
+    <ecm-viewer id="catalog" mode="showcase" compact-zoom="0.8" src="https://tapalog.com/demo/go-liquidation/go-liquidation-web.ecatm"></ecm-viewer>
+    <script>
+      // A printed QR opens this page as ?image=I&link=L: hand those to the widget
+      // (it reads its attributes once, when the bundle below defines the element).
+      (function () {
+        var q = new URLSearchParams(location.search), el = document.getElementById("catalog");
+        if (q.get("image")) el.setAttribute("initial-image", q.get("image"));
+        if (q.get("link")) {
+          el.setAttribute("initial-link", q.get("link"));
+          addEventListener("load", function () { document.getElementById("in-stock").scrollIntoView(); });
+        }
+      })();
+    </script>
+    <div class="how">
+      <div><b>One of each.</b> Every item is a single unit — when it's gone, it's marked SOLD with a pointer to something similar.</div>
+      <div><b>Honest about flaws.</b> Each card says exactly what the scratch, dent or missing part is.</div>
+      <div><b>Scan from the paper catalog.</b> Every item in the printed flyer has its own QR code — it opens this page on that exact item. Call or come by to buy.</div>
+    </div>
+  </div>
+</section>
+
+<section class="contact">
+  <h2>Contact Us</h2>
+  <hr />
+  <p class="lead">Drop us a line!</p>
+  <form onsubmit="return false">
+    <input placeholder="Name" disabled />
+    <input placeholder="Email*" disabled />
+    <textarea placeholder="Message" disabled></textarea>
+    <label class="chk"><input type="checkbox" disabled /> Sign up for our email list for updates, promotions, and more.</label>
+    <button type="button" disabled>SEND</button>
+  </form>
+</section>
+
+<footer>
+  Copyright © 2026 Go Liquidation Appliances - All Rights Reserved.<br /><br />
+  Catalog: <a href="https://tapalog.com/" target="_blank" rel="noopener">Tapalog</a> ·
+  Product photos: Wikimedia Commons contributors, CC BY / CC BY-SA (<a href="../credits.html">credits</a>)
+</footer>
+
+<script src="https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js"></script>
+</body>
+</html>
