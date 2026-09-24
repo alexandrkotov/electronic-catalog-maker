@@ -333,6 +333,10 @@ body {
   cursor: grab;
 }
 
+.stage-scroll.fitted .stage-inner img {
+  cursor: default; /* fitted whole — no panning (see startImagePan) */
+}
+
 .stage-scroll.panning,
 .stage-scroll.panning * {
   cursor: grabbing !important;
@@ -477,6 +481,19 @@ tbody tr.quiz-wrong:hover {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   z-index: 5;
+}
+
+/* Showcase: the only item on an image (a close-up) — a label, not a control
+   (see hotspotHtml). Neutral grey so it doesn't read as something to click. */
+.hotspot.static,
+.hotspot.static.selected,
+.hotspot.static:hover {
+  background: #e5e7eb;
+  color: #374151;
+  border-color: #9ca3af;
+  outline: none;
+  cursor: default;
+  pointer-events: none;
 }
 
 .table-panel {
@@ -1154,12 +1171,31 @@ button:disabled {
    MountViewerOptions.mode). Image fitted whole on the left, one details card
    for the selected hotspot on the right; no toolbar, image list, or table. ---- */
 .ecm-viewer-app.mode-showcase {
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 34%);
+  /* --showcase-details-w: set by dragging the card's left edge (see
+     startShowcaseResize); never more than 70% of the widget. */
+  grid-template-columns: minmax(0, 1fr) minmax(220px, min(var(--showcase-details-w, 34%), 70%));
   grid-template-rows: minmax(0, 1fr);
   grid-template-areas: "stage details";
   /* A host that sizes itself to its content (the stacked layout below) must
      not collapse this grid's single 1fr row. */
   min-height: 480px;
+}
+
+/* Drag handle on the card's left edge — shares the card's grid cell, pinned
+   to its start and straddling the border line. */
+.showcase-divider {
+  grid-area: details;
+  justify-self: start;
+  z-index: 2;
+  width: 8px;
+  margin-left: -4px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.showcase-divider:hover,
+.showcase-divider.dragging {
+  background: var(--accent);
+  opacity: 0.5;
 }
 
 .showcase-details {
@@ -1206,27 +1242,39 @@ button:disabled {
 /* Overview image (only navigation markers): the items they lead to. */
 .showcase-list {
   list-style: none;
-  margin: 0.7rem 0 0;
+  margin: 0.4rem 0 0;
   padding: 0;
 }
 
 .showcase-list-item {
-  display: block;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  box-sizing: border-box; /* 100% wide including padding — no sideways scroll in the card */
   width: 100%;
-  padding: 0.5rem 0.2rem;
+  padding: 0.55rem 0.2rem;
   border: 0;
   border-bottom: 1px solid var(--border);
   background: none;
   color: var(--text);
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  white-space: normal; /* a long name wraps inside the card, "›" stays at the edge */
   text-align: left;
   cursor: pointer;
 }
 
+.showcase-list-item > span {
+  flex: 1; /* fills the row — fitShowcaseDetailsToList measures the rest as padding + "›" */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .showcase-list-item::after {
   content: "›";
-  float: right;
+  flex: none;
   color: var(--muted);
 }
 
@@ -1348,6 +1396,10 @@ button:disabled {
       "details";
     height: auto;
     min-height: 0;
+  }
+
+  .mode-showcase .showcase-divider {
+    display: none;
   }
 
   .mode-showcase .showcase-details {
