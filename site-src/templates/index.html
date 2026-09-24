@@ -235,6 +235,7 @@
       <!-- One hint per example, shown with its tab (see show() below); data-hint="*" = every other tab. -->
       <p class="intro" data-hint="living-room">{{index.demo.hint.livingRoom}}</p>
       <p class="intro" data-hint="product-grid" hidden>{{index.demo.hint.grid}}</p>
+      <p class="intro" data-hint="diy-stool-{{@lang}}" hidden>{{index.demo.noteProtected}}</p>
       <p class="intro" data-hint="*" hidden>{{index.demo.intro}}</p>
       <div class="tabs" role="group" aria-label="{{index.demo.tabsLabel}}">
         <button type="button" data-cat="living-room" aria-pressed="true">{{index.demo.tabs.livingRoom}}</button>
@@ -249,7 +250,6 @@
         <a id="edit-this" href="{{@base}}editor/?src=..%2Fdemo%2Fliving-room.ecatm{{@a}}">{{index.demo.editThis}}</a>
       </p>
       <p class="demo-note" id="demo-note">{{index.demo.note}}</p>
-      <p class="demo-note" id="demo-note-protected" hidden>{{index.demo.noteProtected}}</p>
       <p class="steps-line">{{index.demo.steps}}</p>
       <p class="steps-line">{{index.demo.embed}} <a href="{{@base}}demo/embed-demo.html">{{index.demo.embed.sample}}</a> · <a href="https://github.com/alexandrkotov/electronic-catalog-maker#embedding-the-viewer">{{index.demo.embed.howto}}</a></p>
       <noscript><p>{{index.demo.noscript}}</p></noscript>
@@ -414,7 +414,6 @@
         document.getElementById("edit-this").href = "{{@base}}editor/?src=..%2Fdemo%2F" + cat + ".ecatm{{@a}}";
         document.getElementById("edit-this").style.display = cat === LOCKED ? "none" : "";
         document.getElementById("demo-note").hidden = cat === LOCKED;
-        document.getElementById("demo-note-protected").hidden = cat !== LOCKED;
         loadScript(function () {
           frame.textContent = "";
           var el = document.createElement("ecm-viewer");

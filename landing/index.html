@@ -239,6 +239,7 @@
       <!-- One hint per example, shown with its tab (see show() below); data-hint="*" = every other tab. -->
       <p class="intro" data-hint="living-room">Select a marker to open a close-up of that piece — its details and Buy are there. ⌂ takes you back to the room.</p>
       <p class="intro" data-hint="product-grid" hidden>Select a number on a tile to see the product’s details and Buy. The list at the top switches between groups.</p>
+      <p class="intro" data-hint="diy-stool-en" hidden>Demo password: <strong>stool-2026</strong> — it is public on purpose. Type it on the lock screen below; the cover and title are visible without it.</p>
       <p class="intro" data-hint="*" hidden>Select a marker or use the arrows to explore item details. Use Fit to see the whole image.</p>
       <div class="tabs" role="group" aria-label="Example catalog">
         <button type="button" data-cat="living-room" aria-pressed="true">Shop the look</button>
@@ -253,7 +254,6 @@
         <a id="edit-this" href="editor/?src=..%2Fdemo%2Fliving-room.ecatm">Edit this example</a>
       </p>
       <p class="demo-note" id="demo-note">Buy opens our demo store checkout, where every item costs $0.</p>
-      <p class="demo-note" id="demo-note-protected" hidden>Demo password: <strong>stool-2026</strong> — it is public on purpose. Type it on the lock screen above; the cover and title are visible without it.</p>
       <p class="steps-line"><strong>Build your own:</strong> add an image → mark the details with hotspots → save the catalog file and open it in Viewer.</p>
       <p class="steps-line"><strong>Put it on your own site:</strong> the demo above is the embeddable widget itself — one <code>&lt;script&gt;</code> tag and one <code>&lt;ecm-viewer&gt;</code> line put it on your page. <a href="demo/embed-demo.html">See it on a sample store site →</a> · <a href="https://github.com/alexandrkotov/electronic-catalog-maker#embedding-the-viewer">How to embed →</a></p>
       <noscript><p>The live demo needs JavaScript — use “Open full demo” above.</p></noscript>
@@ -418,7 +418,6 @@
         document.getElementById("edit-this").href = "editor/?src=..%2Fdemo%2F" + cat + ".ecatm";
         document.getElementById("edit-this").style.display = cat === LOCKED ? "none" : "";
         document.getElementById("demo-note").hidden = cat === LOCKED;
-        document.getElementById("demo-note-protected").hidden = cat !== LOCKED;
         loadScript(function () {
           frame.textContent = "";
           var el = document.createElement("ecm-viewer");
