@@ -1247,7 +1247,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   }
 
   /** Rows of the images this image's navigation links open (each image once, in link order; never the image itself). */
-  function navTargetRows(links: CatalogLink[], imageId: number): CatalogRow[] {
+  function navTargetRows(links: { id: number; url: string }[], imageId: number): CatalogRow[] {
     if (!db) return [];
     const targets: number[] = [];
     for (const l of [...links].sort((a, b) => a.id - b.id)) {
@@ -2288,8 +2288,22 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function renderShowcaseDetails(row: CatalogRow | null, imageLinks: { id: number; url: string }[]): string {
     if (!row) {
       const onlyNav = imageLinks.some(isNavLink) && showcaseItems(imageLinks).length === 0;
+      // An overview image (only navigation markers — the room photo): list the
+      // items those markers lead to, each one opening where it lives, the
+      // showcase counterpart of the full viewer's table (see navTargetRows).
+      const listed = onlyNav && activeImageId !== null ? navTargetRows(imageLinks, activeImageId) : [];
       return `<section class="showcase-details" role="region" aria-label="${te("showcase.region")}" aria-live="polite">
-        <p class="hint">${onlyNav ? te("showcase.navHint") : te("showcase.hint")}</p>
+        <p class="hint">${listed.length ? te("showcase.navListHint") : onlyNav ? te("showcase.navHint") : te("showcase.hint")}</p>
+        ${
+          listed.length
+            ? `<ul class="showcase-list">${listed
+                .map(
+                  (r) =>
+                    `<li><button type="button" class="showcase-list-item" data-image-id="${r.imageId}" data-url="${escapeHtml(r.url)}">${escapeHtml(r.name || r.url)}</button></li>`,
+                )
+                .join("")}</ul>`
+            : ""
+        }
       </section>`;
     }
     const buyUrl = typeof row.extra.buy_url === "string" && row.extra.buy_url ? row.extra.buy_url : null;
@@ -2814,6 +2828,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       const next = items[(at + dir + items.length) % items.length];
       if (next) actionSelectHotspot(next.id);
     };
+    root.querySelectorAll<HTMLButtonElement>(".showcase-list-item").forEach((btn) => {
+      btn.addEventListener("click", () => actionGoToSearchResult(Number(btn.dataset.imageId), btn.dataset.url!));
+    });
     root.getElementById("btn-showcase-prev")?.addEventListener("click", () => stepShowcase(-1));
     root.getElementById("btn-showcase-next")?.addEventListener("click", () => stepShowcase(1));
 
