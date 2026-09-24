@@ -237,14 +237,15 @@
       <h2 id="demo-h">Як це працює</h2>
       <p class="intro">Оберіть точку або прокрутіть за допомогою стрілок, щоб переглянути інформацію про позицію. Натисніть кнопку «Вмістити», щоб переглянути зображення у повному розмірі.</p>
       <div class="tabs" role="group" aria-label="Приклад каталогу">
-        <button type="button" data-cat="auto-spare-parts" aria-pressed="true">Автозапчастини</button>
+        <button type="button" data-cat="living-room" aria-pressed="true">Вітальня</button>
+        <button type="button" data-cat="auto-spare-parts" aria-pressed="false">Автозапчастини</button>
         <button type="button" data-cat="furniture" aria-pressed="false">Меблі</button>
         <button type="button" data-cat="diy-stool-uk" aria-pressed="false">Під паролем</button>
       </div>
       <div class="frame" id="frame"></div>
       <p class="demo-links">
-        <a id="open-full" href="../viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm&lang=uk">Відкрити повне демо</a>
-        <a id="edit-this" href="../editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm&lang=uk">Редагувати цей приклад</a>
+        <a id="open-full" href="../viewer/?src=..%2Fdemo%2Fliving-room.ecatm&lang=uk">Відкрити повне демо</a>
+        <a id="edit-this" href="../editor/?src=..%2Fdemo%2Fliving-room.ecatm&lang=uk">Редагувати цей приклад</a>
       </p>
       <p class="demo-note" id="demo-note">Кнопка «Купити» веде на оформлення замовлення в нашому демонстраційному магазині, де будь-яка позиція коштує $0.</p>
       <p class="demo-note" id="demo-note-protected" hidden>Демо-пароль: <strong>stool-2026</strong> — він публічний навмисно. Введіть його на екрані блокування вище; обкладинка й назва видимі й без пароля.</p>
@@ -376,7 +377,7 @@
       var buttons = document.querySelectorAll(".tabs button");
       var scriptLoaded = false;
       // [image id, hotspot id] to show selected on load, per example catalog.
-      var START = { "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-uk": [1, 1] };
+      var START = { "living-room": [1, 1], "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-uk": [1, 1] };
       // Password-protected demo: it opens on a lock screen (the password is printed
       // under the frame), and a protected file cannot be opened in the editor.
       var LOCKED = "diy-stool-uk";
@@ -420,13 +421,14 @@
           el.setAttribute("initial-link", start[1]);
           // Phones: a dense diagram fitted whole is an unreadable pile of
           // markers, so open close-up on the selected item (Fit shows it all).
-          el.setAttribute("compact-zoom", "0.75");
+          // The living-room photo reads fine whole, so it stays fitted.
+          if (cat !== "living-room") el.setAttribute("compact-zoom", "0.75");
           el.setAttribute("src", new URL("../demo/" + cat + ".ecatm", location.href).href);
           frame.appendChild(el);
         });
       }
       buttons.forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.cat); }); });
-      show("auto-spare-parts");
+      show("living-room");
     })();
   </script>
   <script>

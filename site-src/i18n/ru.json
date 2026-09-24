@@ -6,6 +6,7 @@
   "index.hero.cta.create": "Создать каталог",
   "index.demo.title": "Как это работает",
   "index.demo.intro": "Выберите точку или листайте стрелками, чтобы увидеть сведения о позиции. Кнопка «Вписать» показывает изображение целиком.",
+  "index.demo.tabs.livingRoom": "Гостиная",
   "index.demo.tabs.autoParts": "Автозапчасти",
   "index.demo.tabs.furniture": "Мебель",
   "index.demo.tabs.protected": "Под паролем",
