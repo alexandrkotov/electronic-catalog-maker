@@ -16,7 +16,7 @@
   "index.demo.openFull": "Open full demo",
   "index.demo.editThis": "Edit this example",
   "index.demo.note": "Buy opens our demo store checkout, where every item costs $0.",
-  "index.demo.noteProtected": "Demo password: <strong>stool-2026</strong> — it is public on purpose. Type it on the lock screen below; the cover and title are visible without it.",
+  "index.demo.noteProtected": "Demo password: <strong>stool-2026</strong>. Type it on the lock screen below; the cover and title are visible without it.",
   "index.demo.steps": "<strong>Build your own:</strong> add an image → mark the details with hotspots → save the catalog file and open it in Viewer.",
   "index.demo.embed": "<strong>Put it on your own site:</strong> the demo above is the embeddable widget itself — one <code>&lt;script&gt;</code> tag and one <code>&lt;ecm-viewer&gt;</code> line put it on your page.",
   "index.demo.embed.sample": "See it on a sample store site →",
