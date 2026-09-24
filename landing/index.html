@@ -235,11 +235,15 @@
   <main>
     <section class="demo" id="demo" aria-labelledby="demo-h">
       <h2 id="demo-h">See how it works</h2>
-      <p class="intro">Select a marker or use the arrows to explore item details. Use Fit to see the whole image.</p>
+      <!-- One hint per example, shown with its tab (see show() below); data-hint="*" = every other tab. -->
+      <p class="intro" data-hint="living-room">Select a marker to open a close-up of that piece — its details and Buy are there. ⌂ takes you back to the room.</p>
+      <p class="intro" data-hint="product-grid" hidden>Select a number on a tile to see the product’s details and Buy. The list at the top switches between groups.</p>
+      <p class="intro" data-hint="*" hidden>Select a marker or use the arrows to explore item details. Use Fit to see the whole image.</p>
       <div class="tabs" role="group" aria-label="Example catalog">
-        <button type="button" data-cat="living-room" aria-pressed="true">Living room</button>
-        <button type="button" data-cat="auto-spare-parts" aria-pressed="false">Auto parts</button>
-        <button type="button" data-cat="furniture" aria-pressed="false">Furniture</button>
+        <button type="button" data-cat="living-room" aria-pressed="true">Shop the look</button>
+        <button type="button" data-cat="auto-spare-parts" aria-pressed="false">Exploded view</button>
+        <button type="button" data-cat="furniture" aria-pressed="false">Product photo</button>
+        <button type="button" data-cat="product-grid" aria-pressed="false">Product grid</button>
         <button type="button" data-cat="diy-stool-en" aria-pressed="false">Password-protected</button>
       </div>
       <div class="frame" id="frame"></div>
@@ -377,7 +381,7 @@
       var buttons = document.querySelectorAll(".tabs button");
       var scriptLoaded = false;
       // [image id, hotspot id] to show selected on load, per example catalog.
-      var START = { "living-room": [1, 1], "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-en": [1, 1] };
+      var START = { "living-room": [1, 1], "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-en": [1, 1], "product-grid": [1, 1] };
       // Password-protected demo: it opens on a lock screen (the password is printed
       // under the frame), and a protected file cannot be opened in the editor.
       var LOCKED = "diy-stool-en";
@@ -405,6 +409,10 @@
       }
       function show(cat) {
         buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.cat === cat)); });
+        var own = document.querySelector('.demo .intro[data-hint="' + cat + '"]');
+        document.querySelectorAll(".demo .intro[data-hint]").forEach(function (p) {
+          p.hidden = own ? p !== own : p.dataset.hint !== "*";
+        });
         document.getElementById("open-full").href = "viewer/?src=..%2Fdemo%2F" + cat + ".ecatm";
         document.getElementById("edit-this").href = "editor/?src=..%2Fdemo%2F" + cat + ".ecatm";
         document.getElementById("edit-this").style.display = cat === LOCKED ? "none" : "";

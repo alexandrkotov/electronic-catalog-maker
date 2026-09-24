@@ -235,11 +235,15 @@
   <main>
     <section class="demo" id="demo" aria-labelledby="demo-h">
       <h2 id="demo-h">Як це працює</h2>
-      <p class="intro">Оберіть точку або прокрутіть за допомогою стрілок, щоб переглянути інформацію про позицію. Натисніть кнопку «Вмістити», щоб переглянути зображення у повному розмірі.</p>
+      <!-- One hint per example, shown with its tab (see show() below); data-hint="*" = every other tab. -->
+      <p class="intro" data-hint="living-room">Натисніть на маркер, щоб відкрити великий план предмета — там його опис і кнопка Buy. ⌂ поверне до кімнати.</p>
+      <p class="intro" data-hint="product-grid" hidden>Натисніть на номер на плитці, щоб побачити опис товару і кнопку Buy. Список угорі перемикає групи.</p>
+      <p class="intro" data-hint="*" hidden>Оберіть точку або прокрутіть за допомогою стрілок, щоб переглянути інформацію про позицію. Натисніть кнопку «Вмістити», щоб переглянути зображення у повному розмірі.</p>
       <div class="tabs" role="group" aria-label="Приклад каталогу">
-        <button type="button" data-cat="living-room" aria-pressed="true">Вітальня</button>
-        <button type="button" data-cat="auto-spare-parts" aria-pressed="false">Автозапчастини</button>
-        <button type="button" data-cat="furniture" aria-pressed="false">Меблі</button>
+        <button type="button" data-cat="living-room" aria-pressed="true">Товари в інтер’єрі</button>
+        <button type="button" data-cat="auto-spare-parts" aria-pressed="false">Рознесена схема</button>
+        <button type="button" data-cat="furniture" aria-pressed="false">Фото виробу</button>
+        <button type="button" data-cat="product-grid" aria-pressed="false">Сітка товарів</button>
         <button type="button" data-cat="diy-stool-uk" aria-pressed="false">Під паролем</button>
       </div>
       <div class="frame" id="frame"></div>
@@ -377,7 +381,7 @@
       var buttons = document.querySelectorAll(".tabs button");
       var scriptLoaded = false;
       // [image id, hotspot id] to show selected on load, per example catalog.
-      var START = { "living-room": [1, 1], "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-uk": [1, 1] };
+      var START = { "living-room": [1, 1], "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-uk": [1, 1], "product-grid": [1, 1] };
       // Password-protected demo: it opens on a lock screen (the password is printed
       // under the frame), and a protected file cannot be opened in the editor.
       var LOCKED = "diy-stool-uk";
@@ -405,6 +409,10 @@
       }
       function show(cat) {
         buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.cat === cat)); });
+        var own = document.querySelector('.demo .intro[data-hint="' + cat + '"]');
+        document.querySelectorAll(".demo .intro[data-hint]").forEach(function (p) {
+          p.hidden = own ? p !== own : p.dataset.hint !== "*";
+        });
         document.getElementById("open-full").href = "../viewer/?src=..%2Fdemo%2F" + cat + ".ecatm&lang=uk";
         document.getElementById("edit-this").href = "../editor/?src=..%2Fdemo%2F" + cat + ".ecatm&lang=uk";
         document.getElementById("edit-this").style.display = cat === LOCKED ? "none" : "";
