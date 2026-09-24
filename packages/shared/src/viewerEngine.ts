@@ -509,6 +509,89 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   let colWidths = loadColWidths();
   applyPanelWidths(); // before the first render — avoids a flash of the default width
 
+  // Showcase: the details card's width, dragged by its left edge
+  // (#divider-showcase). Read by style.css as --showcase-details-w; unset =
+  // the stylesheet's default share of the widget.
+  const SHOWCASE_DETAILS_KEY = "ecm-viewer-showcase-details-width";
+  // A width the visitor chose (dragged now or saved before) — never overridden
+  // by fitShowcaseDetailsToList.
+  let detailsWidthByUser = false;
+  if (mode === "showcase") {
+    const saved = loadPanelWidth(SHOWCASE_DETAILS_KEY, 0);
+    if (saved) {
+      container.style.setProperty("--showcase-details-w", `${saved}px`);
+      detailsWidthByUser = true;
+    }
+  }
+
+  /**
+   * Showcase overview list (see renderShowcaseDetails): widen the card, once,
+   * until every item name fits on one line — up to the stylesheet's 70% cap,
+   * past which names wrap. Never narrows it, so the card keeps that width on
+   * the close-ups too instead of jumping. Returns true when it changed the
+   * width (the caller re-renders so the image re-fits the narrower stage).
+   */
+  function fitShowcaseDetailsToList(): boolean {
+    if (detailsWidthByUser || isStackedShowcase()) return false;
+    const details = root.querySelector<HTMLElement>(".showcase-details");
+    const list = details?.querySelector<HTMLElement>(".showcase-list");
+    if (!details || !list) return false;
+    let widest = 0;
+    list.querySelectorAll<HTMLElement>(".showcase-list-item").forEach((btn) => {
+      const name = btn.firstElementChild as HTMLElement | null;
+      if (!name) return;
+      // The row minus its name = padding + "›"; plus the name's one-line width.
+      const chrome = btn.getBoundingClientRect().width - name.getBoundingClientRect().width;
+      name.style.cssText = "flex:none;white-space:nowrap";
+      widest = Math.max(widest, chrome + name.getBoundingClientRect().width);
+      name.style.cssText = "";
+    });
+    const need = Math.ceil(details.getBoundingClientRect().width - list.getBoundingClientRect().width + widest);
+    const value = `${need}px`;
+    if (need <= Math.ceil(details.getBoundingClientRect().width) || container.style.getPropertyValue("--showcase-details-w") === value) return false;
+    container.style.setProperty("--showcase-details-w", value);
+    return true;
+  }
+
+  function startShowcaseResize(evt: PointerEvent) {
+    evt.preventDefault();
+    const divider = evt.currentTarget as HTMLElement;
+    const details = root.querySelector<HTMLElement>(".showcase-details");
+    if (!details) return;
+    const startX = evt.clientX;
+    const startWidth = details.getBoundingClientRect().width;
+    let width = startWidth;
+    divider.classList.add("dragging");
+    function onMove(moveEvt: PointerEvent) {
+      // The card is on the right: dragging its edge left (dx < 0) widens it.
+      const max = Math.max(PANEL_WIDTH_LIMITS.min, container.clientWidth * 0.7);
+      width = Math.round(Math.min(max, Math.max(PANEL_WIDTH_LIMITS.min, startWidth - (moveEvt.clientX - startX))));
+      container.style.setProperty("--showcase-details-w", `${width}px`);
+      detailsWidthByUser = true;
+    }
+    function onUp() {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      divider.classList.remove("dragging");
+      try {
+        localStorage.setItem(SHOWCASE_DETAILS_KEY, String(width));
+      } catch {
+        // Width still applies for this session, just won't persist.
+      }
+      // The stage changed size, the container did not — the ResizeObserver
+      // stays quiet, so re-fit here (same as its showcase branch).
+      if (userZoomed) {
+        const scroll = root.getElementById("stage-scroll");
+        if (scroll) stageBox = { w: scroll.clientWidth, h: scroll.clientHeight };
+      } else fitPending = true;
+      render();
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }
+
   function loadPanelWidth(key: string, fallback: number): number {
     try {
       const raw = Number(localStorage.getItem(key));
@@ -1909,6 +1992,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   /** Press-and-drag anywhere on the image to pan it (cursor turns into a grabbing hand). */
   function startImagePan(evt: MouseEvent, scrollEl: HTMLElement) {
     evt.preventDefault();
+    // Fitted whole (.fitted): nothing is hidden, so there is nothing to pan to —
+    // overflow:hidden stops scrollbars, not a scrollLeft set from here.
+    if (scrollEl.classList.contains("fitted")) return;
     const startX = evt.clientX;
     const startY = evt.clientY;
     const startScrollLeft = scrollEl.scrollLeft;
@@ -2096,7 +2182,17 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                         : `transform: scale(${zoom})`
                   }">
                      <img id="stage-img" src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
-                     ${links.map((l, i) => hotspotHtml(l, selectedUrl, selectedLinkId, i === 0)).join("")}
+                     ${(() => {
+                       // Showcase: an image with a single item (a close-up) — its marker is
+                       // already selected and the card already shows it, so it becomes a plain
+                       // label (.static: grey, not clickable, not a tab stop). Tab then lands on
+                       // the first marker that does something (the ⌂), not on the dead one.
+                       const items = showcase ? showcaseItems(links) : [];
+                       const staticUrl = items.length === 1 ? items[0]!.url : null;
+                       const live = links.filter((l) => l.url !== staticUrl);
+                       const tabStopId = live.some((l) => l.id === selectedLinkId) ? selectedLinkId : (live[0]?.id ?? null);
+                       return links.map((l) => hotspotHtml(l, selectedUrl, selectedLinkId, l.id === tabStopId, l.url === staticUrl)).join("");
+                     })()}
                    </div>${catalogMode === "quiz" ? `</div>${renderQuizFeedback(rows)}` : ""}`
                 : `<p class="hint" style="padding:2rem">${te("stage.noImage")}</p>`
             }
@@ -2107,7 +2203,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
         ${
           showcase
-            ? renderShowcaseDetails(rows.find((r) => r.url === selectedUrl) ?? null, links)
+            ? `<div class="showcase-divider" id="divider-showcase" title="${te("divider.tip")}"></div>
+               ${renderShowcaseDetails(rows.find((r) => r.url === selectedUrl) ?? null, links)}`
             : `<div class="panel-divider" id="divider-table" title="${te("divider.tip")}"></div>
 
         <div class="table-panel">
@@ -2171,6 +2268,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           return;
         }
       }
+    }
+
+    if (showcase && fitShowcaseDetailsToList()) {
+      if (!userZoomed) fitPending = true;
+      render(); // the stage got narrower — fit the image to it
+      return;
     }
 
     if ((showcase || wholeFit) && fitPending) {
@@ -2299,7 +2402,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
             ? `<ul class="showcase-list">${listed
                 .map(
                   (r) =>
-                    `<li><button type="button" class="showcase-list-item" data-image-id="${r.imageId}" data-url="${escapeHtml(r.url)}">${escapeHtml(r.name || r.url)}</button></li>`,
+                    `<li><button type="button" class="showcase-list-item" data-image-id="${r.imageId}" data-url="${escapeHtml(r.url)}"><span>${escapeHtml(r.name || r.url)}</span></button></li>`,
                 )
                 .join("")}</ul>`
             : ""
@@ -2585,7 +2688,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     `;
   }
 
-  function hotspotHtml(l: CatalogLink, selectedUrl: string | null, selectedLinkId: number | null, isFirst = false): string {
+  function hotspotHtml(l: CatalogLink, selectedUrl: string | null, selectedLinkId: number | null, tabStop = false, isStatic = false): string {
     // .selected: this hotspot's part is the one showing in the table (may be several).
     // .current: this is the *specific* instance centering targets — distinct so
     // stepping through duplicates with the instance-nav is visually obvious.
@@ -2594,17 +2697,20 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (navTarget !== null) classes.push("nav");
     if (l.url === selectedUrl) classes.push("selected");
     if (l.id === selectedLinkId) classes.push("current");
+    if (isStatic) classes.push("static");
     classes.push(...quizClasses(l.url));
     // Showcase mode: keyboard-operable (Tab to a marker, Enter/Space to select)
     // with a spoken name instead of the raw url as tooltip.
     // Roving tabindex: with dozens of markers, Tab would otherwise step through
     // every one — only the selected marker (or the first, if none) is a tab
-    // stop; arrow keys move between markers (see wireEvents).
-    const tabbable = l.id === selectedLinkId || (selectedLinkId === null && isFirst);
+    // stop; arrow keys move between markers (see wireEvents). The caller picks it.
+    const tabbable = tabStop;
     const navName = navTarget !== null ? (imageNamesById.get(navTarget) ?? l.name) : null;
     const a11y =
       mode === "showcase"
-        ? navName !== null
+        ? isStatic
+          ? ` aria-hidden="true"`
+          : navName !== null
           ? ` role="button" tabindex="${tabbable ? 0 : -1}" aria-label="${te("hotspot.navAria", { name: navName })}"`
           : ` role="button" tabindex="${tabbable ? 0 : -1}" aria-label="${te("hotspot.aria", { name: l.name })}" aria-pressed="${l.id === selectedLinkId}"`
         : "";
@@ -2853,7 +2959,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       stageImg.addEventListener("mousedown", (evt) => startImagePan(evt, stageScroll));
     }
 
-    root.querySelectorAll<HTMLDivElement>(".hotspot[data-id]").forEach((el) => {
+    root.querySelectorAll<HTMLDivElement>(".hotspot[data-id]:not(.static)").forEach((el) => {
       el.addEventListener("click", () => {
         if (catalogMode === "quiz" && navTargetImageId(el.dataset.url!) === null) actionQuizAnswer(el.dataset.url!);
         actionSelectHotspot(Number(el.dataset.id), catalogMode === "quiz" ? "stage" : "table");
@@ -2868,7 +2974,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           const step = evt.key === "ArrowRight" || evt.key === "ArrowDown" ? 1 : evt.key === "ArrowLeft" || evt.key === "ArrowUp" ? -1 : 0;
           if (!step) return;
           evt.preventDefault();
-          const all = Array.from(root.querySelectorAll<HTMLElement>(".hotspot[data-id]"));
+          const all = Array.from(root.querySelectorAll<HTMLElement>(".hotspot[data-id]:not(.static)"));
           const next = all[(all.indexOf(el) + step + all.length) % all.length];
           next?.focus({ preventScroll: true });
         });
@@ -2913,6 +3019,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
     root.getElementById("divider-images")?.addEventListener("mousedown", (evt) => startPanelResize(evt as MouseEvent, "images"));
     root.getElementById("divider-table")?.addEventListener("mousedown", (evt) => startPanelResize(evt as MouseEvent, "table"));
+    root.getElementById("divider-showcase")?.addEventListener("pointerdown", (evt) => startShowcaseResize(evt as PointerEvent));
     root.querySelectorAll<HTMLElement>(".col-resize-handle").forEach((handle) => {
       handle.addEventListener("mousedown", (evt) => startColumnResize(evt as MouseEvent, Number(handle.dataset.col)));
     });
