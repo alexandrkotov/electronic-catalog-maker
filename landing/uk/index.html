@@ -239,6 +239,7 @@
       <!-- One hint per example, shown with its tab (see show() below); data-hint="*" = every other tab. -->
       <p class="intro" data-hint="living-room">Натисніть на маркер, щоб відкрити великий план предмета — там його опис і кнопка «Купити». ⌂ поверне до кімнати.</p>
       <p class="intro" data-hint="product-grid" hidden>Натисніть на номер на плитці, щоб побачити опис товару і кнопку «Купити». Список угорі перемикає групи.</p>
+      <p class="intro" data-hint="diy-stool-uk" hidden>Демо-пароль: <strong>stool-2026</strong> — він публічний навмисно. Введіть його на екрані блокування нижче; обкладинка й назва видимі й без пароля.</p>
       <p class="intro" data-hint="*" hidden>Оберіть точку або прокрутіть за допомогою стрілок, щоб переглянути інформацію про позицію. Натисніть кнопку «Вмістити», щоб переглянути зображення у повному розмірі.</p>
       <div class="tabs" role="group" aria-label="Приклад каталогу">
         <button type="button" data-cat="living-room" aria-pressed="true">Товари в інтер’єрі</button>
@@ -253,7 +254,6 @@
         <a id="edit-this" href="../editor/?src=..%2Fdemo%2Fliving-room.ecatm&lang=uk">Редагувати цей приклад</a>
       </p>
       <p class="demo-note" id="demo-note">Кнопка «Купити» веде на оформлення замовлення в нашому демонстраційному магазині, де будь-яка позиція коштує $0.</p>
-      <p class="demo-note" id="demo-note-protected" hidden>Демо-пароль: <strong>stool-2026</strong> — він публічний навмисно. Введіть його на екрані блокування вище; обкладинка й назва видимі й без пароля.</p>
       <p class="steps-line"><strong>Створіть свій каталог:</strong> додайте зображення → позначте деталі точками → збережіть файл каталогу та відкрийте його в Перегляді.</p>
       <p class="steps-line"><strong>Розмістіть на своєму сайті:</strong> демо вище — це і є віджет для вбудовування. Щоб поставити його на свою сторінку, потрібні один тег <code>&lt;script&gt;</code> і один рядок <code>&lt;ecm-viewer&gt;</code>. <a href="../demo/embed-demo.html">Приклад на сайті магазину →</a> · <a href="https://github.com/alexandrkotov/electronic-catalog-maker#embedding-the-viewer">Як вбудувати →</a></p>
       <noscript><p>Для живого демо потрібен JavaScript — скористайтеся посиланням «Відкрити повне демо» вище.</p></noscript>
@@ -418,7 +418,6 @@
         document.getElementById("edit-this").href = "../editor/?src=..%2Fdemo%2F" + cat + ".ecatm&lang=uk";
         document.getElementById("edit-this").style.display = cat === LOCKED ? "none" : "";
         document.getElementById("demo-note").hidden = cat === LOCKED;
-        document.getElementById("demo-note-protected").hidden = cat !== LOCKED;
         loadScript(function () {
           frame.textContent = "";
           var el = document.createElement("ecm-viewer");
