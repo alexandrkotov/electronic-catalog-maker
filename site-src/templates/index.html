@@ -125,6 +125,7 @@
   .demo-links a + a { margin-left: 1rem; }
   .demo-note { margin: 0.4rem 0 0; font-size: 0.9rem; color: var(--muted); }
   .steps-line { margin: 1rem 0 0; color: var(--text-2); }
+  .steps-line code { white-space: nowrap; }
 
 
   
@@ -250,6 +251,7 @@
       <p class="demo-note" id="demo-note">{{index.demo.note}}</p>
       <p class="demo-note" id="demo-note-protected" hidden>{{index.demo.noteProtected}}</p>
       <p class="steps-line">{{index.demo.steps}}</p>
+      <p class="steps-line">{{index.demo.embed}} <a href="{{@base}}demo/embed-demo.html">{{index.demo.embed.sample}}</a> · <a href="https://github.com/alexandrkotov/electronic-catalog-maker#embedding-the-viewer">{{index.demo.embed.howto}}</a></p>
       <noscript><p>{{index.demo.noscript}}</p></noscript>
     </section>
 
@@ -363,7 +365,6 @@
   <footer>
     <a href="{url_github}">{{common.footer.source}}</a>
     {{common.footer.note}}
-    <div><a href="{{@base}}demo/embed-demo.html">{{index.footer.embed}}</a></div>
     <div><a href="{{@base}}privacy.html">{{common.footer.privacy}}</a></div>
     <div id="visits"></div>
     <div class="built-by">

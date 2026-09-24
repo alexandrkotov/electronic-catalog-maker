@@ -129,6 +129,7 @@
   .demo-links a + a { margin-left: 1rem; }
   .demo-note { margin: 0.4rem 0 0; font-size: 0.9rem; color: var(--muted); }
   .steps-line { margin: 1rem 0 0; color: var(--text-2); }
+  .steps-line code { white-space: nowrap; }
 
 
   
@@ -254,6 +255,7 @@
       <p class="demo-note" id="demo-note">Buy opens our demo store checkout, where every item costs $0.</p>
       <p class="demo-note" id="demo-note-protected" hidden>Demo password: <strong>stool-2026</strong> — it is public on purpose. Type it on the lock screen above; the cover and title are visible without it.</p>
       <p class="steps-line"><strong>Build your own:</strong> add an image → mark the details with hotspots → save the catalog file and open it in Viewer.</p>
+      <p class="steps-line"><strong>Put it on your own site:</strong> the demo above is the embeddable widget itself — one <code>&lt;script&gt;</code> tag and one <code>&lt;ecm-viewer&gt;</code> line put it on your page. <a href="demo/embed-demo.html">See it on a sample store site →</a> · <a href="https://github.com/alexandrkotov/electronic-catalog-maker#embedding-the-viewer">How to embed →</a></p>
       <noscript><p>The live demo needs JavaScript — use “Open full demo” above.</p></noscript>
     </section>
 
@@ -367,7 +369,6 @@
   <footer>
     <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Source on GitHub</a>
     — catalogs stay on your disk unless opened from a URL.
-    <div><a href="demo/embed-demo.html">See it embedded on a website →</a></div>
     <div><a href="privacy.html">Privacy policy</a></div>
     <div id="visits"></div>
     <div class="built-by">
