@@ -89,6 +89,8 @@
   "image.delete.tip": "Удалить «{name}»",
   "image.title": "Изображение",
   "image.folder": "Папка (оставьте пустой, если папки нет)",
+  "image.fitOnOpen": "Вписать в окно при открытии",
+  "image.fitOnOpen.hint": "Просмотрщик покажет это изображение целиком, а не в масштабе 100%.",
   "image.folder.placeholder": "например, Шкаф",
 
   "link.new.title": "Новая ссылка (точка)",
@@ -98,6 +100,9 @@
   "link.reuse.none": "— новая деталь —",
   "link.name": "Название ссылки",
   "link.address": "Адрес",
+  "link.target.label": "Переход на изображение",
+  "link.target.none": "— нет: позиция со строкой таблицы —",
+  "link.target.missing": "изображение удалено",
   "link.add": "Добавить ссылку",
   "link.placeHint": "Щёлкните по изображению, чтобы поставить точку.",
   "link.edit.title": "Изменить ссылку",

@@ -28,6 +28,7 @@ import {
   detectLocalCollabServerViaBridge,
 } from "./collabClient.js";
 import { renderQrCodeSvg } from "./qrcode.js";
+import { isNavLink, navTargetImageId } from "./navLink.js";
 import { createTranslator, matchLocale, type MessageParams, type Translate } from "./i18n.js";
 import { VIEWER_LOCALES, VIEWER_LOCALE_NAMES, viewerMessages } from "./locales/viewer/index.js";
 import { buildCartCheckoutUrl, cartStorageKey, catalogHasAnyBuyUrl, loadPersistedCart, parseCartItemId, savePersistedCart } from "./cart.js";
@@ -272,6 +273,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // on "whichever hotspot happens to match this url" would jump to the wrong
   // one. The url derived from this link is still what highlights the row.
   let selectedLinkId: number | null = null;
+  /** Target names for navigation markers' labels (see hotspotHtml), refreshed by render(). */
+  let imageNamesById = new Map<number, string>();
   let zoom = 1;
   // "showcase" mode only: the image is fitted whole into the stage instead of
   // starting at 100%. `fitPending` asks the next render() to measure the
@@ -286,6 +289,10 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // re-applied over a deliberate "show me the whole image"; cleared when
   // another image is opened.
   let forceWhole = false;
+  // Full/lite modes: the image is kept fitted whole into the stage (the Fit
+  // button, or an image whose `fitOnOpen` is set) — re-fitted on resize until
+  // the visitor zooms or presses Reset. Showcase mode fits by default anyway.
+  let wholeFit = false;
   let resizeObserver: ResizeObserver | null = null;
   let quizObserverDisconnect: (() => void) | null = null;
   // Last measured size of the stage's scroll box (showcase mode) — used to
@@ -663,10 +670,19 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function actionSetZoom(next: number) {
     zoom = Math.min(4, Math.max(Math.min(0.25, fitZoom), next));
     userZoomed = true;
+    wholeFit = false;
     render();
     // On touch screens the zoomed stage isn't finger-scrollable (see the
     // pointer:coarse rule in style.css), so keep the selected item in view.
     if (mode === "showcase") centerSelection();
+  }
+
+  /** Fit button (full/lite): the whole image inside the stage, kept fitted on resize. */
+  function actionFitZoom() {
+    wholeFit = true;
+    userZoomed = false;
+    fitPending = true;
+    render();
   }
 
   /** Reset button: 100% normally; "fit the whole image" in showcase mode. */
@@ -755,8 +771,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (!db) return;
     if (options.initialImageId !== undefined && listImages(db).some((i) => i.id === options.initialImageId)) {
       activeImageId = options.initialImageId;
+      resetZoomForImage(activeImageId);
     }
-    if (activeImageId !== null && options.initialLinkId !== undefined && listLinksForImage(db, activeImageId).some((l) => l.id === options.initialLinkId)) {
+    if (activeImageId !== null && options.initialLinkId !== undefined && listLinksForImage(db, activeImageId).some((l) => l.id === options.initialLinkId && !isNavLink(l))) {
       selectedLinkId = options.initialLinkId;
     }
     syncAddressBar();
@@ -1012,9 +1029,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     cartOpen = false;
     activeImageId = listImages(db)[0]?.id ?? null;
     selectedLinkId = null;
-    zoom = 1;
-    userZoomed = false;
-    fitPending = mode === "showcase";
+    resetZoomForImage(activeImageId);
     // Fresh catalog: start on the catalog's own defaultView (see CatalogMeta
     // — "images" unless the author picked otherwise in Store settings).
     // Only visible below the mobile-tab breakpoint (embeds in a narrow
@@ -1145,6 +1160,21 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     fallbackInput.click();
   }
 
+  /**
+   * The zoom an image starts at when it is opened: showcase fits it (unless
+   * options.compactZoom opens a close-up — an image marked `fitOnOpen` stays
+   * whole even then); full/lite open at 100%, or fitted whole when the image
+   * is marked `fitOnOpen`. Quiz mode keeps its own fit-to-width.
+   */
+  function resetZoomForImage(id: number | null) {
+    const fitOnOpen = !!(db && id !== null && listImages(db).find((i) => i.id === id)?.fitOnOpen);
+    zoom = 1;
+    userZoomed = false;
+    forceWhole = mode === "showcase" && fitOnOpen;
+    wholeFit = mode !== "showcase" && catalogMode !== "quiz" && fitOnOpen;
+    fitPending = mode === "showcase" || wholeFit;
+  }
+
   function actionSelectImage(id: number) {
     activeImageId = id;
     selectedLinkId = null;
@@ -1152,12 +1182,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // switch would just be a hint — select the image's first hotspot instead
     // (same "always something to read" state as the initial preselection).
     if (mode === "showcase" && db) {
-      selectedLinkId = [...listLinksForImage(db, id)].sort((a, b) => a.id - b.id)[0]?.id ?? null;
+      selectedLinkId = [...listLinksForImage(db, id)].filter((l) => !isNavLink(l)).sort((a, b) => a.id - b.id)[0]?.id ?? null;
     }
-    zoom = 1;
-    userZoomed = false;
-    forceWhole = false;
-    fitPending = mode === "showcase";
+    resetZoomForImage(id);
     mobileTab = "stage"; // no-op above the mobile breakpoint — see mobileTab's declaration
     syncAddressBar();
     render();
@@ -1182,6 +1209,16 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    * mobileTab's declaration.
    */
   function actionSelectHotspot(linkId: number, toTab: "stage" | "table" = "table") {
+    // A navigation hotspot (address `#image=<id>`, see navLink.ts) has no row:
+    // it opens its target image. A target that no longer exists does nothing.
+    if (db && activeImageId !== null) {
+      const link = listLinksForImage(db, activeImageId).find((l) => l.id === linkId);
+      const target = link ? navTargetImageId(link.url) : null;
+      if (target !== null) {
+        if (listImages(db).some((i) => i.id === target)) actionSelectImage(target);
+        return;
+      }
+    }
     selectedLinkId = linkId;
     mobileTab = toTab;
     syncAddressBar();
@@ -1199,7 +1236,25 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function actionSelectRowByUrl(url: string) {
     if (!db || activeImageId === null) return;
     const link = listLinksForImage(db, activeImageId).find((l) => l.url === url);
-    if (link) actionSelectHotspot(link.id, "stage");
+    if (link) {
+      actionSelectHotspot(link.id, "stage");
+      return;
+    }
+    // A row listed through a navigation link (see navTargetRows): open the
+    // image it belongs to, with its hotspot selected.
+    const row = findRowByUrl(db, url);
+    if (row && row.imageId !== activeImageId) actionGoToSearchResult(row.imageId, url);
+  }
+
+  /** Rows of the images this image's navigation links open (each image once, in link order; never the image itself). */
+  function navTargetRows(links: CatalogLink[], imageId: number): CatalogRow[] {
+    if (!db) return [];
+    const targets: number[] = [];
+    for (const l of [...links].sort((a, b) => a.id - b.id)) {
+      const target = navTargetImageId(l.url);
+      if (target !== null && target !== imageId && !targets.includes(target)) targets.push(target);
+    }
+    return targets.flatMap((id) => listRowsForImage(db!, id));
   }
 
   /**
@@ -1623,7 +1678,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (!db) return;
     searchOpen = false;
     activeImageId = imageId;
-    zoom = 1;
+    resetZoomForImage(imageId);
     mobileTab = "stage"; // no-op above the mobile breakpoint — see mobileTab's declaration
     const link = listLinksForImage(db, imageId).find((l) => l.url === url);
     selectedLinkId = link ? link.id : null;
@@ -1844,7 +1899,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       return;
     }
     const hotspotEl = root.querySelector(`.hotspot[data-id="${selectedLinkId}"]`);
-    hotspotEl?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    // A fitted image is already whole on screen; scrolling its (unscaled,
+    // overflow-hidden) layout box would only shift it off center.
+    if (!(wholeFit && zoom <= fitZoom + 0.001)) hotspotEl?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
     const url = hotspotEl?.getAttribute("data-url");
     if (url) root.querySelector(`tr[data-url="${cssEscape(url)}"]`)?.scrollIntoView({ block: "nearest" });
   }
@@ -1889,10 +1946,16 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   function render() {
     const images = db ? listImages(db) : [];
+    imageNamesById = new Map(images.map((i) => [i.id, i.name]));
     const activeImage = images.find((i) => i.id === activeImageId) ?? null;
     const links = db && activeImage ? listLinksForImage(db, activeImage.id) : [];
     const rows = db && activeImage ? listRowsForImage(db, activeImage.id) : [];
     computeQuizState(images, activeImage?.id ?? null, rows);
+    // An overview image whose hotspots open other images (navigation links,
+    // see navLink.ts) lists those images' items in its table too — the room
+    // photo's table shows the room's furniture. Clicking one opens it where it
+    // lives (see actionSelectRowByUrl). Not in a quiz: its table is the question.
+    const tableRows = db && activeImage && catalogMode !== "quiz" ? [...rows, ...navTargetRows(links, activeImage.id)] : rows;
     // Every hotspot sharing this url is highlighted together (they're the same
     // part), while centering (see actionSelectHotspot) targets the one actually
     // clicked.
@@ -2018,12 +2081,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
             // there is nothing to pan — and a scrollable box here would (a) show
             // blank scroll room past the scaled image and (b) swallow the page's
             // wheel/touch scrolling while the pointer is over the demo.
-            showcase && zoom <= fitZoom + 0.001 ? " fitted" : catalogMode === "quiz" && !userZoomed ? " quiz-fit" : ""
+            (showcase || wholeFit) && zoom <= fitZoom + 0.001 ? " fitted" : catalogMode === "quiz" && !userZoomed ? " quiz-fit" : ""
           }" id="stage-scroll">
             ${
               activeImage
                 ? `${catalogMode === "quiz" ? `<div class="quiz-fit-box" style="width:${Math.round(activeImage.width * zoom)}px;height:${Math.round(activeImage.height * zoom)}px">` : ""}<div class="stage-inner" style="${
-                    showcase
+                    showcase || wholeFit
                       ? // Centered when smaller than the stage; markers are counter-scaled
                         // (capped) so they stay legible while the whole image is shrunk to fit.
                         `transform: translate(${Math.max(0, (stageBox.w - activeImage.width * zoom) / 2)}px, ${Math.max(0, (stageBox.h - activeImage.height * zoom) / 2)}px) scale(${zoom}); --marker-scale: ${Math.max(1, Math.min(1 / zoom, 1.8))}`
@@ -2059,7 +2122,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                      ${catalogMode === "quiz" ? "" : `<th>${te("column.extra")}<span class="col-resize-handle" data-col="3"></span></th>
                      <th><span class="col-resize-handle" data-col="4"></span></th>`}
                    </tr></thead>
-                   <tbody>${rows.map((r) => rowHtml(r, selectedUrl)).join("")}</tbody>
+                   <tbody>${tableRows.map((r) => rowHtml(r, selectedUrl)).join("")}</tbody>
                  </table>`
               : ""
           }
@@ -2110,15 +2173,16 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       }
     }
 
-    if (showcase && fitPending) {
+    if ((showcase || wholeFit) && fitPending) {
       const fit = measureFitZoom();
       if (fit !== null) {
         fitPending = false;
         fitZoom = fit;
-        const compact = !forceWhole && options.compactZoom && isStackedShowcase() && options.compactZoom > fit;
+        const compact = showcase && !forceWhole && options.compactZoom && isStackedShowcase() && options.compactZoom > fit;
         zoom = compact ? Math.min(4, options.compactZoom as number) : fit;
         render(); // second pass with the chosen zoom; restores focus and wires events itself
         if (compact) centerSelection(true);
+        if (!showcase) root.getElementById("stage-scroll")?.scrollTo(0, 0); // a scroll kept from 100% would offset the centered image
         return;
       }
     }
@@ -2207,7 +2271,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const seen = new Set<string>();
     const out: T[] = [];
     for (const l of [...imageLinks].sort((a, b) => a.id - b.id)) {
-      if (seen.has(l.url)) continue;
+      if (seen.has(l.url) || isNavLink(l)) continue;
       seen.add(l.url);
       out.push(l);
     }
@@ -2223,8 +2287,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    */
   function renderShowcaseDetails(row: CatalogRow | null, imageLinks: { id: number; url: string }[]): string {
     if (!row) {
+      const onlyNav = imageLinks.some(isNavLink) && showcaseItems(imageLinks).length === 0;
       return `<section class="showcase-details" role="region" aria-label="${te("showcase.region")}" aria-live="polite">
-        <p class="hint">${te("showcase.hint")}</p>
+        <p class="hint">${onlyNav ? te("showcase.navHint") : te("showcase.hint")}</p>
       </section>`;
     }
     const buyUrl = typeof row.extra.buy_url === "string" && row.extra.buy_url ? row.extra.buy_url : null;
@@ -2266,6 +2331,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         <span class="zoom-pct">${Math.round(zoom * 100)}%</span>
         <button id="btn-zoom-in" title="${te("zoom.in")}" aria-label="${te("zoom.in")}">+</button>
         <button id="btn-zoom-reset" title="${mode === "showcase" ? te("zoom.fit.tip") : te("zoom.reset.tip")}">${mode === "showcase" ? te("zoom.fit") : te("zoom.reset")}</button>
+        ${mode !== "showcase" && catalogMode !== "quiz" ? `<button id="btn-zoom-fit" title="${te("zoom.fit.tip")}">${te("zoom.fit")}</button>` : ""}
       </div>
     `;
   }
@@ -2510,6 +2576,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // .current: this is the *specific* instance centering targets — distinct so
     // stepping through duplicates with the instance-nav is visually obvious.
     const classes = ["hotspot"];
+    const navTarget = navTargetImageId(l.url);
+    if (navTarget !== null) classes.push("nav");
     if (l.url === selectedUrl) classes.push("selected");
     if (l.id === selectedLinkId) classes.push("current");
     classes.push(...quizClasses(l.url));
@@ -2519,11 +2587,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // every one — only the selected marker (or the first, if none) is a tab
     // stop; arrow keys move between markers (see wireEvents).
     const tabbable = l.id === selectedLinkId || (selectedLinkId === null && isFirst);
+    const navName = navTarget !== null ? (imageNamesById.get(navTarget) ?? l.name) : null;
     const a11y =
       mode === "showcase"
-        ? ` role="button" tabindex="${tabbable ? 0 : -1}" aria-label="${te("hotspot.aria", { name: l.name })}" aria-pressed="${l.id === selectedLinkId}"`
+        ? navName !== null
+          ? ` role="button" tabindex="${tabbable ? 0 : -1}" aria-label="${te("hotspot.navAria", { name: navName })}"`
+          : ` role="button" tabindex="${tabbable ? 0 : -1}" aria-label="${te("hotspot.aria", { name: l.name })}" aria-pressed="${l.id === selectedLinkId}"`
         : "";
-    const title = mode === "showcase" ? "" : ` title="${escapeHtml(l.url)}"`;
+    const title = mode === "showcase" ? "" : ` title="${navName !== null ? te("hotspot.navAria", { name: navName }) : escapeHtml(l.url)}"`;
     return `<div class="${classes.join(" ")}" data-id="${l.id}" data-url="${escapeHtml(l.url)}"${a11y} style="top:${l.top}px;left:${l.left}px;font-size:${l.fontSize}px"${title}>${escapeHtml(l.name)}</div>`;
   }
 
@@ -2730,6 +2801,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     root.getElementById("btn-zoom-in")?.addEventListener("click", () => actionSetZoom(zoom * 1.25));
     root.getElementById("btn-zoom-out")?.addEventListener("click", () => actionSetZoom(zoom / 1.25));
     root.getElementById("btn-zoom-reset")?.addEventListener("click", actionResetZoom);
+    root.getElementById("btn-zoom-fit")?.addEventListener("click", actionFitZoom);
     root.getElementById("showcase-image")?.addEventListener("change", (evt) => {
       actionSelectImage(Number((evt.target as HTMLSelectElement).value));
     });
@@ -2766,7 +2838,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
     root.querySelectorAll<HTMLDivElement>(".hotspot[data-id]").forEach((el) => {
       el.addEventListener("click", () => {
-        if (catalogMode === "quiz") actionQuizAnswer(el.dataset.url!);
+        if (catalogMode === "quiz" && navTargetImageId(el.dataset.url!) === null) actionQuizAnswer(el.dataset.url!);
         actionSelectHotspot(Number(el.dataset.id), catalogMode === "quiz" ? "stage" : "table");
       });
       if (mode === "showcase") {
@@ -2828,13 +2900,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       handle.addEventListener("mousedown", (evt) => startColumnResize(evt as MouseEvent, Number(handle.dataset.col)));
     });
 
-    void findRowByUrl; // used indirectly via listRowsForImage today; kept for future direct-lookup use
   }
 
   // Showcase mode: keep the image fitted as the widget's box changes (window
   // resize, the demo frame changing height on a phone) — unless the visitor
   // has zoomed on purpose.
-  if (mode === "showcase" && typeof ResizeObserver !== "undefined") {
+  // Full/lite modes do the same while the image is kept fitted (wholeFit).
+  if (typeof ResizeObserver !== "undefined") {
     let lastW = 0;
     let lastH = 0;
     resizeObserver = new ResizeObserver(() => {
@@ -2844,6 +2916,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       lastW = w;
       lastH = h;
       if (!db) return;
+      if (mode !== "showcase") {
+        if (wholeFit) {
+          fitPending = true;
+          render();
+        }
+        return;
+      }
       if (userZoomed) {
         const scroll = root.getElementById("stage-scroll");
         if (scroll) stageBox = { w: scroll.clientWidth, h: scroll.clientHeight };

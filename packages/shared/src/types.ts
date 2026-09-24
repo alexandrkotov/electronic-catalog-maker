@@ -9,6 +9,8 @@ export interface CatalogImage {
   sortOrder: number;
   /** Free-form grouping label for the two-level image list; "" = ungrouped. */
   folder: string;
+  /** The viewer opens this image fitted whole into its window instead of at its default zoom. */
+  fitOnOpen: boolean;
 }
 
 export interface CatalogLink {

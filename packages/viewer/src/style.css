@@ -1283,7 +1283,9 @@ button:disabled {
   background: var(--bg-panel);
 }
 
-.mode-showcase .stage-scroll.fitted {
+.stage-scroll.fitted {
+  /* The scaled-down image still has its full-size layout box; without this
+     the stage would scroll through empty space (see "fitted" in viewerEngine). */
   overflow: hidden;
 }
 
@@ -1339,7 +1341,10 @@ button:disabled {
   width: auto;
 }
 
-.ecm-viewer-app.mode-showcase .hotspot {
+.ecm-viewer-app.mode-showcase .hotspot,
+.stage-scroll.fitted .hotspot {
+  /* Fitted (showcase, or Fit / "fit when opened" in the other modes): the
+     image is shrunk, so markers are counter-scaled to stay readable. */
   transform: translate(-50%, -50%) scale(var(--marker-scale, 1));
 }
 

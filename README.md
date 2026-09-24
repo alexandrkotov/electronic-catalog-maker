@@ -115,6 +115,14 @@ A few other things worth knowing:
 
 - Drag a hotspot to reposition it; click one (or its row under "Links on
   this image") to rename it, change its address, or delete it.
+- A hotspot can also jump to another image instead of showing a row: pick
+  that image under **Goes to image** (its address becomes `#image=<id>`,
+  and it never gets a table row). That's the classic room catalog — a room
+  photo whose hotspots open each piece's close-up, and a "⌂" hotspot on
+  every close-up back to the room.
+- Tick **Fit to the window when opened** on an image to have the viewer
+  show it whole instead of at 100% (the viewer's **Fit** button does the
+  same on demand).
 - Select an image to rename it or move it into a **Folder** — the image
   list becomes two-level, grouped by folder (see "Grouping images into
   folders" below).
@@ -327,11 +335,14 @@ One `.ecatm` file (a SQLite database under the hood) = one catalog. Tables:
   (`store_url`, `cart_mode`, and the cart-recipe fields). A key a given
   file predates just falls back to a sensible default — no migration
   needed when this list grows.
-- `images` — one row per picture (name, embedded image data, size, and an
-  optional `folder` label for grouping in the image list)
+- `images` — one row per picture (name, embedded image data, size, an
+  optional `folder` label for grouping in the image list, and `fit_on_open`:
+  1 = the viewer opens it fitted whole into its window)
 - `links` — one row per clickable hotspot on an image (name, url, pixel
   position). Several hotspots may share the same `name`/`url` — that's how
   the same part gets drawn at multiple positions on one exploded diagram.
+  A url of the form `#image=<id>` is a navigation hotspot: it opens that
+  image and has no row.
 - `rows` — one row of data per link, joined by `url`. Fixed columns (`name`,
   `sku`, `description`) plus a free-form `extra` JSON column for whatever
   characteristics a given catalog needs (including `buy_url`, above).

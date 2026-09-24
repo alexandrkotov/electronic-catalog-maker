@@ -87,6 +87,8 @@
   "image.delete.tip": "Delete \"{name}\"",
   "image.title": "Image",
   "image.folder": "Folder (leave empty for none)",
+  "image.fitOnOpen": "Fit to the window when opened",
+  "image.fitOnOpen.hint": "The viewer shows this image whole instead of at 100%.",
   "image.folder.placeholder": "e.g. Wardrobe",
 
   "link.new.title": "New link (hotspot)",
@@ -96,6 +98,9 @@
   "link.reuse.none": "— new part —",
   "link.name": "Link name",
   "link.address": "Address",
+  "link.target.label": "Goes to image",
+  "link.target.none": "— nothing: an item with a table row —",
+  "link.target.missing": "missing image",
   "link.add": "Add link",
   "link.placeHint": "Click on the image to place a hotspot.",
   "link.edit.title": "Edit link",
