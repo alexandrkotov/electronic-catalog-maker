@@ -62,6 +62,10 @@ const HOST_DEFAULTS_CSS = `
  * - `compact-zoom` — showcase mode, narrow layout only: open each image at
  *   this zoom (e.g. "0.75") centered on the selected item instead of fitting
  *   it whole; the Fit button still shows the whole image.
+ * - `panels` — "images,table" opening widths of the two side panels as a
+ *   percentage of the widget, e.g. "17,26" (the diagram gets the rest). Makes
+ *   this widget ignore the panel widths saved in the visitor's browser (shared
+ *   by every page on the site), so each widget keeps its own proportions.
  */
 class EcmViewerElement extends HTMLElement {
   private controller: ViewerController | null = null;
@@ -87,6 +91,12 @@ class EcmViewerElement extends HTMLElement {
       const n = Number.parseInt(this.getAttribute(name) ?? "", 10);
       return Number.isNaN(n) ? undefined : n;
     };
+    const panels = (this.getAttribute("panels") ?? "").split(",").map((v) => Number.parseFloat(v));
+    const [imagesPct, tablePct] = panels;
+    const panelFractions =
+      panels.length === 2 && panels.every((n) => Number.isFinite(n) && n >= 5 && n <= 60) && imagesPct! + tablePct! <= 85
+        ? { images: imagesPct! / 100, table: tablePct! / 100 }
+        : undefined;
     this.controller = mountViewer({
       container: mount,
       root: shadow,
@@ -96,6 +106,7 @@ class EcmViewerElement extends HTMLElement {
       initialImageId: intAttr("initial-image"),
       initialLinkId: intAttr("initial-link"),
       compactZoom: floatAttr("compact-zoom"),
+      panelFractions,
       // Never rewrite the *embedding* page's address bar.
       updateAddressBar: false,
       // Apply data-theme to this element itself (the shadow host), never

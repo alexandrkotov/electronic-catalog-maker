@@ -106,6 +106,10 @@ body {
   background: var(--bg-page);
   color: var(--text);
 }
+/* An embed with its own `panels` proportions: percentages, no caps needed. */
+.ecm-viewer-app[data-panels-fixed] {
+  grid-template-columns: var(--images-w) 6px minmax(0, 1fr) 6px var(--table-w);
+}
 
 .ecm-viewer-app.mode-full {
   grid-template-rows: auto 1fr;
