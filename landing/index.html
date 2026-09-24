@@ -237,14 +237,15 @@
       <h2 id="demo-h">See how it works</h2>
       <p class="intro">Select a marker or use the arrows to explore item details. Use Fit to see the whole image.</p>
       <div class="tabs" role="group" aria-label="Example catalog">
-        <button type="button" data-cat="auto-spare-parts" aria-pressed="true">Auto parts</button>
+        <button type="button" data-cat="living-room" aria-pressed="true">Living room</button>
+        <button type="button" data-cat="auto-spare-parts" aria-pressed="false">Auto parts</button>
         <button type="button" data-cat="furniture" aria-pressed="false">Furniture</button>
         <button type="button" data-cat="diy-stool-en" aria-pressed="false">Password-protected</button>
       </div>
       <div class="frame" id="frame"></div>
       <p class="demo-links">
-        <a id="open-full" href="viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Open full demo</a>
-        <a id="edit-this" href="editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Edit this example</a>
+        <a id="open-full" href="viewer/?src=..%2Fdemo%2Fliving-room.ecatm">Open full demo</a>
+        <a id="edit-this" href="editor/?src=..%2Fdemo%2Fliving-room.ecatm">Edit this example</a>
       </p>
       <p class="demo-note" id="demo-note">Buy opens our demo store checkout, where every item costs $0.</p>
       <p class="demo-note" id="demo-note-protected" hidden>Demo password: <strong>stool-2026</strong> — it is public on purpose. Type it on the lock screen above; the cover and title are visible without it.</p>
@@ -376,7 +377,7 @@
       var buttons = document.querySelectorAll(".tabs button");
       var scriptLoaded = false;
       // [image id, hotspot id] to show selected on load, per example catalog.
-      var START = { "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-en": [1, 1] };
+      var START = { "living-room": [1, 1], "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-en": [1, 1] };
       // Password-protected demo: it opens on a lock screen (the password is printed
       // under the frame), and a protected file cannot be opened in the editor.
       var LOCKED = "diy-stool-en";
@@ -420,13 +421,14 @@
           el.setAttribute("initial-link", start[1]);
           // Phones: a dense diagram fitted whole is an unreadable pile of
           // markers, so open close-up on the selected item (Fit shows it all).
-          el.setAttribute("compact-zoom", "0.75");
+          // The living-room photo reads fine whole, so it stays fitted.
+          if (cat !== "living-room") el.setAttribute("compact-zoom", "0.75");
           el.setAttribute("src", new URL("demo/" + cat + ".ecatm", location.href).href);
           frame.appendChild(el);
         });
       }
       buttons.forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.cat); }); });
-      show("auto-spare-parts");
+      show("living-room");
     })();
   </script>
   <script>

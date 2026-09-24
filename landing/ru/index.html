@@ -237,14 +237,15 @@
       <h2 id="demo-h">Как это работает</h2>
       <p class="intro">Выберите точку или листайте стрелками, чтобы увидеть сведения о позиции. Кнопка «Вписать» показывает изображение целиком.</p>
       <div class="tabs" role="group" aria-label="Пример каталога">
-        <button type="button" data-cat="auto-spare-parts" aria-pressed="true">Автозапчасти</button>
+        <button type="button" data-cat="living-room" aria-pressed="true">Гостиная</button>
+        <button type="button" data-cat="auto-spare-parts" aria-pressed="false">Автозапчасти</button>
         <button type="button" data-cat="furniture" aria-pressed="false">Мебель</button>
         <button type="button" data-cat="diy-stool-ru" aria-pressed="false">Под паролем</button>
       </div>
       <div class="frame" id="frame"></div>
       <p class="demo-links">
-        <a id="open-full" href="../viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm&lang=ru">Открыть полное демо</a>
-        <a id="edit-this" href="../editor/?src=..%2Fdemo%2Fauto-spare-parts.ecatm&lang=ru">Редактировать этот пример</a>
+        <a id="open-full" href="../viewer/?src=..%2Fdemo%2Fliving-room.ecatm&lang=ru">Открыть полное демо</a>
+        <a id="edit-this" href="../editor/?src=..%2Fdemo%2Fliving-room.ecatm&lang=ru">Редактировать этот пример</a>
       </p>
       <p class="demo-note" id="demo-note">Кнопка «Купить» ведёт на оформление заказа в нашем демо-магазине, где любая позиция стоит $0.</p>
       <p class="demo-note" id="demo-note-protected" hidden>Демо-пароль: <strong>stool-2026</strong> — он публичный намеренно. Введите его на экране блокировки выше; обложка и название видны и без пароля.</p>
@@ -376,7 +377,7 @@
       var buttons = document.querySelectorAll(".tabs button");
       var scriptLoaded = false;
       // [image id, hotspot id] to show selected on load, per example catalog.
-      var START = { "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-ru": [1, 1] };
+      var START = { "living-room": [1, 1], "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-ru": [1, 1] };
       // Password-protected demo: it opens on a lock screen (the password is printed
       // under the frame), and a protected file cannot be opened in the editor.
       var LOCKED = "diy-stool-ru";
@@ -420,13 +421,14 @@
           el.setAttribute("initial-link", start[1]);
           // Phones: a dense diagram fitted whole is an unreadable pile of
           // markers, so open close-up on the selected item (Fit shows it all).
-          el.setAttribute("compact-zoom", "0.75");
+          // The living-room photo reads fine whole, so it stays fitted.
+          if (cat !== "living-room") el.setAttribute("compact-zoom", "0.75");
           el.setAttribute("src", new URL("../demo/" + cat + ".ecatm", location.href).href);
           frame.appendChild(el);
         });
       }
       buttons.forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.cat); }); });
-      show("auto-spare-parts");
+      show("living-room");
     })();
   </script>
   <script>
