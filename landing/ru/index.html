@@ -129,6 +129,7 @@
   .demo-links a + a { margin-left: 1rem; }
   .demo-note { margin: 0.4rem 0 0; font-size: 0.9rem; color: var(--muted); }
   .steps-line { margin: 1rem 0 0; color: var(--text-2); }
+  .steps-line code { white-space: nowrap; }
 
 
   
@@ -236,8 +237,8 @@
     <section class="demo" id="demo" aria-labelledby="demo-h">
       <h2 id="demo-h">Как это работает</h2>
       <!-- One hint per example, shown with its tab (see show() below); data-hint="*" = every other tab. -->
-      <p class="intro" data-hint="living-room">Нажмите на маркер, чтобы открыть крупный план предмета — там его описание и кнопка Buy. ⌂ вернёт в комнату.</p>
-      <p class="intro" data-hint="product-grid" hidden>Нажмите на номер на плитке, чтобы увидеть описание товара и кнопку Buy. Список вверху переключает группы.</p>
+      <p class="intro" data-hint="living-room">Нажмите на маркер, чтобы открыть крупный план предмета — там его описание и кнопка «Купить». ⌂ вернёт в комнату.</p>
+      <p class="intro" data-hint="product-grid" hidden>Нажмите на номер на плитке, чтобы увидеть описание товара и кнопку «Купить». Список вверху переключает группы.</p>
       <p class="intro" data-hint="*" hidden>Выберите точку или листайте стрелками, чтобы увидеть сведения о позиции. Кнопка «Вписать» показывает изображение целиком.</p>
       <div class="tabs" role="group" aria-label="Пример каталога">
         <button type="button" data-cat="living-room" aria-pressed="true">Товары в интерьере</button>
@@ -254,13 +255,14 @@
       <p class="demo-note" id="demo-note">Кнопка «Купить» ведёт на оформление заказа в нашем демо-магазине, где любая позиция стоит $0.</p>
       <p class="demo-note" id="demo-note-protected" hidden>Демо-пароль: <strong>stool-2026</strong> — он публичный намеренно. Введите его на экране блокировки выше; обложка и название видны и без пароля.</p>
       <p class="steps-line"><strong>Сделайте свой каталог:</strong> добавьте изображение → отметьте детали точками → сохраните файл каталога и откройте его в Просмотрщике.</p>
+      <p class="steps-line"><strong>Разместите на своём сайте:</strong> демо выше — это и есть встраиваемый виджет. Чтобы поставить его к себе на страницу, нужны один тег <code>&lt;script&gt;</code> и одна строка <code>&lt;ecm-viewer&gt;</code>. <a href="../demo/embed-demo.html">Пример на сайте магазина →</a> · <a href="https://github.com/alexandrkotov/electronic-catalog-maker#embedding-the-viewer">Как встроить →</a></p>
       <noscript><p>Для живого демо нужен JavaScript — воспользуйтесь ссылкой «Открыть полное демо» выше.</p></noscript>
     </section>
 
     <h2>Для кого это</h2>
     <div class="card-row use-cases">
-      <div class="card"><h3>Мебель и товары для дома</h3><p>Товары в интерьере: нажмите на предмет на фото комнаты — откроется его описание и кнопка Buy. Или покажите весь ассортимент сеткой товаров. <a href="../viewer/?src=..%2Fdemo%2Fliving-room.ecatm&lang=ru">Открыть демо →</a></p></div>
-      <div class="card"><h3>Запчасти и оборудование</h3><p>Разнесённые схемы, связанные с артикулами, описаниями и кнопкой Buy: номер на схеме совпадает со строкой в таблице. <a href="../viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm&lang=ru">Открыть демо →</a></p></div>
+      <div class="card"><h3>Мебель и товары для дома</h3><p>Товары в интерьере: нажмите на предмет на фото комнаты — откроется его описание и кнопка «Купить». Или покажите весь ассортимент сеткой товаров. <a href="../viewer/?src=..%2Fdemo%2Fliving-room.ecatm&lang=ru">Открыть демо →</a></p></div>
+      <div class="card"><h3>Запчасти и оборудование</h3><p>Разнесённые схемы, связанные с артикулами, описаниями и кнопкой «Купить»: номер на схеме совпадает со строкой в таблице. <a href="../viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm&lang=ru">Открыть демо →</a></p></div>
       <div class="card"><h3>Платные и закрытые каталоги</h3><p>Продавайте инструкцию или курс, либо делитесь одними каталогами со всеми, а другими — только с теми, кому дали пароль. Один пароль на файл — без аккаунтов и сервера; открыть может любой, у кого есть пароль. Защищённую копию вы создаёте в редакторе. <a href="../viewer/?src=..%2Fdemo%2Fdiy-stool-ru.ecatm&lang=ru">Открыть демо (пароль: stool-2026) →</a></p></div>
       <div class="card"><h3>Обучение</h3><p>Схемы, которые можно исследовать, для уроков и школьных проектов — без учётных записей учеников и без облака. <a href="schools.html">Страница для школ →</a></p></div>
       <div class="card"><h3>Залы и фитнес</h3><p>Выберите группу мышц, найдите тренажёр, узнайте, как его настроить, и распечатайте тренировку — без приложения и аккаунта. <a href="../viewer/?src=..%2Fdemo%2Ffitness-ru.ecatm&lang=ru">Открыть демо →</a></p></div>
@@ -367,7 +369,6 @@
   <footer>
     <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Исходный код на GitHub</a>
     — каталоги остаются на вашем диске, если их не открывают по URL.
-    <div><a href="../demo/embed-demo.html">Как это выглядит на сайте →</a></div>
     <div><a href="../privacy.html">Политика конфиденциальности (на английском)</a></div>
     <div id="visits"></div>
     <div class="built-by">
