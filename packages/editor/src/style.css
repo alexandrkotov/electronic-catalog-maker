@@ -740,6 +740,17 @@ td.extra-cell {
   color: var(--muted);
 }
 
+/* A dialog-level heads-up, e.g. why the PDF dialog's QR options are disabled. */
+.notice {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 .collab-status {
   font-size: 0.8rem;
   white-space: nowrap;

@@ -774,6 +774,17 @@ button:disabled {
   color: var(--muted);
 }
 
+/* A dialog-level heads-up, e.g. why the PDF dialog's QR options are disabled. */
+.notice {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-panel);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 .hint a {
   color: var(--accent);
 }
