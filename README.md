@@ -15,11 +15,12 @@ Build and view interactive image-hotspot catalogs — a schematic picture with
 clickable positions linked to a data table (name, SKU, characteristics) —
 packaged as a single portable `.ecatm` file (a SQLite database under the
 hood, read and written entirely in the browser via
-[sql.js](https://github.com/sql-js/sql.js)). One file format, three ways to
-use it: the **editor** builds a catalog, the **viewer** opens one as its
-own full-page app, and `<ecm-viewer>` embeds that same viewer into any
-other page — even a plain static HTML file with no build step of its own
-(see "Embedding the viewer" below).
+[sql.js](https://github.com/sql-js/sql.js)). One file format, several ways
+to use it: the **editor** builds a catalog, the **Grid Composer** builds a
+whole tile catalog in one go from a folder of photos and a spreadsheet, the
+**viewer** opens one as its own full-page app, and `<ecm-viewer>` embeds
+that same viewer into any other page — even a plain static HTML file with
+no build step of its own (see "Embedding the viewer" below).
 
 ## Getting started
 
@@ -29,8 +30,11 @@ or jump straight in:
 
 - **[Editor](https://tapalog.com/editor/)**
 - **[Viewer](https://tapalog.com/viewer/)**
+- **[Grid Composer](https://tapalog.com/composer/)** — a folder of photos
+  plus a spreadsheet → a ready tile catalog (see "Building a tile catalog
+  from photos and a table" below)
 
-Both run entirely in your browser — nothing you build gets uploaded
+All of them run entirely in your browser — nothing you build gets uploaded
 anywhere unless you explicitly open a catalog from a URL (see "Sharing a
 catalog via link" below); a saved `.ecatm` file lives on your own disk.
 
@@ -139,6 +143,49 @@ A few other things worth knowing:
   catalog — see "Selling from a catalog" below.
 - **🤝 Start collaboration** invites a colleague to edit this catalog with
   you live, in real time — see "Real-time collaboration" below.
+
+## Building a tile catalog from photos and a table
+
+Got a folder of product photos and a spreadsheet of names, SKUs and prices?
+The **[Grid Composer](https://tapalog.com/composer/)** turns them into a
+ready tile catalog in one go — no placing hotspots by hand. Each folder of
+the table becomes one grid: a single picture with every product on its own
+tile (photo, name, and a second line of your choice — SKU, price, …) and a
+numbered hotspot in each tile's corner, linked to that product's row.
+
+1. **Photos**: one folder, each photo named by its number — `1.jpg`,
+   `2.jpg`, … (leading zeros are fine). Any size or proportions: each is
+   fitted into a square tile (whole, or cropped to fill it — your choice).
+2. **Table**: a CSV/TSV file, or just copy a range out of Excel or Google
+   Sheets and paste it in. The first row is headers; the columns are, in
+   order: **No.** (matches the photo's number), **Folder** (empty = the
+   catalog's root grid), **Name**, **SKU**, **Description**, then any
+   number of your own columns — each becomes a key in the row's `extra`
+   (see "Using the editor" above), e.g. `Price`, or `buy_url` for a Buy
+   button and a printed QR code (see "Selling from a catalog" below).
+   **Download template** gives you a file with exactly these columns.
+3. **Settings**: tiles per row (3 by default), whole photo or cropped, what
+   goes under the name on each tile, and the grid title color.
+4. **Report**: before anything is built, the composer lists the grids it's
+   about to make and everything worth a look — a number used twice or not a
+   number at all (these block the build), a row with no photo (it gets a
+   "No photo" tile), a photo with no row, a duplicate SKU, a missing name,
+   or no `buy_url` column at all.
+5. **Build catalog**, then **Download .ecatm** — or **Open in Editor** /
+   **Open in Viewer** to jump straight in (these hand the file over through
+   the composer's own tab, so keep it open until the other one has loaded).
+
+Grids are listed in the order their folders first appear in the table, and
+there's no limit on tiles per grid: a folder of hundreds of items stays one
+long, scrollable grid. Only a grid too tall for a single image (about 120
+tiles at 3 per row, more with more columns) is split into equal parts —
+"Lighting (1/2)", "Lighting (2/2)" — grouped under a folder of that name.
+Since each grid is one picture, the text on a tile is part of that picture:
+change a name or price in the Editor and the table updates, but the tile
+itself only changes if you rebuild it in the composer.
+
+Like the Editor and Viewer, it runs entirely in your browser — the photos
+and the table never leave your computer.
 
 ## Using the viewer
 
@@ -268,24 +315,36 @@ page to itself, image filling it, table right below. Folders (see
 "Grouping images into folders" below) each get their own heading and their
 own table — a run of tiles never shares its table across a folder boundary.
 
+A tile grid — one picture with many products on it, like the ones the Grid
+Composer builds (see "Building a tile catalog from photos and a table"
+above) — is recognized from its evenly spaced hotspots and printed its own
+way: at the page's width, over as many pages as it takes, and cut only in
+the gap between two rows of tiles, so no tile is ever split across two
+sheets, however long the grid.
+
 Every row with a `buy_url` (see "Selling from a catalog" above) gets a
 small QR code, always pointing straight at a one-item checkout for that
 row, regardless of the catalog's own cart behavior: a printed code has no
 cart to add to. Rows without a `buy_url` get no QR at all. The table's own
 Extra column never prints `buy_url` itself, since it's already the QR code.
 A tile's QR always sits in its own top-right corner — the button opens an
-options dialog before exporting that only asks about a diagram's own two
-questions:
+options dialog before exporting (if no row has a `buy_url`, it says so at
+the top and the QR questions are greyed out):
 
 - **QR code placement** — in the table only (default: a new "QR" column,
   next to the existing "No." column), right next to the diagram's own
-  hotspot label, or both.
+  hotspot label, or both. On a tile grid, "on the diagram" means each
+  tile's top-right corner.
+- **QR code size** — small (default, the smallest a phone reliably reads)
+  or large (1.5×) — easier to aim at when a sheet carries many codes and
+  the phone camera keeps jumping between them.
 - **Diagram page size** — shrink the whole diagram to fit one page
   (default), or print it at its real on-screen size (the same pixel-to-
   point mapping as this app's own 100% zoom), split across as many A4
   sheets as that takes — for a diagram too detailed to stay legible once
   shrunk down. Each sheet gets a small footer saying where it sits in the
-  sheet grid, to help line them up after printing.
+  sheet grid, to help line them up after printing. Doesn't apply to a
+  tile grid, which is always printed as described above.
 
 ## Embedding the viewer
 
@@ -573,12 +632,16 @@ done in the browser with no server to offload to.
   real-time collaboration server (see "Real-time collaboration" above): a
   standalone app, not a static site — whoever starts a shared session runs
   it themselves, on their own computer, for as long as it's needed.
+- [`packages/composer`](packages/composer) — the Grid Composer (see
+  "Building a tile catalog from photos and a table" above): a static web
+  app like the editor and viewer, making a finished `.ecatm` from a folder
+  of photos and a table.
 - [`packages/catalog-server`](packages/catalog-server) — the self-hosted
   Catalog Server (see "Sharing a folder of catalogs from your computer"
   above): same kind of standalone app, run by whoever wants to share a
   folder of catalogs from their own computer.
 
-All three page-rendering apps render their own DOM directly — there's no
+All the page-rendering apps render their own DOM directly — there's no
 UI framework, just the shared engine/data layer above.
 
 ## Development
@@ -588,6 +651,7 @@ pnpm install
 pnpm dev:editor         # http://localhost:5173
 pnpm dev:viewer         # http://localhost:5174 (or next free port)
 pnpm dev:embed          # http://localhost:5175 (or next free port) — <ecm-viewer> dev preview
+pnpm dev:composer       # http://localhost:5173 (or next free port) — Grid Composer
 pnpm dev:collab-server  # http://localhost:8787 — see packages/collab-server for the rest
 pnpm dev:catalog-server # http://localhost:8899 — see packages/catalog-server for the rest
 pnpm -r build           # production build of editor/viewer/viewer-embed -> packages/*/dist
@@ -641,11 +705,14 @@ explanation instead of collaborators just going quiet. The Catalog Server
 (see "Sharing a folder of catalogs from your computer") is live too —
 Microsoft Store, Snap Store and direct downloads — live-tested across
 devices: a Windows host, an Ubuntu machine, and a real iPhone, both on the
-local network and over the internet. [CI](.github/workflows/ci.yml)
-typechecks and builds every package on each push/PR (plus runs
-`packages/collab-server`'s own test suite), rebuilds+recommits
+local network and over the internet. The Grid Composer (see "Building a
+tile catalog from photos and a table") works end-to-end as well — tested
+with catalogs of 30 and 138 items, from photos and table through to the
+editor, the viewer and the exported PDF. [CI](.github/workflows/ci.yml)
+typechecks and builds every package on each push/PR (plus runs the
+`shared`, `composer` and `collab-server` test suites), rebuilds+recommits
 `ecm-viewer.js` if it's gone stale so the CDN URL can't silently drift
-from source, and redeploys the editor/viewer to Pages — all on every push
+from source, and redeploys the editor, viewer and composer to Pages — all on every push
 to `main`, no manual step.
 
 ## License
