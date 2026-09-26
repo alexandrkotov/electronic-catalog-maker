@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Assembles the published site (landing page + editor + viewer + demo
+# Assembles the published site (landing page + editor + viewer + composer + demo
 # catalogs) into ./site, ready to be served by any static host.
 #
 # This is the single source of truth for "how the site is put together" —
@@ -17,6 +17,7 @@ cd "$(dirname "$0")/.."
 
 pnpm --filter @ecm/editor build
 pnpm --filter @ecm/viewer build
+pnpm --filter @ecm/composer build
 
 rm -rf site
 mkdir -p site
@@ -35,6 +36,7 @@ cp landing/favicon-32.png site/favicon-32.png
 cp landing/icon-192.png site/icon-192.png
 cp -r packages/editor/dist site/editor
 cp -r packages/viewer/dist site/viewer
+cp -r packages/composer/dist site/composer
 cp -r demo site/demo
 
 echo "Site assembled in ./site"
