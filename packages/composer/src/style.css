@@ -1,0 +1,273 @@
+:root {
+  /* Explicit tokens per theme, toggled via data-theme (packages/shared/src/theme.ts) — same approach as the editor. */
+  color-scheme: light;
+  --bg-page: #f4f6f9;
+  --bg-card: #ffffff;
+  --border: #d0d5dd;
+  --text: #1a1a1a;
+  --muted: #5f6673;
+  --accent: #2563eb;
+  --accent-text: #ffffff;
+  --error-bg: #fdecec;
+  --error-border: #f3b4b4;
+  --warn-bg: #fff6e0;
+  --warn-border: #f1d28a;
+  --ok-bg: #e8f6ec;
+  --ok-border: #a9dcb8;
+  --info-bg: #e8f0fe;
+  --info-border: #aac4f5;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-page: #14161b;
+  --bg-card: #1f2229;
+  --border: #3a3f4b;
+  --text: #e5e7eb;
+  --muted: #9aa1ac;
+  --accent: #60a5fa;
+  --accent-text: #0b1220;
+  --error-bg: #3b1d1d;
+  --error-border: #7f3434;
+  --warn-bg: #3a3017;
+  --warn-border: #7a6224;
+  --ok-bg: #173323;
+  --ok-border: #2f6b45;
+  --info-bg: #1b2a44;
+  --info-border: #34507f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.top {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px 16px 4px;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+h1 span {
+  color: var(--accent);
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+h3 {
+  margin: 8px 0 4px;
+  font-size: 0.95rem;
+}
+
+.muted {
+  color: var(--muted);
+  margin: 4px 0 10px;
+}
+
+.top-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 8px 16px 40px;
+  display: grid;
+  gap: 14px;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  min-width: 0;
+}
+
+.form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px 16px;
+}
+
+.form label,
+.paste {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+.form small {
+  margin: 0;
+}
+
+.paste {
+  margin-top: 12px;
+}
+
+input[type="text"],
+input[type="number"],
+select,
+textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.top-actions select {
+  width: auto;
+}
+
+input[type="color"] {
+  width: 64px;
+  height: 34px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-page);
+}
+
+textarea {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+button,
+.btn {
+  font: inherit;
+  font-size: 0.9rem;
+  display: inline-block;
+  cursor: pointer;
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+  text-decoration: none;
+}
+
+button.secondary,
+.btn.secondary {
+  background: transparent;
+  color: var(--accent);
+}
+
+/* Same look as the editor/viewer toolbar buttons (the language select sits next to it). */
+button.neutral {
+  background: var(--bg-card);
+  color: var(--text);
+  border-color: var(--border);
+  white-space: nowrap;
+}
+
+button.neutral:hover,
+button.neutral:focus-visible {
+  background: var(--bg-page);
+  border-color: var(--accent);
+  outline: none;
+}
+
+button.primary,
+.btn.primary {
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.status {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.box {
+  border: 1px solid;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+}
+
+.box ul,
+.card ul {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.box.error {
+  background: var(--error-bg);
+  border-color: var(--error-border);
+}
+
+.box.warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+
+.box.info {
+  background: var(--info-bg);
+  border-color: var(--info-border);
+}
+
+.box.ok {
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+}
+
+.previews {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+  align-items: start;
+}
+
+.previews img {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+@media (max-width: 600px) {
+  .top {
+    flex-direction: column;
+  }
+}
