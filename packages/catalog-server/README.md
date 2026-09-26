@@ -95,13 +95,18 @@ The GitHub Release build (`.github/workflows/catalog-server-release.yml`,
 `workflow_dispatch` only) also packages a `.deb` (Chromebook/Debian/Ubuntu)
 and can build + publish a Snap — same structure as collab-server's release
 workflow, see its own README for the full rationale of each piece.
-`publish_snap` defaults to **off** here (unlike collab-server's, which
-defaults on): `ecm-catalog-server` hasn't been registered as a name on the
-Snap Store yet — a one-time, human step
-(`snapcraft register ecm-catalog-server`, logged in as the Snap Store
-account that already owns `ecm-collab-server`) needs to happen before a
-publish attempt can succeed. Until then, leave `publish_snap` unchecked and
-the workflow just (re)builds the GitHub Release binaries, `.deb` included.
+`ecm-catalog-server` is registered and live on the
+[Snap Store](https://snapcraft.io/ecm-catalog-server) (and so in Ubuntu's
+App Center). `publish_snap` still defaults to **off** here (unlike
+collab-server's, which defaults on) — check it when a release should also
+update the Snap; left unchecked, the workflow just (re)builds the GitHub
+Release binaries, `.deb` included. The Windows build is also on the
+[Microsoft Store](https://apps.microsoft.com/detail/9pl38zj5djmk?hl=en-US&gl=US),
+packaged by hand as an MSIX (not by this workflow).
+
+Strict snap confinement only reaches `$HOME` by default — a folder on a USB
+drive or elsewhere under `/media`/`/mnt` needs the `removable-media` plug
+connected once per install: `sudo snap connect ecm-catalog-server:removable-media`.
 
 The icon used for the `.deb`/Snap packaging (`assets/icons/icon-*.png`) is
 collab-server's icon with its badge letter changed from "S" to "C" — same

@@ -87,6 +87,11 @@ Both apps are also on the Microsoft Store for Windows, if you'd rather
 install from there:
 **[Editor](https://apps.microsoft.com/detail/9p4zk48txrln?hl=en-US&gl=US)**,
 **[Viewer](https://apps.microsoft.com/detail/9nb4shzt8fd1?hl=en-US&gl=US)**.
+So are the two optional apps you run yourself — the
+[Collaboration Server](https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=en-US&gl=US)
+(see "Real-time collaboration") and the
+[Catalog Server](https://apps.microsoft.com/detail/9pl38zj5djmk?hl=en-US&gl=US)
+(see "Sharing a folder of catalogs from your computer").
 
 ## Using the editor
 
@@ -406,6 +411,52 @@ down. Either way it's a snapshot, not a live feed: it won't update if you
 keep browsing afterwards. Only offered when the viewer's own address isn't
 `localhost` — a link there can't be reached from any other device anyway.
 
+## Sharing a folder of catalogs from your computer
+
+Have a whole folder of catalogs — on your own disk, or on a flash drive —
+and want other people to open them, without uploading anything anywhere?
+Run the **Catalog Server**: a small, optional app you start on your own
+computer, point at that folder, and it gives you an address to share.
+Anyone who opens that address — a phone, a tablet, another computer — sees
+the list of catalogs in the folder (subfolders included) and can open any
+of them right in the browser, no app of their own installed.
+
+It shares on your **local network** by default (a shop floor, an office, a
+classroom — works with no internet connection at all), or switch it to
+**Internet** mode to get a public `https://…trycloudflare.com` address
+instead — no account, no router setup, no port-forwarding (the same free
+Cloudflare "quick tunnel" the collaboration server uses). Each catalog in
+the list has two buttons:
+
+- **Preview** — opens the catalog in a new tab, in the same viewer
+  `<ecm-viewer>` embeds (see "Embedding the viewer" above), served by the
+  Catalog Server itself. Always works, on any device, in either mode.
+- **Copy URL** — the catalog file's own address, for "Open remote
+  catalog…" in the Viewer or "Copy remote catalog…" in the Editor (see
+  "Sharing a catalog via link" above). In local-network mode this doesn't
+  work from an iPhone/iPad — browsers there (all WebKit) won't let an
+  `https://` page fetch a plain `http://` file on the local network — so
+  the list turns that button off there and points at Preview instead.
+
+The folder and the sharing mode are remembered between runs; **Stop** on
+its status page ends the sharing. Nothing is uploaded and nothing leaves
+your computer except the files people actually open — see
+[`packages/catalog-server`](packages/catalog-server) for how it works.
+
+Get it for **Windows** from the
+[Microsoft Store](https://apps.microsoft.com/detail/9pl38zj5djmk?hl=en-US&gl=US),
+for **Ubuntu** from the [Snap Store](https://snapcraft.io/ecm-catalog-server)
+(`sudo snap install ecm-catalog-server`, also listed in Ubuntu's App
+Center — for a folder outside your home directory, such as a USB drive,
+also run `sudo snap connect ecm-catalog-server:removable-media` once), or as
+a direct download for Windows, Linux, **macOS (13+)** and **Chromebook**
+(`.deb`) from the
+[latest release](https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/catalog-server-latest)
+(also linked from the [landing page](https://tapalog.com/)). Same caveats
+as the collaboration server's direct downloads: they aren't code-signed, so
+a raw Windows `.exe` shows a SmartScreen warning on first run, and macOS
+needs a one-line Terminal command (see the release page).
+
 ## Real-time collaboration
 
 Multiple people can edit the same catalog together and see each other's
@@ -520,9 +571,12 @@ done in the browser with no server to offload to.
   above), built as a single self-contained script.
 - [`packages/collab-server`](packages/collab-server) — the self-hosted
   real-time collaboration server (see "Real-time collaboration" above): a
-  fourth, standalone app, not a static site — whoever starts a shared
-  session runs it themselves, on their own computer, for as long as it's
-  needed.
+  standalone app, not a static site — whoever starts a shared session runs
+  it themselves, on their own computer, for as long as it's needed.
+- [`packages/catalog-server`](packages/catalog-server) — the self-hosted
+  Catalog Server (see "Sharing a folder of catalogs from your computer"
+  above): same kind of standalone app, run by whoever wants to share a
+  folder of catalogs from their own computer.
 
 All three page-rendering apps render their own DOM directly — there's no
 UI framework, just the shared engine/data layer above.
@@ -535,6 +589,7 @@ pnpm dev:editor         # http://localhost:5173
 pnpm dev:viewer         # http://localhost:5174 (or next free port)
 pnpm dev:embed          # http://localhost:5175 (or next free port) — <ecm-viewer> dev preview
 pnpm dev:collab-server  # http://localhost:8787 — see packages/collab-server for the rest
+pnpm dev:catalog-server # http://localhost:8899 — see packages/catalog-server for the rest
 pnpm -r build           # production build of editor/viewer/viewer-embed -> packages/*/dist
 ```
 
@@ -582,7 +637,11 @@ collaboration" above) is functional end-to-end too, live-verified with
 real multiple-tab sessions: live editing without stepping on each other's
 changes, presence, recovering from a dropped connection, and a session
 ending cleanly (on purpose, or the host's server stopping) with an actual
-explanation instead of collaborators just going quiet. [CI](.github/workflows/ci.yml)
+explanation instead of collaborators just going quiet. The Catalog Server
+(see "Sharing a folder of catalogs from your computer") is live too —
+Microsoft Store, Snap Store and direct downloads — live-tested across
+devices: a Windows host, an Ubuntu machine, and a real iPhone, both on the
+local network and over the internet. [CI](.github/workflows/ci.yml)
 typechecks and builds every package on each push/PR (plus runs
 `packages/collab-server`'s own test suite), rebuilds+recommits
 `ecm-viewer.js` if it's gone stale so the CDN URL can't silently drift

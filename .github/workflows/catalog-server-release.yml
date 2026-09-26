@@ -22,7 +22,7 @@ on:
           - beta
           - edge
       publish_snap:
-        description: "Also publish to the Snap Store (uncheck to only refresh the GitHub Release binaries). First run needs `ecm-catalog-server` registered on the Snap Store first — see this package's README."
+        description: "Also publish to the Snap Store (uncheck to only refresh the GitHub Release binaries)."
         required: true
         default: false
         type: boolean
