@@ -78,7 +78,7 @@ import { isNavLink } from "./navLink.js";
 import { groupImagesByFolder } from "./images.js";
 import { buildInstantBuyUrl } from "./cart.js";
 import { buildQrMatrix, type QrMatrix } from "./qrcode.js";
-import { DEFAULT_PDF_EXPORT_OPTIONS, type PdfExportOptions, type QrSize } from "./pdfExportOptions.js";
+import { DEFAULT_PDF_EXPORT_OPTIONS, detectGrid, type PdfExportOptions, type QrSize } from "./pdfExportOptions.js";
 import type { CatalogImage, CatalogLink, CatalogMeta, CatalogRow } from "./types.js";
 
 // A4 in PDF points (1pt = 1/72in): 210mm x 297mm.
@@ -304,39 +304,6 @@ function drawBadgeCentered(page: PDFPage, text: string, font: PDFFont, centerX: 
   const width = font.widthOfTextAtSize(text, TILE_BADGE_FONT_SIZE) + TILE_BADGE_PADDING * 2;
   const height = TILE_BADGE_FONT_SIZE + TILE_BADGE_PADDING * 1.5;
   drawTileBadge(page, text, font, centerX - width / 2, centerY + height / 2);
-}
-
-/**
- * Recognizes a diagram whose hotspots sit on an evenly-spaced 2D grid —
- * the signature of the монетизация cold-pitch playbook's tile-diagram-
- * compose tool, which composites several product photos into one image
- * with a hotspot centered on each (see this module's own top comment).
- * Real exploded-view/hand-placed hotspots don't line up this precisely by
- * coincidence. Requires at least a 2×2 grid and a handful of hotspots —
- * a genuine diagram can easily have 2-3 hotspots that happen to share an
- * x or y coordinate without being a grid at all.
- *
- * Returns the inferred cell size in the image's own pixel space (same
- * units as CatalogLink.top/left), or null if this doesn't look like one.
- */
-function detectGrid(links: CatalogLink[]): { cellW: number; cellH: number } | null {
-  if (links.length < 4) return null;
-
-  const spacing = (values: number[]): number | null => {
-    const sorted = [...new Set(values)].sort((a, b) => a - b);
-    if (sorted.length < 2) return null;
-    const diffs = sorted.slice(1).map((v, i) => v - sorted[i]!);
-    const avg = diffs.reduce((a, b) => a + b, 0) / diffs.length;
-    if (avg <= 0) return null;
-    // A little tolerance for coordinates that were nudged by a pixel or
-    // two when authored, not just machine-perfect compositing output.
-    const uniform = diffs.every((d) => Math.abs(d - avg) <= avg * 0.15 + 2);
-    return uniform ? avg : null;
-  };
-
-  const cellW = spacing(links.map((l) => l.left));
-  const cellH = spacing(links.map((l) => l.top));
-  return cellW && cellH ? { cellW, cellH } : null;
 }
 
 /** Word-wraps `text` to fit `maxWidth` at `size` in `font`, hard-breaking any single word that's wider than the column on its own. */
