@@ -36,8 +36,12 @@
  *     grid; detectGrid recognizes that and switches to the tile treatment
  *     per inferred cell instead — label top-left of the cell, QR top-right
  *     — so it reads the same as a real tile grid despite being one image.
- *   Either way the image fills the page and the row table follows directly
- *   below, continuing onto further pages if it doesn't fit.
+ *     Such a grid is printed at page width over as many pages as it takes,
+ *     cut only between rows of cards (see renderGridByRows) — however many
+ *     tiles it holds (the Grid Composer makes grids of hundreds), none is
+ *     ever split across two sheets; diagramPageMode doesn't apply to it.
+ *   Either way the row table follows directly below the image, continuing
+ *   onto further pages if it doesn't fit.
  *
  * Every QR encodes an "instant, single-item" checkout link (see
  * cart.ts buildInstantBuyUrl) regardless of the catalog's own cart_mode —
@@ -66,7 +70,7 @@
  *   more room per hotspot, so the crowding that machinery exists for is
  *   expected to be rare there.
  */
-import { PDFDocument, PDFFont, PDFPage, rgb, type PDFImage } from "pdf-lib";
+import { clip, endPath, PDFDocument, PDFFont, PDFPage, popGraphicsState, pushGraphicsState, rectangle, rgb, type PDFImage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import type { Database } from "sql.js";
 import { listImages, listLinksForImage, listRowsForImage, readMeta } from "./db.js";
@@ -74,7 +78,7 @@ import { isNavLink } from "./navLink.js";
 import { groupImagesByFolder } from "./images.js";
 import { buildInstantBuyUrl } from "./cart.js";
 import { buildQrMatrix, type QrMatrix } from "./qrcode.js";
-import { DEFAULT_PDF_EXPORT_OPTIONS, type PdfExportOptions } from "./pdfExportOptions.js";
+import { DEFAULT_PDF_EXPORT_OPTIONS, type PdfExportOptions, type QrSize } from "./pdfExportOptions.js";
 import type { CatalogImage, CatalogLink, CatalogMeta, CatalogRow } from "./types.js";
 
 // A4 in PDF points (1pt = 1/72in): 210mm x 297mm.
@@ -98,6 +102,8 @@ const TILE_INNER_PADDING = 6; // between a tile's border and the image drawn ins
  */
 const TILE_QR_SIZE = 26;
 const DIAGRAM_QR_SIZE = 32;
+/** "large" in the export dialog (see pdfExportOptions.ts QrSize): every code 1.5× its "small" size. */
+const LARGE_QR_FACTOR = 1.5;
 // How tight the QR/badge sit against a tile's own border — deliberately
 // small (not 0): a hair of breathing room so the code's white backing
 // doesn't visually fuse with the border stroke, while still reading as
@@ -151,7 +157,18 @@ const TABLE_CELL_PADDING = 4;
 // (DIAGRAM_QR_SIZE) — it sits in its own dedicated, uncrowded column, with
 // nothing else competing for space around it.
 const TABLE_QR_SIZE = 28;
-const QR_COLUMN_WIDTH = TABLE_QR_SIZE + TABLE_CELL_PADDING * 2;
+
+/** QR edge lengths (pt) for one export, per where the code sits. */
+interface QrSizes {
+  tile: number;
+  diagram: number;
+  table: number;
+}
+
+function qrSizes(size: QrSize): QrSizes {
+  const k = size === "large" ? LARGE_QR_FACTOR : 1;
+  return { tile: TILE_QR_SIZE * k, diagram: DIAGRAM_QR_SIZE * k, table: TABLE_QR_SIZE * k };
+}
 
 type TableColumnKey = "no" | "name" | "sku" | "description" | "extra" | "qr";
 interface TableColumn {
@@ -165,8 +182,9 @@ interface TableColumn {
 // short word without wrapping every line, not just a single digit. A QR
 // column only exists when the diagram's own qrPlacement calls for one (see
 // PdfExportOptions) — Extra absorbs the width it would otherwise take.
-function tableColumns(withQrColumn: boolean): TableColumn[] {
-  const extraWidth = CONTENT_WIDTH - 50 - 110 - 60 - 178 - (withQrColumn ? QR_COLUMN_WIDTH : 0);
+function tableColumns(withQrColumn: boolean, qrSize: number): TableColumn[] {
+  const qrColumnWidth = qrSize + TABLE_CELL_PADDING * 2;
+  const extraWidth = CONTENT_WIDTH - 50 - 110 - 60 - 178 - (withQrColumn ? qrColumnWidth : 0);
   const columns: TableColumn[] = [
     { key: "no", header: "No.", width: 50 },
     { key: "name", header: "Name", width: 110 },
@@ -174,7 +192,7 @@ function tableColumns(withQrColumn: boolean): TableColumn[] {
     { key: "description", header: "Description", width: 178 },
     { key: "extra", header: "Extra", width: extraWidth },
   ];
-  if (withQrColumn) columns.push({ key: "qr", header: "QR", width: QR_COLUMN_WIDTH });
+  if (withQrColumn) columns.push({ key: "qr", header: "QR", width: qrColumnWidth });
   return columns;
 }
 
@@ -191,6 +209,8 @@ interface Cursor {
   page: PDFPage;
   /** PDF y-coordinate (grows upward) of the top edge the next element should start at. */
   y: number;
+  /** This export's QR sizes (the dialog's small/large choice). */
+  qr: QrSizes;
 }
 
 function newPage(doc: PDFDocument): PDFPage {
@@ -365,7 +385,7 @@ function extraCellText(row: CatalogRow): string {
     // (the монетизация cold-pitch demos predate this table's own "No."
     // column) stash the same hotspot number here by convention — now
     // redundant with that column, so it's dropped the same way.
-    .filter(([k]) => k !== "buy_url" && k !== "no")
+    .filter(([k]) => k !== "buy_url" && k.toLowerCase().replace(/\.$/, "") !== "no")
     .map(([k, v]) => `${k}: ${String(v)}`)
     .join(", ");
 }
@@ -389,7 +409,9 @@ function drawTableHeader(cursor: Cursor, font: PDFFont, columns: TableColumn[]) 
 /** Draws the shared row table for one page/section — always its own header, paginating (with the header repeated) whenever a row doesn't fit. `withQrColumn` adds the extra QR column (see tableColumns) — only ever true for a diagram whose qrPlacement calls for one; a tile grid never passes it. */
 function drawTableRows(cursor: Cursor, font: PDFFont, entries: TableEntry[], withQrColumn: boolean) {
   if (entries.length === 0) return;
-  const columns = tableColumns(withQrColumn);
+  const columns = tableColumns(withQrColumn, cursor.qr.table);
+  // Never a header stranded alone at the bottom of a page: keep room for it plus a couple of lines.
+  ensureRoom(cursor, TABLE_LINE_HEIGHT * 3 + TABLE_CELL_PADDING * 2);
   drawTableHeader(cursor, font, columns);
 
   for (const { row, no, qrMatrix } of entries) {
@@ -397,7 +419,7 @@ function drawTableRows(cursor: Cursor, font: PDFFont, entries: TableEntry[], wit
     const wrapped = columns.map((col, i) => (col.key === "qr" ? [] : wrapText(font, cellValues[i]!, TABLE_FONT_SIZE, col.width - TABLE_CELL_PADDING * 2)));
     const textLineCount = Math.max(0, ...wrapped.map((w) => w.length));
     let rowHeight = textLineCount * TABLE_LINE_HEIGHT + TABLE_CELL_PADDING;
-    if (withQrColumn && qrMatrix) rowHeight = Math.max(rowHeight, TABLE_QR_SIZE + TABLE_CELL_PADDING * 2);
+    if (withQrColumn && qrMatrix) rowHeight = Math.max(rowHeight, cursor.qr.table + TABLE_CELL_PADDING * 2);
 
     if (cursor.y - rowHeight < CONTENT_BOTTOM) {
       cursor.page = newPage(cursor.doc);
@@ -409,7 +431,7 @@ function drawTableRows(cursor: Cursor, font: PDFFont, entries: TableEntry[], wit
     for (let i = 0; i < columns.length; i++) {
       const col = columns[i]!;
       if (col.key === "qr") {
-        if (qrMatrix) drawQrCode(cursor.page, qrMatrix, x + TABLE_CELL_PADDING, cursor.y - TABLE_CELL_PADDING, TABLE_QR_SIZE);
+        if (qrMatrix) drawQrCode(cursor.page, qrMatrix, x + TABLE_CELL_PADDING, cursor.y - TABLE_CELL_PADDING, cursor.qr.table);
       } else {
         const lines = wrapped[i]!;
         for (let li = 0; li < lines.length; li++) {
@@ -444,10 +466,10 @@ function badgeBounds(u: DiagramUnit) {
 }
 
 /** Where this hotspot's QR would sit if nothing needed to move it (offset down-right of the point) — used only for overlap detection; the actual draw position also clamps to the image bounds. */
-function naturalQrBounds(u: DiagramUnit) {
+function naturalQrBounds(u: DiagramUnit, qrSize: number) {
   const left = u.pointX + 8;
   const top = u.pointY - 8;
-  return { left, right: left + DIAGRAM_QR_SIZE, top, bottom: top - DIAGRAM_QR_SIZE };
+  return { left, right: left + qrSize, top, bottom: top - qrSize };
 }
 
 function boxesOverlap(a: { left: number; right: number; top: number; bottom: number }, b: typeof a): boolean {
@@ -465,19 +487,19 @@ function boxesOverlap(a: { left: number; right: number; top: number; bottom: num
  * where the hotspot is; a relocated QR gets a thin leader line back to it
  * instead. Returns the offending links' own ids.
  */
-function findQrsToMove(units: DiagramUnit[]): Set<number> {
+function findQrsToMove(units: DiagramUnit[], qrSize: number): Set<number> {
   const withQr = units.filter((u) => u.matrix);
   const toMove = new Set<number>();
   for (let i = 0; i < withQr.length; i++) {
     const a = withQr[i]!;
-    const aBox = naturalQrBounds(a);
+    const aBox = naturalQrBounds(a, qrSize);
     if (units.some((b) => b !== a && boxesOverlap(aBox, badgeBounds(b)))) {
       toMove.add(a.link.id);
       continue;
     }
     for (let j = i + 1; j < withQr.length; j++) {
       const b = withQr[j]!;
-      if (boxesOverlap(aBox, naturalQrBounds(b))) {
+      if (boxesOverlap(aBox, naturalQrBounds(b, qrSize))) {
         toMove.add(a.link.id);
         toMove.add(b.link.id);
       }
@@ -545,10 +567,12 @@ async function renderDiagramPage(
   // by construction, so it's never subject to the crowding check below.
   const grid = detectGrid(links);
 
-  if (options.diagramPageMode === "real-size") {
-    await renderDiagramRealSize(cursor, doc, font, image, pdfImage, links, grid, qrByUrl, showOnImage);
+  if (grid) {
+    await renderGridByRows(cursor, font, image, pdfImage, links, grid, qrByUrl, showOnImage);
+  } else if (options.diagramPageMode === "real-size") {
+    await renderDiagramRealSize(cursor, doc, font, image, pdfImage, links, qrByUrl, showOnImage);
   } else {
-    renderDiagramFitToPage(cursor, font, image, pdfImage, links, fullTop, grid, qrByUrl, showOnImage);
+    renderDiagramFitToPage(cursor, font, image, pdfImage, links, fullTop, qrByUrl, showOnImage);
   }
 
   drawTableRows(
@@ -567,7 +591,6 @@ function renderDiagramFitToPage(
   pdfImage: PDFImage,
   links: CatalogLink[],
   fullTop: number,
-  grid: ReturnType<typeof detectGrid>,
   qrByUrl: Map<string, QrMatrix>,
   showOnImage: boolean,
 ) {
@@ -598,83 +621,66 @@ function renderDiagramFitToPage(
   // detect at all once on-image QRs are off (qrPlacement "table") — no QR
   // ever gets drawn, so there's nothing to collide, and the diagram gets
   // the whole page instead of paying for a margin it wouldn't use.
-  const toMove = grid || !showOnImage ? new Set<number>() : findQrsToMove(buildUnits(computeRect(0)));
+  const toMove = !showOnImage ? new Set<number>() : findQrsToMove(buildUnits(computeRect(0)), cursor.qr.diagram);
   const rect = toMove.size > 0 ? computeRect(LEADER_MARGIN) : computeRect(0);
   const units = buildUnits(rect);
 
   cursor.page.drawImage(pdfImage, { x: rect.drawX, y: rect.drawYBottom, width: rect.drawW, height: rect.drawH });
 
-  if (grid) {
-    for (const u of units) {
-      // `point` is near its card's top-left corner (see GRID_MARGIN_*'s own
-      // doc), not centered the way an on-screen `.hotspot`'s CSS transform
-      // would suggest and not exactly AT the corner either — pull it the
-      // rest of the way to the card's own true edges before treating it
-      // like a real tile (label top-left, QR top-right).
-      const cellWPdf = (grid.cellW / image.width) * rect.drawW;
-      const cellHPdf = (grid.cellH / image.height) * rect.drawH;
-      const cellLeft = u.pointX - cellWPdf * GRID_MARGIN_X_FRACTION;
-      const cellTop = u.pointY + cellHPdf * GRID_MARGIN_Y_FRACTION; // "up" on the image is +y in PDF space
-      const cellRight = cellLeft + cellWPdf * GRID_VISIBLE_FRACTION;
-      drawTileBadge(cursor.page, u.link.name, font, cellLeft + TILE_BADGE_INSET, cellTop - TILE_BADGE_INSET);
-      if (u.matrix) drawQrCode(cursor.page, u.matrix, cellRight - DIAGRAM_QR_SIZE - TILE_QR_INSET, cellTop - TILE_QR_INSET, DIAGRAM_QR_SIZE);
-    }
-  } else {
-    // Every hotspot's own badge always renders right where the hotspot is —
-    // see this function's own doc. Only a colliding QR gets relocated below.
-    for (const u of units) drawBadgeCentered(cursor.page, u.link.name, font, u.pointX, u.pointY);
+  // Every hotspot's own badge always renders right where the hotspot is —
+  // see this function's own doc. Only a colliding QR gets relocated below.
+  for (const u of units) drawBadgeCentered(cursor.page, u.link.name, font, u.pointX, u.pointY);
 
-    const edgeGroups: Record<"top" | "bottom" | "left" | "right", DiagramUnit[]> = { top: [], bottom: [], left: [], right: [] };
-    for (const u of units) {
-      if (!u.matrix) continue;
-      if (!toMove.has(u.link.id)) {
-        // A little further from the point than the badge itself needs —
-        // enough to clear it, for a typically-short hotspot label.
-        const qrX = Math.min(Math.max(u.pointX + 8, rect.drawX), rect.drawX + rect.drawW - DIAGRAM_QR_SIZE);
-        const qrYTop = Math.min(Math.max(u.pointY - 8, rect.drawYBottom + DIAGRAM_QR_SIZE), rect.drawYTop);
-        drawQrCode(cursor.page, u.matrix, qrX, qrYTop, DIAGRAM_QR_SIZE);
-        continue;
-      }
-      // Colliding — bucket by whichever edge of the image is closest, so
-      // its relocated QR and leader line travel the shortest distance.
-      const distances: [("top" | "bottom" | "left" | "right"), number][] = [
-        ["top", rect.drawYTop - u.pointY],
-        ["bottom", u.pointY - rect.drawYBottom],
-        ["left", u.pointX - rect.drawX],
-        ["right", rect.drawX + rect.drawW - u.pointX],
-      ];
-      distances.sort((a, b) => a[1] - b[1]);
-      edgeGroups[distances[0]![0]].push(u);
+  const edgeGroups: Record<"top" | "bottom" | "left" | "right", DiagramUnit[]> = { top: [], bottom: [], left: [], right: [] };
+  for (const u of units) {
+    if (!u.matrix) continue;
+    if (!toMove.has(u.link.id)) {
+      // A little further from the point than the badge itself needs —
+      // enough to clear it, for a typically-short hotspot label.
+      const qrX = Math.min(Math.max(u.pointX + 8, rect.drawX), rect.drawX + rect.drawW - cursor.qr.diagram);
+      const qrYTop = Math.min(Math.max(u.pointY - 8, rect.drawYBottom + cursor.qr.diagram), rect.drawYTop);
+      drawQrCode(cursor.page, u.matrix, qrX, qrYTop, cursor.qr.diagram);
+      continue;
     }
-
-    /** A relocated QR, plus a thin leader line back to the badge that stayed put at the real hotspot. */
-    function drawPushedQr(u: DiagramUnit, x: number, yTop: number) {
-      drawQrCode(cursor.page, u.matrix!, x, yTop, DIAGRAM_QR_SIZE);
-      cursor.page.drawLine({
-        start: { x: x + DIAGRAM_QR_SIZE / 2, y: yTop - DIAGRAM_QR_SIZE / 2 },
-        end: { x: u.pointX, y: u.pointY },
-        thickness: 0.4,
-        color: rgb(0.55, 0.55, 0.55),
-      });
-    }
-    /** Spreads a group of relocated QRs evenly along one straight run (top/bottom: left-to-right; left/right: top-to-bottom) — every tag is one QR, so this is a plain even distribution, no per-item sizing to account for. */
-    function layoutEdge(group: DiagramUnit[], span: number, sortKey: (u: DiagramUnit) => number, along: (pos: number) => { x: number; y: number }) {
-      if (group.length === 0) return;
-      group.sort((a, b) => sortKey(a) - sortKey(b));
-      const gap = group.length > 1 ? Math.max(4, (span - group.length * DIAGRAM_QR_SIZE) / (group.length - 1)) : 0;
-      let pos = 0;
-      for (const u of group) {
-        const { x, y } = along(pos);
-        drawPushedQr(u, x, y);
-        pos += DIAGRAM_QR_SIZE + gap;
-      }
-    }
-
-    layoutEdge(edgeGroups.top, rect.drawW, (u) => u.pointX, (pos) => ({ x: rect.drawX + pos, y: fullTop }));
-    layoutEdge(edgeGroups.bottom, rect.drawW, (u) => u.pointX, (pos) => ({ x: rect.drawX + pos, y: CONTENT_BOTTOM + LEADER_MARGIN }));
-    layoutEdge(edgeGroups.left, rect.drawH, (u) => -u.pointY, (pos) => ({ x: MARGIN, y: rect.drawYTop - pos }));
-    layoutEdge(edgeGroups.right, rect.drawH, (u) => -u.pointY, (pos) => ({ x: MARGIN + CONTENT_WIDTH - DIAGRAM_QR_SIZE, y: rect.drawYTop - pos }));
+    // Colliding — bucket by whichever edge of the image is closest, so
+    // its relocated QR and leader line travel the shortest distance.
+    const distances: [("top" | "bottom" | "left" | "right"), number][] = [
+      ["top", rect.drawYTop - u.pointY],
+      ["bottom", u.pointY - rect.drawYBottom],
+      ["left", u.pointX - rect.drawX],
+      ["right", rect.drawX + rect.drawW - u.pointX],
+    ];
+    distances.sort((a, b) => a[1] - b[1]);
+    edgeGroups[distances[0]![0]].push(u);
   }
+
+  /** A relocated QR, plus a thin leader line back to the badge that stayed put at the real hotspot. */
+  function drawPushedQr(u: DiagramUnit, x: number, yTop: number) {
+    drawQrCode(cursor.page, u.matrix!, x, yTop, cursor.qr.diagram);
+    cursor.page.drawLine({
+      start: { x: x + cursor.qr.diagram / 2, y: yTop - cursor.qr.diagram / 2 },
+      end: { x: u.pointX, y: u.pointY },
+      thickness: 0.4,
+      color: rgb(0.55, 0.55, 0.55),
+    });
+  }
+  /** Spreads a group of relocated QRs evenly along one straight run (top/bottom: left-to-right; left/right: top-to-bottom) — every tag is one QR, so this is a plain even distribution, no per-item sizing to account for. */
+  function layoutEdge(group: DiagramUnit[], span: number, sortKey: (u: DiagramUnit) => number, along: (pos: number) => { x: number; y: number }) {
+    if (group.length === 0) return;
+    group.sort((a, b) => sortKey(a) - sortKey(b));
+    const gap = group.length > 1 ? Math.max(4, (span - group.length * cursor.qr.diagram) / (group.length - 1)) : 0;
+    let pos = 0;
+    for (const u of group) {
+      const { x, y } = along(pos);
+      drawPushedQr(u, x, y);
+      pos += cursor.qr.diagram + gap;
+    }
+  }
+
+  layoutEdge(edgeGroups.top, rect.drawW, (u) => u.pointX, (pos) => ({ x: rect.drawX + pos, y: fullTop }));
+  layoutEdge(edgeGroups.bottom, rect.drawW, (u) => u.pointX, (pos) => ({ x: rect.drawX + pos, y: CONTENT_BOTTOM + LEADER_MARGIN }));
+  layoutEdge(edgeGroups.left, rect.drawH, (u) => -u.pointY, (pos) => ({ x: MARGIN, y: rect.drawYTop - pos }));
+  layoutEdge(edgeGroups.right, rect.drawH, (u) => -u.pointY, (pos) => ({ x: MARGIN + CONTENT_WIDTH - cursor.qr.diagram, y: rect.drawYTop - pos }));
 
   cursor.y = (toMove.size > 0 ? CONTENT_BOTTOM : rect.drawYBottom) - 10;
 }
@@ -705,7 +711,6 @@ async function renderDiagramRealSize(
   image: CatalogImage,
   pdfImage: PDFImage,
   links: CatalogLink[],
-  grid: ReturnType<typeof detectGrid>,
   qrByUrl: Map<string, QrMatrix>,
   showOnImage: boolean,
 ) {
@@ -742,9 +747,6 @@ async function renderDiagramRealSize(
     else unitsByCell.set(key, [unit]);
   }
 
-  const cellWPdf = grid ? grid.cellW * REAL_SIZE_PT_PER_PX : 0;
-  const cellHPdf = grid ? grid.cellH * REAL_SIZE_PT_PER_PX : 0;
-
   for (let row = 0; row < sheetRows; row++) {
     for (let col = 0; col < cols; col++) {
       cursor.page = newPage(cursor.doc);
@@ -754,22 +756,12 @@ async function renderDiagramRealSize(
       cursor.page.drawImage(pdfImage, { x: imgX, y: imgTopY - drawH, width: drawW, height: drawH });
 
       const units = unitsByCell.get(`${row}:${col}`) ?? [];
-      if (grid) {
-        for (const u of units) {
-          const cellLeft = u.pointX - cellWPdf * GRID_MARGIN_X_FRACTION;
-          const cellTop = u.pointY + cellHPdf * GRID_MARGIN_Y_FRACTION;
-          const cellRight = cellLeft + cellWPdf * GRID_VISIBLE_FRACTION;
-          drawTileBadge(cursor.page, u.link.name, font, cellLeft + TILE_BADGE_INSET, cellTop - TILE_BADGE_INSET);
-          if (u.matrix) drawQrCode(cursor.page, u.matrix, cellRight - DIAGRAM_QR_SIZE - TILE_QR_INSET, cellTop - TILE_QR_INSET, DIAGRAM_QR_SIZE);
-        }
-      } else {
-        for (const u of units) {
-          drawBadgeCentered(cursor.page, u.link.name, font, u.pointX, u.pointY);
-          if (u.matrix) {
-            const qrX = Math.min(Math.max(u.pointX + 8, MARGIN), MARGIN + CONTENT_WIDTH - DIAGRAM_QR_SIZE);
-            const qrYTop = Math.min(Math.max(u.pointY - 8, CONTENT_BOTTOM + DIAGRAM_QR_SIZE), CONTENT_TOP);
-            drawQrCode(cursor.page, u.matrix, qrX, qrYTop, DIAGRAM_QR_SIZE);
-          }
+      for (const u of units) {
+        drawBadgeCentered(cursor.page, u.link.name, font, u.pointX, u.pointY);
+        if (u.matrix) {
+          const qrX = Math.min(Math.max(u.pointX + 8, MARGIN), MARGIN + CONTENT_WIDTH - cursor.qr.diagram);
+          const qrYTop = Math.min(Math.max(u.pointY - 8, CONTENT_BOTTOM + cursor.qr.diagram), CONTENT_TOP);
+          drawQrCode(cursor.page, u.matrix, qrX, qrYTop, cursor.qr.diagram);
         }
       }
 
@@ -788,6 +780,135 @@ async function renderDiagramRealSize(
   // to follow directly the way a fit-to-page diagram's table does.
   cursor.page = newPage(cursor.doc);
   cursor.y = CONTENT_TOP;
+}
+
+/** One row of cards on a composited grid, in the image's own pixels. */
+interface GridRow {
+  /** The row's hotspots all sit at (about) this `top`. */
+  pointTop: number;
+  /** Where the row's cards actually start. */
+  cardTop: number;
+  /** Where to cut the image above this row: the middle of the background gap. */
+  cutAbove: number;
+}
+
+/**
+ * Finds each row of a composited grid (see detectGrid) and the background
+ * gap above it, by looking at the pixels: in the strip just above a row's
+ * hotspots, the gap is the run of pixel rows that are one flat color right
+ * across the image (cards, photos and captions never are). Falls back to
+ * the GRID_MARGIN_Y_FRACTION estimate when no flat run shows up — e.g. a
+ * grid drawn over a photo background.
+ */
+async function detectGridRows(image: CatalogImage, links: CatalogLink[], cellH: number): Promise<GridRow[]> {
+  const tops: number[] = [];
+  for (const t of [...links.map((l) => l.top)].sort((a, b) => a - b)) {
+    if (tops.length === 0 || t - tops[tops.length - 1]! > cellH / 3) tops.push(t);
+  }
+  const fallback = (t: number): GridRow => {
+    const cardTop = t - cellH * GRID_MARGIN_Y_FRACTION;
+    return { pointTop: t, cardTop, cutAbove: Math.max(0, cardTop - cellH * 0.03) };
+  };
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(new Blob([base64ToBytes(image.imageData) as BlobPart], { type: image.mimeType }));
+  } catch {
+    return tops.map(fallback);
+  }
+  const SAMPLES = 64;
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  const rows = tops.map((t) => {
+    const from = Math.max(0, Math.floor(t - cellH * 0.4));
+    const to = Math.max(from + 1, Math.floor(t));
+    canvas.width = bitmap.width;
+    canvas.height = to - from;
+    ctx.drawImage(bitmap, 0, from, bitmap.width, to - from, 0, 0, bitmap.width, to - from);
+    const data = ctx.getImageData(0, 0, bitmap.width, to - from).data;
+    // Per pixel row: the largest channel difference between any sample and the row's first one.
+    const scores: number[] = [];
+    for (let y = 0; y < to - from; y++) {
+      const base = y * bitmap.width * 4;
+      let worst = 0;
+      for (let k = 0; k < SAMPLES; k++) {
+        const i = base + Math.floor(((k + 0.5) / SAMPLES) * bitmap.width) * 4;
+        for (let c = 0; c < 3; c++) worst = Math.max(worst, Math.abs(data[i + c]! - data[base + c]!));
+      }
+      scores.push(worst);
+    }
+    const best = Math.min(...scores);
+    if (best > 40) return fallback(t);
+    // The gap is the near-flat run closest above the hotspots (a card's drop shadow shades its
+    // edges a little) — on the first row the strip also reaches the flat margin above the title.
+    let runStart = -1;
+    let gap: { start: number; end: number } | null = null;
+    for (let y = 0; y <= scores.length; y++) {
+      const flat = y < scores.length && scores[y]! <= best + 8;
+      if (flat && runStart < 0) runStart = y;
+      if (!flat && runStart >= 0) {
+        if (y - runStart >= 3) gap = { start: runStart, end: y };
+        runStart = -1;
+      }
+    }
+    if (!gap) return fallback(t);
+    return { pointTop: t, cardTop: from + gap.end, cutAbove: from + Math.floor((gap.start + gap.end) / 2) };
+  });
+  bitmap.close();
+  return rows;
+}
+
+/**
+ * A composited tile grid (see detectGrid), whatever `diagramPageMode` says:
+ * scaled to the page width and laid out over as many pages as it takes,
+ * cut only in the background gap between two rows of cards — a card is
+ * never split across sheets. The first row keeps whatever sits above it
+ * (the grid's title pill). Each slice is the one embedded image drawn
+ * under a clipping rectangle, so the PDF carries the image only once.
+ */
+async function renderGridByRows(
+  cursor: Cursor,
+  font: PDFFont,
+  image: CatalogImage,
+  pdfImage: PDFImage,
+  links: CatalogLink[],
+  grid: { cellW: number; cellH: number },
+  qrByUrl: Map<string, QrMatrix>,
+  showOnImage: boolean,
+) {
+  const scale = Math.min(CONTENT_WIDTH / Math.max(1, image.width), REAL_SIZE_PT_PER_PX);
+  const drawW = image.width * scale;
+  const drawX = MARGIN + (CONTENT_WIDTH - drawW) / 2;
+  const rows = await detectGridRows(image, links, grid.cellH);
+  const cellWPdf = grid.cellW * scale;
+
+  for (let r = 0; r < rows.length; r++) {
+    const start = r === 0 ? 0 : rows[r]!.cutAbove;
+    const end = r + 1 < rows.length ? rows[r + 1]!.cutAbove : image.height;
+    const sliceH = (end - start) * scale;
+    if (sliceH > cursor.y - CONTENT_BOTTOM && cursor.y < CONTENT_TOP) {
+      cursor.page = newPage(cursor.doc);
+      cursor.y = CONTENT_TOP;
+    }
+    const top = cursor.y;
+    // Half a point of overlap with the slice above (same pixels) hides the anti-aliased seam.
+    const overlap = r > 0 && top < CONTENT_TOP ? 0.5 : 0;
+    cursor.page.pushOperators(pushGraphicsState(), rectangle(drawX, top - sliceH, drawW, sliceH + overlap), clip(), endPath());
+    cursor.page.drawImage(pdfImage, { x: drawX, y: top + start * scale - image.height * scale, width: drawW, height: image.height * scale });
+    cursor.page.pushOperators(popGraphicsState());
+
+    const cardTop = top - (rows[r]!.cardTop - start) * scale;
+    for (const link of links) {
+      if (Math.abs(link.top - rows[r]!.pointTop) > grid.cellH / 3) continue;
+      const cellLeft = drawX + link.left * scale - cellWPdf * GRID_MARGIN_X_FRACTION;
+      const cellRight = cellLeft + cellWPdf * GRID_VISIBLE_FRACTION;
+      drawTileBadge(cursor.page, link.name, font, cellLeft + TILE_BADGE_INSET, cardTop - TILE_BADGE_INSET);
+      const matrix = showOnImage ? qrByUrl.get(link.url) : undefined;
+      if (matrix) drawQrCode(cursor.page, matrix, cellRight - cursor.qr.diagram - TILE_QR_INSET, cardTop - TILE_QR_INSET, cursor.qr.diagram);
+    }
+    cursor.y = top - sliceH;
+  }
+  cursor.y -= 10;
 }
 
 /** One buffered "tile" image: exactly one link, so the whole picture is one buy target. */
@@ -826,7 +947,7 @@ async function flushTileBuffer(cursor: Cursor, doc: PDFDocument, font: PDFFont, 
     const buyUrl = buyUrlOf(tile.row);
     if (buyUrl) {
       const matrix = buildQrMatrix(buildInstantBuyUrl(buyUrl, meta), "L");
-      drawQrCode(cursor.page, matrix, x + cellW - TILE_QR_SIZE - TILE_QR_INSET, yTop - TILE_QR_INSET, TILE_QR_SIZE);
+      drawQrCode(cursor.page, matrix, x + cellW - cursor.qr.tile - TILE_QR_INSET, yTop - TILE_QR_INSET, cursor.qr.tile);
     }
 
     col++;
@@ -860,7 +981,7 @@ export async function exportCatalogPdf(
   doc.registerFontkit(fontkit);
   const font = await doc.embedFont(fontBytes, { subset: true });
 
-  const cursor: Cursor = { doc, page: newPage(doc), y: CONTENT_TOP };
+  const cursor: Cursor = { doc, page: newPage(doc), y: CONTENT_TOP, qr: qrSizes(options.qrSize) };
   cursor.page.drawText(meta.catalogName || "Catalog", { x: MARGIN, y: cursor.y - 18, size: 18, font });
   cursor.y -= 32;
   // True right after a heading/title has been drawn onto an otherwise-empty

@@ -18,15 +18,24 @@
 /** Where a diagram's QR codes render. Default "table" — set by the user after live-testing found the on-image codes, however small, still visually competed with a crowded diagram's own artwork; the table column reads cleanly regardless of how busy the image is. */
 export type QrPlacement = "image" | "table" | "both";
 
-/** Shrink a diagram to fit one A4 page (default, existing behavior), or print it at its real on-screen size — same pixel-to-point mapping as this app's own 100% zoom — split across as many A4 sheets as that takes, for a diagram too detailed to read once shrunk to one page. */
+/** Not applied to a composited tile grid, which always prints at page width cut between rows (pdfExport.ts renderGridByRows). Shrink a diagram to fit one A4 page (default, existing behavior), or print it at its real on-screen size — same pixel-to-point mapping as this app's own 100% zoom — split across as many A4 sheets as that takes, for a diagram too detailed to read once shrunk to one page. */
 export type DiagramPageMode = "fit" | "real-size";
+
+/**
+ * "small" (default): the smallest codes a phone still reliably reads. "large": 1.5× — with
+ * several small codes on one sheet a phone camera tends to jump between them; a bigger code
+ * fills more of the frame, so it locks onto the one being aimed at. Applies to every QR.
+ */
+export type QrSize = "small" | "large";
 
 export interface PdfExportOptions {
   qrPlacement: QrPlacement;
   diagramPageMode: DiagramPageMode;
+  qrSize: QrSize;
 }
 
 export const DEFAULT_PDF_EXPORT_OPTIONS: PdfExportOptions = {
   qrPlacement: "table",
   diagramPageMode: "fit",
+  qrSize: "small",
 };

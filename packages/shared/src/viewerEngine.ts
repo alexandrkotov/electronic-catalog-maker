@@ -32,7 +32,7 @@ import { isNavLink, navTargetImageId } from "./navLink.js";
 import { createTranslator, matchLocale, type MessageParams, type Translate } from "./i18n.js";
 import { VIEWER_LOCALES, VIEWER_LOCALE_NAMES, viewerMessages } from "./locales/viewer/index.js";
 import { buildCartCheckoutUrl, cartStorageKey, catalogHasAnyBuyUrl, loadPersistedCart, parseCartItemId, savePersistedCart } from "./cart.js";
-import { DEFAULT_PDF_EXPORT_OPTIONS, type DiagramPageMode, type PdfExportOptions, type QrPlacement } from "./pdfExportOptions.js";
+import { DEFAULT_PDF_EXPORT_OPTIONS, type DiagramPageMode, type PdfExportOptions, type QrPlacement, type QrSize } from "./pdfExportOptions.js";
 import {
   QUIZ_HIDDEN_EXTRA_KEYS,
   evaluateQuestion,
@@ -472,6 +472,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   let pdfOptionsDialogOpen = false;
   let pdfQrPlacement: QrPlacement = DEFAULT_PDF_EXPORT_OPTIONS.qrPlacement;
   let pdfDiagramPageMode: DiagramPageMode = DEFAULT_PDF_EXPORT_OPTIONS.diagramPageMode;
+  let pdfQrSize: QrSize = DEFAULT_PDF_EXPORT_OPTIONS.qrSize;
   // Which single panel is shown below the mobile breakpoint (see .mobile-tabs
   // / .ecm-viewer-app[data-mobile-tab] in style.css) — irrelevant above it,
   // where all three panels sit side by side per the desktop grid regardless
@@ -1795,7 +1796,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     exportPdfBusy = true;
     render();
     try {
-      const bytes = await exportPdf(db, { qrPlacement: pdfQrPlacement, diagramPageMode: pdfDiagramPageMode });
+      const bytes = await exportPdf(db, { qrPlacement: pdfQrPlacement, diagramPageMode: pdfDiagramPageMode, qrSize: pdfQrSize });
       const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -2548,6 +2549,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       <div class="open-overlay">
         <div class="open-box pdf-options-box">
           <h2>${te("pdf.title")}</h2>
+          ${hasBuyUrl ? "" : `<p class="notice">${te("pdf.qr.hintNoStore")}</p>`}
           <div class="field">
             <label>${te("pdf.qr.legend")}</label>
             <label class="radio-option">
@@ -2562,13 +2564,18 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
               <input type="radio" name="pdf-qr-placement" value="both" ${pdfQrPlacement === "both" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
               ${te("pdf.qr.both")}
             </label>
-            <p class="hint">
-              ${
-                hasBuyUrl
-                  ? te("pdf.qr.hint")
-                  : te("pdf.qr.hintNoStore")
-              }
-            </p>
+            ${hasBuyUrl ? `<p class="hint">${te("pdf.qr.hint")}</p>` : ""}
+          </div>
+          <div class="field">
+            <label>${te("pdf.qrSize.legend")}</label>
+            <label class="radio-option">
+              <input type="radio" name="pdf-qr-size" value="small" ${pdfQrSize === "small" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
+              ${te("pdf.qrSize.small")}
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="pdf-qr-size" value="large" ${pdfQrSize === "large" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
+              ${te("pdf.qrSize.large")}
+            </label>
           </div>
           <div class="field">
             <label>${te("pdf.size.legend")}</label>
@@ -2580,6 +2587,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
               <input type="radio" name="pdf-diagram-page-mode" value="real-size" ${pdfDiagramPageMode === "real-size" ? "checked" : ""} />
               ${te("pdf.size.real")}
             </label>
+            <p class="hint">${te("pdf.size.hintGrid")}</p>
           </div>
           <div class="open-actions">
             <button type="button" id="pdf-options-cancel">${te("action.cancel")}</button>
@@ -2878,6 +2886,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     root.querySelectorAll<HTMLInputElement>('input[name="pdf-diagram-page-mode"]').forEach((input) => {
       input.addEventListener("change", () => {
         if (input.checked) pdfDiagramPageMode = input.value as DiagramPageMode;
+      });
+    });
+    root.querySelectorAll<HTMLInputElement>('input[name="pdf-qr-size"]').forEach((input) => {
+      input.addEventListener("change", () => {
+        if (input.checked) pdfQrSize = input.value as QrSize;
       });
     });
     root.getElementById("share-view-include-key")?.addEventListener("change", (evt) => {
