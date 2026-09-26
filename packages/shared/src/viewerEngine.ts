@@ -32,7 +32,7 @@ import { isNavLink, navTargetImageId } from "./navLink.js";
 import { createTranslator, matchLocale, type MessageParams, type Translate } from "./i18n.js";
 import { VIEWER_LOCALES, VIEWER_LOCALE_NAMES, viewerMessages } from "./locales/viewer/index.js";
 import { buildCartCheckoutUrl, cartStorageKey, catalogHasAnyBuyUrl, loadPersistedCart, parseCartItemId, savePersistedCart } from "./cart.js";
-import { DEFAULT_PDF_EXPORT_OPTIONS, type DiagramPageMode, type PdfExportOptions, type QrPlacement, type QrSize } from "./pdfExportOptions.js";
+import { DEFAULT_PDF_EXPORT_OPTIONS, suggestedQrSize, type DiagramPageMode, type PdfExportOptions, type QrPlacement, type QrSize } from "./pdfExportOptions.js";
 import {
   QUIZ_HIDDEN_EXTRA_KEYS,
   evaluateQuestion,
@@ -1780,6 +1780,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   /** Opens the "Export PDF…" options dialog (see pdfOptionsDialogOpen's own doc) — the button's click handler, not the export itself. */
   function actionOpenPdfOptions() {
     if (!db || !exportPdf || exportPdfBusy) return;
+    pdfQrSize = suggestedQrSize(db);
     pdfOptionsDialogOpen = true;
     render();
   }
