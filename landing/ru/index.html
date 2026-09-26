@@ -150,6 +150,8 @@
   .card-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 0 0 2rem; }
   .use-cases { grid-template-columns: repeat(2, 1fr); }
   .apps-row { grid-template-columns: repeat(2, 1fr); }
+  .apps-row.web { grid-template-columns: repeat(3, 1fr); margin-bottom: 1rem; }
+  h3.apps-h { margin: 0 0 0.6rem; font-size: 1rem; color: var(--text-2); }
   .card { padding: 1.25rem; border: 1px solid var(--border); border-radius: 8px; }
   .card h2, .card h3 { margin: 0 0 0.4rem; font-size: 1.1rem; }
   .card p { margin: 0 0 0.4rem; font-size: 0.9rem; color: var(--text-2); }
@@ -178,7 +180,7 @@
     background: none; border: 0; cursor: pointer; color: var(--text-2);
     min-width: 44px; min-height: 44px;
   }
-  @media (max-width: 700px) { .card-row, .use-cases, .apps-row { grid-template-columns: 1fr; } }
+  @media (max-width: 700px) { .card-row, .use-cases, .apps-row, .apps-row.web { grid-template-columns: 1fr; } }
   .benefits {
     margin: 0 0 2rem;
     padding: 1.25rem;
@@ -238,7 +240,7 @@
       <h2 id="demo-h">Как это работает</h2>
       <!-- One hint per example, shown with its tab (see show() below); data-hint="*" = every other tab. -->
       <p class="intro" data-hint="living-room">Нажмите на маркер, чтобы открыть крупный план предмета — там его описание и кнопка «Купить». ⌂ вернёт в комнату.</p>
-      <p class="intro" data-hint="product-grid" hidden>Нажмите на номер на плитке, чтобы увидеть описание товара и кнопку «Купить». Список вверху переключает группы.</p>
+      <p class="intro" data-hint="product-grid" hidden>Нажмите на номер на плитке, чтобы увидеть описание товара и кнопку «Купить». Список вверху переключает группы. <a href="../composer/?lang=ru">Есть фото и таблица? Grid Composer соберёт такую сетку за вас →</a></p>
       <p class="intro" data-hint="diy-stool-ru" hidden>Демо-пароль: <strong>stool-2026</strong>. Введите его на экране блокировки ниже; обложка и название видны и без пароля.</p>
       <p class="intro" data-hint="*" hidden>Выберите точку или листайте стрелками, чтобы увидеть сведения о позиции. Кнопка «Вписать» показывает изображение целиком.</p>
       <div class="tabs" role="group" aria-label="Пример каталога">
@@ -261,7 +263,7 @@
 
     <h2>Для кого это</h2>
     <div class="card-row use-cases">
-      <div class="card"><h3>Мебель и товары для дома</h3><p>Товары в интерьере: нажмите на предмет на фото комнаты — откроется его описание и кнопка «Купить». Или покажите весь ассортимент сеткой товаров. <a href="../viewer/?src=..%2Fdemo%2Fliving-room.ecatm&lang=ru">Открыть демо →</a></p></div>
+      <div class="card"><h3>Мебель и товары для дома</h3><p>Товары в интерьере: нажмите на предмет на фото комнаты — откроется его описание и кнопка «Купить». Или покажите весь ассортимент сеткой товаров. <a href="../viewer/?src=..%2Fdemo%2Fliving-room.ecatm&lang=ru">Открыть демо →</a> · <a href="../composer/?lang=ru">Собрать сетку из своих фото →</a></p></div>
       <div class="card"><h3>Запчасти и оборудование</h3><p>Разнесённые схемы, связанные с артикулами, описаниями и кнопкой «Купить»: номер на схеме совпадает со строкой в таблице. <a href="../viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm&lang=ru">Открыть демо →</a></p></div>
       <div class="card"><h3>Платные и закрытые каталоги</h3><p>Продавайте инструкцию или курс, либо делитесь одними каталогами со всеми, а другими — только с теми, кому дали пароль. Один пароль на файл — без аккаунтов и сервера; открыть может любой, у кого есть пароль. Защищённую копию вы создаёте в редакторе. <a href="../viewer/?src=..%2Fdemo%2Fdiy-stool-ru.ecatm&lang=ru">Открыть демо (пароль: stool-2026) →</a></p></div>
       <div class="card"><h3>Обучение</h3><p>Схемы, которые можно исследовать, для уроков и школьных проектов — без учётных записей учеников и без облака. <a href="schools.html">Страница для школ →</a></p></div>
@@ -270,7 +272,8 @@
     </div>
 
     <h2>Приложения</h2>
-    <div class="card-row apps-row">
+    <h3 class="apps-h">Работают в браузере</h3>
+    <div class="card-row apps-row web">
       <div class="card">
         <h2><a href="../editor/?lang=ru">Редактор →</a></h2>
         <p>Создавайте каталог: ставьте точки на изображении и прикрепляйте к каждой данные.</p>
@@ -282,8 +285,15 @@
         <p><a href="https://apps.microsoft.com/detail/9nb4shzt8fd1?hl=ru-RU&amp;gl=US">Скачать в Microsoft Store</a></p>
       </div>
       <div class="card">
+        <h2><a href="../composer/?lang=ru">Grid Composer →</a></h2>
+        <p>Соберите плиточный каталог за один раз из папки пронумерованных фото и таблицы.</p>
+      </div>
+    </div>
+    <h3 class="apps-h">Необязательные серверы, которые вы запускаете у себя</h3>
+    <div class="card-row apps-row">
+      <div class="card">
         <h2>Сервер совместной работы</h2>
-        <p>Необязательный, запускается у вас: редактируйте каталог вместе с кем-то в реальном времени.</p>
+        <p>Редактируйте каталог вместе с кем-то в реальном времени.</p>
         <ul class="links">
           <li><a href="https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=ru-RU&amp;gl=US">Microsoft Store (Windows)</a></li>
           <li><a href="https://snapcraft.io/ecm-collab-server">Snap Store (Linux)</a></li>
@@ -292,7 +302,7 @@
       </div>
       <div class="card">
         <h2>Сервер каталогов</h2>
-        <p>Необязательный, запускается у вас: делитесь папкой каталогов со своего компьютера — по локальной сети или через интернет.</p>
+        <p>Делитесь папкой каталогов со своего компьютера — по локальной сети или через интернет.</p>
         <ul class="links">
           <li><a href="https://apps.microsoft.com/detail/9pl38zj5djmk?hl=ru-RU&amp;gl=US">Microsoft Store (Windows)</a></li>
           <li><a href="https://snapcraft.io/ecm-catalog-server">Snap Store (Linux)</a></li>

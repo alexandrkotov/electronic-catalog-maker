@@ -150,6 +150,8 @@
   .card-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 0 0 2rem; }
   .use-cases { grid-template-columns: repeat(2, 1fr); }
   .apps-row { grid-template-columns: repeat(2, 1fr); }
+  .apps-row.web { grid-template-columns: repeat(3, 1fr); margin-bottom: 1rem; }
+  h3.apps-h { margin: 0 0 0.6rem; font-size: 1rem; color: var(--text-2); }
   .card { padding: 1.25rem; border: 1px solid var(--border); border-radius: 8px; }
   .card h2, .card h3 { margin: 0 0 0.4rem; font-size: 1.1rem; }
   .card p { margin: 0 0 0.4rem; font-size: 0.9rem; color: var(--text-2); }
@@ -178,7 +180,7 @@
     background: none; border: 0; cursor: pointer; color: var(--text-2);
     min-width: 44px; min-height: 44px;
   }
-  @media (max-width: 700px) { .card-row, .use-cases, .apps-row { grid-template-columns: 1fr; } }
+  @media (max-width: 700px) { .card-row, .use-cases, .apps-row, .apps-row.web { grid-template-columns: 1fr; } }
   .benefits {
     margin: 0 0 2rem;
     padding: 1.25rem;
@@ -238,7 +240,7 @@
       <h2 id="demo-h">Як це працює</h2>
       <!-- One hint per example, shown with its tab (see show() below); data-hint="*" = every other tab. -->
       <p class="intro" data-hint="living-room">Натисніть на маркер, щоб відкрити великий план предмета — там його опис і кнопка «Купити». ⌂ поверне до кімнати.</p>
-      <p class="intro" data-hint="product-grid" hidden>Натисніть на номер на плитці, щоб побачити опис товару і кнопку «Купити». Список угорі перемикає групи.</p>
+      <p class="intro" data-hint="product-grid" hidden>Натисніть на номер на плитці, щоб побачити опис товару і кнопку «Купити». Список угорі перемикає групи. <a href="../composer/?lang=uk">Маєте фото й таблицю? Grid Composer збере таку сітку за вас →</a></p>
       <p class="intro" data-hint="diy-stool-uk" hidden>Демо-пароль: <strong>stool-2026</strong>. Введіть його на екрані блокування нижче; обкладинка й назва видимі й без пароля.</p>
       <p class="intro" data-hint="*" hidden>Оберіть точку або прокрутіть за допомогою стрілок, щоб переглянути інформацію про позицію. Натисніть кнопку «Вмістити», щоб переглянути зображення у повному розмірі.</p>
       <div class="tabs" role="group" aria-label="Приклад каталогу">
@@ -261,7 +263,7 @@
 
     <h2>Для кого це</h2>
     <div class="card-row use-cases">
-      <div class="card"><h3>Меблі та товари для дому</h3><p>Товари в інтер’єрі: натисніть на предмет на фото кімнати — відкриється його опис і кнопка «Купити». Або покажіть увесь асортимент сіткою товарів. <a href="../viewer/?src=..%2Fdemo%2Fliving-room.ecatm&lang=uk">Відкрити демо →</a></p></div>
+      <div class="card"><h3>Меблі та товари для дому</h3><p>Товари в інтер’єрі: натисніть на предмет на фото кімнати — відкриється його опис і кнопка «Купити». Або покажіть увесь асортимент сіткою товарів. <a href="../viewer/?src=..%2Fdemo%2Fliving-room.ecatm&lang=uk">Відкрити демо →</a> · <a href="../composer/?lang=uk">Зібрати сітку зі своїх фото →</a></p></div>
       <div class="card"><h3>Запчастини та обладнання</h3><p>Рознесені схеми, пов’язані з артикулами, описами й кнопкою «Купити»: номер на схемі збігається з рядком у таблиці. <a href="../viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm&lang=uk">Відкрити демо →</a></p></div>
       <div class="card"><h3>Платні та закриті каталоги</h3><p>Продавайте посібник або курс, чи діліться одними каталогами з усіма, а іншими — лише з тими, кому дали пароль. Один пароль на файл — без облікових записів і сервера; відкрити може будь-хто, у кого є пароль. Захищену копію ви створюєте в редакторі. <a href="../viewer/?src=..%2Fdemo%2Fdiy-stool-uk.ecatm&lang=uk">Відкрити демо (пароль: stool-2026) →</a></p></div>
       <div class="card"><h3>Навчання</h3><p>Схеми, які можна досліджувати, для уроків і шкільних проєктів — без облікових записів учнів і без хмари. <a href="schools.html">Сторінка для шкіл →</a></p></div>
@@ -270,7 +272,8 @@
     </div>
 
     <h2>Застосунки</h2>
-    <div class="card-row apps-row">
+    <h3 class="apps-h">Працюють у браузері</h3>
+    <div class="card-row apps-row web">
       <div class="card">
         <h2><a href="../editor/?lang=uk">Редактор →</a></h2>
         <p>Створіть каталог: позначте точки на зображенні та прив’яжіть до кожної з них дані.</p>
@@ -281,6 +284,13 @@
         <p>Відкрийте файл каталогу, обирайте деталі та переглядайте відомості про них.</p>
         <p><a href="https://apps.microsoft.com/detail/9nb4shzt8fd1?hl=uk-UA&amp;gl=US">Завантажити з Microsoft Store</a></p>
       </div>
+      <div class="card">
+        <h2><a href="../composer/?lang=uk">Grid Composer →</a></h2>
+        <p>Зберіть плитковий каталог за один раз із папки пронумерованих фото й таблиці.</p>
+      </div>
+    </div>
+    <h3 class="apps-h">Необов’язкові сервери, які ви запускаєте у себе</h3>
+    <div class="card-row apps-row">
       <div class="card">
         <h2>Сервер спільної роботи</h2>
         <p>Редагуйте каталог разом із колегами в реальному часі. Сервер запускається на вашому комп’ютері.</p>
