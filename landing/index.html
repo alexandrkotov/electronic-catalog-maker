@@ -150,6 +150,8 @@
   .card-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 0 0 2rem; }
   .use-cases { grid-template-columns: repeat(2, 1fr); }
   .apps-row { grid-template-columns: repeat(2, 1fr); }
+  .apps-row.web { grid-template-columns: repeat(3, 1fr); margin-bottom: 1rem; }
+  h3.apps-h { margin: 0 0 0.6rem; font-size: 1rem; color: var(--text-2); }
   .card { padding: 1.25rem; border: 1px solid var(--border); border-radius: 8px; }
   .card h2, .card h3 { margin: 0 0 0.4rem; font-size: 1.1rem; }
   .card p { margin: 0 0 0.4rem; font-size: 0.9rem; color: var(--text-2); }
@@ -178,7 +180,7 @@
     background: none; border: 0; cursor: pointer; color: var(--text-2);
     min-width: 44px; min-height: 44px;
   }
-  @media (max-width: 700px) { .card-row, .use-cases, .apps-row { grid-template-columns: 1fr; } }
+  @media (max-width: 700px) { .card-row, .use-cases, .apps-row, .apps-row.web { grid-template-columns: 1fr; } }
   .benefits {
     margin: 0 0 2rem;
     padding: 1.25rem;
@@ -238,7 +240,7 @@
       <h2 id="demo-h">See how it works</h2>
       <!-- One hint per example, shown with its tab (see show() below); data-hint="*" = every other tab. -->
       <p class="intro" data-hint="living-room">Select a marker to open a close-up of that piece — its details and Buy are there. ⌂ takes you back to the room.</p>
-      <p class="intro" data-hint="product-grid" hidden>Select a number on a tile to see the product’s details and Buy. The list at the top switches between groups.</p>
+      <p class="intro" data-hint="product-grid" hidden>Select a number on a tile to see the product’s details and Buy. The list at the top switches between groups. <a href="composer/">Have photos and a spreadsheet? Grid Composer builds a grid like this for you →</a></p>
       <p class="intro" data-hint="diy-stool-en" hidden>Demo password: <strong>stool-2026</strong>. Type it on the lock screen below; the cover and title are visible without it.</p>
       <p class="intro" data-hint="*" hidden>Select a marker or use the arrows to explore item details. Use Fit to see the whole image.</p>
       <div class="tabs" role="group" aria-label="Example catalog">
@@ -261,7 +263,7 @@
 
     <h2>Who it's for</h2>
     <div class="card-row use-cases">
-      <div class="card"><h3>Furniture and home goods</h3><p>Shop the look: tap a piece in a room photo to open it with its details and a Buy button. Or lay out the whole range as a product grid. <a href="viewer/?src=..%2Fdemo%2Fliving-room.ecatm">Open the demo →</a></p></div>
+      <div class="card"><h3>Furniture and home goods</h3><p>Shop the look: tap a piece in a room photo to open it with its details and a Buy button. Or lay out the whole range as a product grid. <a href="viewer/?src=..%2Fdemo%2Fliving-room.ecatm">Open the demo →</a> · <a href="composer/">Build a grid from your photos →</a></p></div>
       <div class="card"><h3>Parts and equipment</h3><p>Exploded views linked to part numbers, descriptions and a Buy button — the number on the diagram matches the row in the table. <a href="viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm">Open the demo →</a></p></div>
       <div class="card"><h3>Paid and members-only catalogs</h3><p>Sell a guide or a course, or share some catalogs with everyone and keep others for the people you give the password to. One password per file — no accounts, no server; anyone who has the password can open it. You create the protected copy in the Editor. <a href="viewer/?src=..%2Fdemo%2Fdiy-stool-en.ecatm">Open the demo (password: stool-2026) →</a></p></div>
       <div class="card"><h3>Teaching and learning</h3><p>Explorable diagrams for lessons and class projects — no student accounts, no cloud. <a href="schools.html">See the schools page →</a></p></div>
@@ -270,7 +272,8 @@
     </div>
 
     <h2>The apps</h2>
-    <div class="card-row apps-row">
+    <h3 class="apps-h">Work in your browser</h3>
+    <div class="card-row apps-row web">
       <div class="card">
         <h2><a href="editor/">Editor →</a></h2>
         <p>Build a catalog: place hotspots on an image, attach data to each.</p>
@@ -281,6 +284,13 @@
         <p>Open a catalog file and click around it.</p>
         <p><a href="https://apps.microsoft.com/detail/9nb4shzt8fd1?hl=en-US&amp;gl=US">Get it on Microsoft Store</a></p>
       </div>
+      <div class="card">
+        <h2><a href="composer/">Grid Composer →</a></h2>
+        <p>Build a tile catalog in one go from a folder of numbered photos and a spreadsheet.</p>
+      </div>
+    </div>
+    <h3 class="apps-h">Optional servers you run yourself</h3>
+    <div class="card-row apps-row">
       <div class="card">
         <h2>Collaboration Server</h2>
         <p>Optional, self-hosted: edit a catalog live with someone else.</p>

@@ -146,6 +146,8 @@
   .card-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 0 0 2rem; }
   .use-cases { grid-template-columns: repeat(2, 1fr); }
   .apps-row { grid-template-columns: repeat(2, 1fr); }
+  .apps-row.web { grid-template-columns: repeat(3, 1fr); margin-bottom: 1rem; }
+  h3.apps-h { margin: 0 0 0.6rem; font-size: 1rem; color: var(--text-2); }
   .card { padding: 1.25rem; border: 1px solid var(--border); border-radius: 8px; }
   .card h2, .card h3 { margin: 0 0 0.4rem; font-size: 1.1rem; }
   .card p { margin: 0 0 0.4rem; font-size: 0.9rem; color: var(--text-2); }
@@ -174,7 +176,7 @@
     background: none; border: 0; cursor: pointer; color: var(--text-2);
     min-width: 44px; min-height: 44px;
   }
-  @media (max-width: 700px) { .card-row, .use-cases, .apps-row { grid-template-columns: 1fr; } }
+  @media (max-width: 700px) { .card-row, .use-cases, .apps-row, .apps-row.web { grid-template-columns: 1fr; } }
   .benefits {
     margin: 0 0 2rem;
     padding: 1.25rem;
@@ -234,7 +236,7 @@
       <h2 id="demo-h">{{index.demo.title}}</h2>
       <!-- One hint per example, shown with its tab (see show() below); data-hint="*" = every other tab. -->
       <p class="intro" data-hint="living-room">{{index.demo.hint.livingRoom}}</p>
-      <p class="intro" data-hint="product-grid" hidden>{{index.demo.hint.grid}}</p>
+      <p class="intro" data-hint="product-grid" hidden>{{index.demo.hint.grid}} <a href="{{@base}}composer/{{@q}}">{{index.demo.hint.gridComposer}}</a></p>
       <p class="intro" data-hint="diy-stool-{{@lang}}" hidden>{{index.demo.noteProtected}}</p>
       <p class="intro" data-hint="*" hidden>{{index.demo.intro}}</p>
       <div class="tabs" role="group" aria-label="{{index.demo.tabsLabel}}">
@@ -257,7 +259,7 @@
 
     <h2>{{index.who.title}}</h2>
     <div class="card-row use-cases">
-      <div class="card"><h3>{{index.who.furniture.title}}</h3><p>{{index.who.furniture.text}} <a href="{{@base}}viewer/?src=..%2Fdemo%2Fliving-room.ecatm{{@a}}">{{index.who.furniture.link}}</a></p></div>
+      <div class="card"><h3>{{index.who.furniture.title}}</h3><p>{{index.who.furniture.text}} <a href="{{@base}}viewer/?src=..%2Fdemo%2Fliving-room.ecatm{{@a}}">{{index.who.furniture.link}}</a> · <a href="{{@base}}composer/{{@q}}">{{index.who.furniture.composer}}</a></p></div>
       <div class="card"><h3>{{index.who.parts.title}}</h3><p>{{index.who.parts.text}} <a href="{{@base}}viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm{{@a}}">{{index.who.parts.link}}</a></p></div>
       <div class="card"><h3>{{index.who.protected.title}}</h3><p>{{index.who.protected.text}} <a href="{{@base}}viewer/?src=..%2Fdemo%2Fdiy-stool-{{@lang}}.ecatm{{@a}}">{{index.who.protected.link}}</a></p></div>
       <div class="card"><h3>{{index.who.teaching.title}}</h3><p>{{index.who.teaching.text}}</p></div>
@@ -266,7 +268,8 @@
     </div>
 
     <h2>{{index.apps.title}}</h2>
-    <div class="card-row apps-row">
+    <h3 class="apps-h">{{index.apps.web}}</h3>
+    <div class="card-row apps-row web">
       <div class="card">
         <h2><a href="{{@base}}editor/{{@q}}">{{index.apps.editor.title}}</a></h2>
         <p>{{index.apps.editor.text}}</p>
@@ -277,6 +280,13 @@
         <p>{{index.apps.viewer.text}}</p>
         <p><a href="{url_msViewer}">{{index.apps.viewer.store}}</a></p>
       </div>
+      <div class="card">
+        <h2><a href="{{@base}}composer/{{@q}}">{{index.apps.composer.title}}</a></h2>
+        <p>{{index.apps.composer.text}}</p>
+      </div>
+    </div>
+    <h3 class="apps-h">{{index.apps.servers}}</h3>
+    <div class="card-row apps-row">
       <div class="card">
         <h2>{{index.apps.collab.title}}</h2>
         <p>{{index.apps.collab.text}}</p>
