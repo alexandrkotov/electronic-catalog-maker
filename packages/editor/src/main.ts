@@ -66,6 +66,7 @@ import {
   rowExistsForUrl,
   searchRows,
   setUpPwa,
+  suggestedQrSize,
   updateImage,
   updateLink,
   updateLinkPosition,
@@ -1059,6 +1060,7 @@ function suggestedPdfFileName(): string {
 /** Opens the "Export PDF…" options dialog — the button's own click handler; the actual export happens in actionConfirmExportPdf once it's submitted. */
 function actionOpenPdfOptions() {
   if (!db || exportPdfBusy) return;
+  pdfQrSize = suggestedQrSize(db);
   pdfOptionsDialogOpen = true;
   render();
 }
