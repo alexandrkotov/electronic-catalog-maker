@@ -52,6 +52,13 @@ function pageUrl(lang: string, page: string): string {
   return SITE_ORIGIN + LANGS[lang]!.path + (page === "index.html" ? "" : page);
 }
 
+// Shared across every page/lang: a real screenshot would need a build step,
+// but the app icon is already deployed (built by @ecm/editor) and on-brand —
+// good enough so a shared link isn't blank in LinkedIn/Facebook/X previews.
+const OG_IMAGE = SITE_ORIGIN + "/editor/icons/icon-512.png";
+const OG_LOCALE: Record<string, string> = { en: "en_US", ru: "ru_RU", uk: "uk_UA" };
+const escapeAttr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+
 function render(template: string, page: string, lang: string): string {
   const cfg = LANGS[lang]!;
   const dict = dictionaries[lang]!;
@@ -69,6 +76,25 @@ function render(template: string, page: string, lang: string): string {
     "@q": () => (lang === DEFAULT_LANG ? "" : `?lang=${lang}`),
     "@a": () => (lang === DEFAULT_LANG ? "" : `&lang=${lang}`),
     "@messages": messagesJson,
+    "@og": () => {
+      const key = page === "index.html" ? "index" : "schools";
+      const title = escapeAttr(dict[`${key}.title`]!);
+      const description = escapeAttr(dict[key === "index" ? "index.hero.text" : "schools.tagline"]!);
+      const url = pageUrl(lang, page);
+      return [
+        `<meta property="og:type" content="website" />`,
+        `<meta property="og:site_name" content="Electronic Catalog Maker" />`,
+        `<meta property="og:locale" content="${OG_LOCALE[lang]}" />`,
+        `<meta property="og:url" content="${url}" />`,
+        `<meta property="og:title" content="${title}" />`,
+        `<meta property="og:description" content="${description}" />`,
+        `<meta property="og:image" content="${OG_IMAGE}" />`,
+        `<meta name="twitter:card" content="summary" />`,
+        `<meta name="twitter:title" content="${title}" />`,
+        `<meta name="twitter:description" content="${description}" />`,
+        `<meta name="twitter:image" content="${OG_IMAGE}" />`,
+      ].join("\n");
+    },
     "@alternates": () =>
       [
         ...Object.keys(LANGS).map((l) => `<link rel="alternate" hreflang="${l}" href="${pageUrl(l, page)}" />`),
