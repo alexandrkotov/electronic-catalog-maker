@@ -75,11 +75,11 @@ const app = document.getElementById("app")!;
 
 function render() {
   document.documentElement.lang = locale;
-  document.title = `Tapalog ${t("app.title")}`;
+  document.title = `ECM ${t("app.title")}`;
   app.innerHTML = `
     <header class="top">
       <div>
-        <h1>Tapalog <span>${tx("app.title")}</span></h1>
+        <h1>ECM <span>${tx("app.title")}</span></h1>
         <p class="muted">${tx("app.tagline")}</p>
       </div>
       <div class="top-actions">
