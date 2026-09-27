@@ -51,6 +51,7 @@
   "index.apps.viewer.text": "Open a catalog file and click around it.",
   "index.apps.composer.title": "Grid Composer →",
   "index.apps.composer.text": "Build a tile catalog in one go from a folder of numbered photos and a spreadsheet.",
+  "index.apps.composer.store": "Get it on Microsoft Store",
   "index.apps.collab.title": "Collaboration Server",
   "index.apps.collab.text": "Edit a catalog live with someone else.",
   "index.apps.collab.win": "Microsoft Store (Windows)",
