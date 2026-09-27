@@ -404,3 +404,6 @@ function fileStem(name: string): string {
 
 applyTheme(resolveInitialTheme());
 render();
+
+// Relative path, so it resolves under whatever base Vite applied (/composer/ in production).
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
