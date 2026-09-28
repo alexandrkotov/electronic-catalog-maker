@@ -1,0 +1,375 @@
+name: Release store-importer (Snap Store + GitHub Release)
+
+# Manual only, same as catalog-server-release.yml (which this is modeled
+# on): rebuilding/republishing binaries is a deliberate, occasional action.
+# Simpler than catalog-server's: no cloudflared to fetch and embed, so each
+# compile is one `bun build --compile` of src/main.ts.
+#
+# Before the first publish_snap run, the snap name has to be registered
+# once (`snapcraft register ecm-store-importer`) and the
+# SNAPCRAFT_STORE_CREDENTIALS secret has to cover this snap too — see
+# feedback-collab-server-binary-release-process in project memory for the
+# credential-scoping gotcha.
+on:
+  workflow_dispatch:
+    inputs:
+      snap_channel:
+        description: "Snap Store channel to release to"
+        required: true
+        default: "stable"
+        type: choice
+        options:
+          - stable
+          - candidate
+          - beta
+          - edge
+      publish_snap:
+        description: "Also publish to the Snap Store (uncheck to only refresh the GitHub Release binaries)."
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Linux binary
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - name: Compile
+        working-directory: packages/store-importer
+        run: bun run compile:linux-x64
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ecm-store-importer-linux-x64
+          path: packages/store-importer/dist/ecm-store-importer-linux-x64
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows binary (cross-compiled)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - name: Compile
+        working-directory: packages/store-importer
+        run: bun run compile:windows-x64
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ecm-store-importer-windows-x64.exe
+          path: packages/store-importer/dist/ecm-store-importer-windows-x64.exe
+          if-no-files-found: error
+
+  build-macos-arm64:
+    name: Build macOS binary (Apple Silicon, cross-compiled)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - name: Compile
+        working-directory: packages/store-importer
+        run: bun run compile:macos-arm64
+      # See collab-server-release.yml's matching step for why this needs to
+      # be a zip, not the raw binary — GitHub Release assets lose the
+      # executable bit otherwise, and a zip's central directory preserves it.
+      - name: Zip (preserves the executable bit through the Release download)
+        working-directory: packages/store-importer/dist
+        run: |
+          chmod +x ecm-store-importer-macos-arm64
+          zip -j ecm-store-importer-macos-arm64.zip ecm-store-importer-macos-arm64
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ecm-store-importer-macos-arm64
+          path: packages/store-importer/dist/ecm-store-importer-macos-arm64.zip
+          if-no-files-found: error
+
+  build-macos-x64:
+    name: Build macOS binary (Intel, cross-compiled)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - name: Compile
+        working-directory: packages/store-importer
+        run: bun run compile:macos-x64
+      - name: Zip (preserves the executable bit through the Release download)
+        working-directory: packages/store-importer/dist
+        run: |
+          chmod +x ecm-store-importer-macos-x64
+          zip -j ecm-store-importer-macos-x64.zip ecm-store-importer-macos-x64
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ecm-store-importer-macos-x64
+          path: packages/store-importer/dist/ecm-store-importer-macos-x64.zip
+          if-no-files-found: error
+
+  # Real Apple hardware, hosted by GitHub — see collab-server-release.yml's
+  # matching job for the full "why" (Apple's license, this project's own
+  # Mac being too old to run Bun's compile output at all).
+  smoke-test-macos-arm64:
+    name: Smoke-test macOS binary (Apple Silicon, real hardware)
+    needs: [build-macos-arm64]
+    runs-on: macos-14
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ecm-store-importer-macos-arm64
+          path: dist
+      - name: Unpack
+        working-directory: dist
+        run: |
+          unzip ecm-store-importer-macos-arm64.zip
+          chmod +x ecm-store-importer-macos-arm64
+      - name: Run it and confirm the status endpoint answers
+        working-directory: dist
+        run: |
+          ./ecm-store-importer-macos-arm64 &
+          SERVER_PID=$!
+          ok=false
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:8931/status.json -o status.json 2>/dev/null; then
+              ok=true
+              break
+            fi
+            sleep 1
+          done
+          echo "--- /status.json ---"
+          cat status.json 2>/dev/null || echo "(no response)"
+          if [ "$ok" != true ] || ! grep -q '"app":"ecm-store-importer"' status.json; then
+            echo "The server never answered /status.json with the expected shape" >&2
+            kill "$SERVER_PID" 2>/dev/null || true
+            exit 1
+          fi
+          curl -fsS -X POST http://localhost:8931/shutdown || true
+          wait "$SERVER_PID" 2>/dev/null || true
+          echo "Smoke test passed: started, served /status.json, shut down cleanly."
+
+  build-deb:
+    name: Package Linux binary as .deb (Chromebook/Crostini, Debian, Ubuntu)
+    needs: [build-linux]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ecm-store-importer-linux-x64
+          path: dist
+
+      - name: Read store-importer version
+        id: version
+        run: echo "version=$(node -p "require('./packages/store-importer/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # Same structure as collab-server-release.yml's build-deb — see its
+      # comment for the full "why" (Crostini install-by-double-click, no
+      # systemd unit / auto-start).
+      - name: Build .deb package
+        run: |
+          set -e
+          VERSION="${{ steps.version.outputs.version }}"
+          PKGROOT=pkgroot
+          mkdir -p "$PKGROOT/DEBIAN" "$PKGROOT/usr/bin" "$PKGROOT/usr/share/applications" "$PKGROOT/usr/share/pixmaps"
+
+          install -m 755 dist/ecm-store-importer-linux-x64 "$PKGROOT/usr/bin/ecm-store-importer"
+          install -m 644 packages/store-importer/assets/icons/icon-512.png "$PKGROOT/usr/share/pixmaps/ecm-store-importer.png"
+
+          printf '%s\n' \
+            '[Desktop Entry]' \
+            'Type=Application' \
+            'Name=ECM Store Importer' \
+            'Comment=Turn your online store into photos and a table for an Electronic Catalog Maker catalog' \
+            'Exec=/usr/bin/ecm-store-importer' \
+            'Icon=/usr/share/pixmaps/ecm-store-importer.png' \
+            'Terminal=false' \
+            'Categories=Office;Utility;' \
+            > "$PKGROOT/usr/share/applications/ecm-store-importer.desktop"
+
+          printf '%s\n' \
+            'Package: ecm-store-importer' \
+            "Version: $VERSION" \
+            'Section: utils' \
+            'Priority: optional' \
+            'Architecture: amd64' \
+            'Maintainer: Alexander Kotov <alexandrkotov@users.noreply.github.com>' \
+            'Homepage: https://tapalog.com/' \
+            'Description: Turn your online store into photos and a table for a tile catalog' \
+            ' Saves the products of your own Shopify or Payhip store as a folder' \
+            ' of photos plus a CSV table, ready for the Grid Composer of Electronic' \
+            ' Catalog Maker. Launch it from the Linux apps menu; it opens its page' \
+            ' in your browser, and its Quit button there stops it again.' \
+            > "$PKGROOT/DEBIAN/control"
+
+          dpkg-deb --build --root-owner-group "$PKGROOT" ecm-store-importer-amd64.deb
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ecm-store-importer-amd64.deb
+          path: ecm-store-importer-amd64.deb
+          if-no-files-found: error
+
+  smoke-test-deb:
+    name: Smoke-test the .deb (install, run, remove)
+    needs: [build-deb]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ecm-store-importer-amd64.deb
+          path: dist
+
+      - name: Install via dpkg
+        run: sudo dpkg -i dist/ecm-store-importer-amd64.deb
+
+      - name: Confirm the files landed where the .desktop entry expects
+        run: |
+          test -x /usr/bin/ecm-store-importer
+          test -f /usr/share/applications/ecm-store-importer.desktop
+          test -f /usr/share/pixmaps/ecm-store-importer.png
+          grep -q '^Exec=/usr/bin/ecm-store-importer$' /usr/share/applications/ecm-store-importer.desktop
+
+      - name: Run it and confirm the status endpoint answers
+        run: |
+          ecm-store-importer &
+          SERVER_PID=$!
+          ok=false
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:8931/status.json -o status.json 2>/dev/null; then
+              ok=true
+              break
+            fi
+            sleep 1
+          done
+          echo "--- /status.json ---"
+          cat status.json 2>/dev/null || echo "(no response)"
+          if [ "$ok" != true ] || ! grep -q '"app":"ecm-store-importer"' status.json; then
+            echo "The server never answered /status.json with the expected shape" >&2
+            kill "$SERVER_PID" 2>/dev/null || true
+            exit 1
+          fi
+          curl -fsS -X POST http://localhost:8931/shutdown || true
+          wait "$SERVER_PID" 2>/dev/null || true
+          echo "Smoke test passed: installed via dpkg, started, served /status.json, shut down cleanly."
+
+      - name: Remove cleanly via dpkg
+        run: |
+          sudo dpkg -r ecm-store-importer
+          test ! -e /usr/bin/ecm-store-importer
+          test ! -e /usr/share/applications/ecm-store-importer.desktop
+
+  publish-snap:
+    name: Build + publish Snap (Snap Store / Ubuntu App Center)
+    if: ${{ github.event.inputs.publish_snap == 'true' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Snapcraft
+        run: sudo snap install --classic snapcraft
+
+      # snapcore/action-build's default path installs LXD and builds inside
+      # an LXD container — confirmed live (2026-09-22) to fail intermittently
+      # on this runner with different errors each time ("/dev/tty: No such
+      # device or address", then "page_idle/bitmap: Permission denied"),
+      # both surfacing as an opaque "Failed to execute pack in instance"
+      # from Snapcraft's own LXD exec wrapper. This is a known class of
+      # nested-virtualization flakiness on GitHub-hosted runners, not
+      # anything in this package's own build script. --destructive-mode
+      # builds directly on the runner instead of inside LXD — an ephemeral,
+      # single-use GitHub Actions VM is exactly the case Canonical's own
+      # docs call out destructive mode as fine for in CI (the "destructive"
+      # part only matters for a machine you'd otherwise want to keep clean).
+      - name: Build snap (destructive mode — skips LXD, which was crashing intermittently)
+        id: build
+        working-directory: packages/store-importer
+        run: |
+          sudo snapcraft pack --destructive-mode
+          echo "snap=packages/store-importer/$(ls *.snap)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to Snap Store
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: ${{ steps.build.outputs.snap }}
+          release: ${{ github.event.inputs.snap_channel }}
+
+  github-release:
+    name: Update the store-importer-latest GitHub Release
+    needs: [build-linux, build-windows, smoke-test-macos-arm64, build-macos-x64, smoke-test-deb]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ecm-store-importer-linux-x64
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ecm-store-importer-windows-x64.exe
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ecm-store-importer-macos-arm64
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ecm-store-importer-macos-x64
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ecm-store-importer-amd64.deb
+          path: dist
+
+      - name: Read store-importer version
+        id: version
+        run: echo "version=$(node -p "require('./packages/store-importer/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Move the rolling store-importer-latest tag to this commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f store-importer-latest
+          git push origin store-importer-latest --force
+
+      - name: Create/update the GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: store-importer-latest
+          name: "store-importer v${{ steps.version.outputs.version }}"
+          body: |
+            Saves the products of your own Shopify or Payhip store as a folder of photos plus a table, ready for Electronic Catalog Maker's [Grid Composer](https://tapalog.com/composer/) to build a printable tile catalog from.
+
+            - `ecm-store-importer-windows-x64.exe` — Windows, portable, no installer
+            - `ecm-store-importer-linux-x64` — Linux, portable, no installer
+            - `ecm-store-importer-amd64.deb` — Debian/Ubuntu/Chromebook (Linux/Crostini), installable package
+            - `ecm-store-importer-macos-arm64.zip` — macOS, Apple Silicon, portable, no installer
+            - `ecm-store-importer-macos-x64.zip` — macOS, Intel, portable, no installer
+
+            Ubuntu users can instead install from the
+            [Snap Store](https://snapcraft.io/ecm-store-importer) (`sudo snap install ecm-store-importer`), once published there.
+
+            On a Chromebook, [turn on Linux (Crostini)](https://support.google.com/chromebook/answer/9145439?hl=en) once in Settings, then download the `.deb` file and double-click it in the Files app — ChromeOS offers to install it, and afterward it shows up as "ECM Store Importer" in the Linux apps folder of your app launcher.
+
+            It has no window of its own: it opens its page in your browser, and closing that tab doesn't stop it — use the **Quit Store Importer** button at the bottom of the page.
+
+            None of these are code-signed. Windows will show a SmartScreen warning on first run ("More info" → "Run anyway").
+
+            The macOS download is a zip (unzipping restores the file's execute permission, which a direct download can't carry) — after unzipping, macOS will refuse to run it at all ("is damaged and can't be opened") because it's fully unsigned; open Terminal in the folder you unzipped it to and run:
+            `xattr -d com.apple.quarantine ecm-store-importer-macos-* && chmod +x ecm-store-importer-macos-* && ./ecm-store-importer-macos-*`
+            (replace the `*` with your actual filename) — also requires **macOS 13 (Ventura) or later**.
+
+            See [packages/store-importer](https://github.com/alexandrkotov/electronic-catalog-maker/tree/main/packages/store-importer) for details.
+          files: |
+            dist/ecm-store-importer-linux-x64
+            dist/ecm-store-importer-windows-x64.exe
+            dist/ecm-store-importer-amd64.deb
+            dist/ecm-store-importer-macos-arm64.zip
+            dist/ecm-store-importer-macos-x64.zip
