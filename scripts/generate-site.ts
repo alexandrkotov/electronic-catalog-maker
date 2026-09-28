@@ -1,6 +1,7 @@
 /**
- * Generates the localized static pages (landing/index.html, landing/schools.html
- * and their translated copies under landing/<lang>/) from the shared
+ * Generates the localized static pages (landing/index.html, landing/schools.html,
+ * the toolset map landing/toolset.svg, and their translated copies under
+ * landing/<lang>/) from the shared
  * templates in site-src/templates/ and the per-language dictionaries in
  * site-src/i18n/. The generated files are COMMITTED (the deploy script and
  * the disaster-recovery runbook just copy landing/ — no build step to break
@@ -41,7 +42,10 @@ const LANGS: Record<string, LangConfig> = {
   uk: { dir: "landing/uk", path: "/uk/", base: "../", name: "Українська", storeLocale: "uk-UA" },
 };
 const DEFAULT_LANG = "en";
-const PAGES = ["index.html", "schools.html"];
+// toolset.svg is the full toolset map the landing's short one links to (and
+// README.md shows) — a standalone SVG, so its messages must stay XML-safe
+// (no HTML-only entities like &nbsp;).
+const PAGES = ["index.html", "schools.html", "toolset.svg"];
 
 const readJson = (path: string) => JSON.parse(readFileSync(join(ROOT, path), "utf8")) as Record<string, string>;
 const links = readJson("site-src/links.json");
