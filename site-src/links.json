@@ -18,6 +18,13 @@
   "catalogServerDlDeb": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-amd64.deb",
   "catalogServerReleasePage": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/catalog-server-latest",
   "catalogServerSnap": "https://snapcraft.io/ecm-catalog-server",
+  "storeImporterSnap": "https://snapcraft.io/ecm-store-importer",
+  "storeImporterDlMacArm": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-macos-arm64.zip",
+  "storeImporterDlMacIntel": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-macos-x64.zip",
+  "storeImporterDlWin": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-windows-x64.exe",
+  "storeImporterDlLinux": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-linux-x64",
+  "storeImporterDlDeb": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-amd64.deb",
+  "storeImporterReleasePage": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/store-importer-latest",
   "linkedin": "https://www.linkedin.com/in/alexkotovwa/",
   "x": "https://x.com/kotov_wa",
   "github": "https://github.com/alexandrkotov/electronic-catalog-maker"

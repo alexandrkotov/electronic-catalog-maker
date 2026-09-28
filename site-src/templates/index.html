@@ -146,8 +146,8 @@
   a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
   .card-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 0 0 2rem; }
   .use-cases { grid-template-columns: repeat(2, 1fr); }
-  .apps-row { grid-template-columns: repeat(2, 1fr); }
-  .apps-row.web { grid-template-columns: repeat(3, 1fr); margin-bottom: 1rem; }
+  .apps-row { grid-template-columns: repeat(3, 1fr); }
+  .apps-row.web { margin-bottom: 1rem; }
   h3.apps-h { margin: 0 0 0.6rem; font-size: 1rem; color: var(--text-2); }
   .card { padding: 1.25rem; border: 1px solid var(--border); border-radius: 8px; }
   .card h2, .card h3 { margin: 0 0 0.4rem; font-size: 1.1rem; }
@@ -307,6 +307,14 @@
           <li><a href="{url_catalogServerReleasePage}" id="catalog-server-other">{{index.apps.catalogServer.more}}</a></li>
         </ul>
       </div>
+      <div class="card">
+        <h2>{{index.apps.storeImporter.title}}</h2>
+        <p>{{index.apps.storeImporter.text}}</p>
+        <ul class="links">
+          <li><a href="{url_storeImporterSnap}">{{index.apps.storeImporter.linux}}</a></li>
+          <li><a href="{url_storeImporterReleasePage}" id="store-importer-other">{{index.apps.storeImporter.more}}</a></li>
+        </ul>
+      </div>
     </div>
 
   <section class="benefits" aria-labelledby="benefits-h">
@@ -370,6 +378,24 @@
       </p>
       <p>
         {{index.catalogServerDialog.chromebook}}
+      </p>
+    </dialog>
+
+    <dialog class="collab" id="store-importer" aria-labelledby="store-importer-h">
+      <button type="button" class="close" aria-label="{{index.dialog.close}}">×</button>
+      <h2 id="store-importer-h">{{index.storeImporterDialog.title}}</h2>
+      <p>{{index.storeImporterDialog.intro}}</p>
+      <p>
+        {{index.storeImporterDialog.windows}}
+      </p>
+      <p>
+        {{index.storeImporterDialog.linux}}
+      </p>
+      <p>
+        {{index.storeImporterDialog.macos}}
+      </p>
+      <p>
+        {{index.storeImporterDialog.chromebook}}
       </p>
     </dialog>
   </main>
@@ -481,7 +507,7 @@
     // "Other downloads"/"Downloads" opens the full per-platform list in a
     // dialog. Without JS the link goes to the GitHub release page, which
     // has the same files. One wiring function, called once per app card
-    // that has this pattern (collab-server, catalog-server) rather than a
+    // that has this pattern (collab-server, catalog-server, store-importer) rather than a
     // copy-pasted IIFE per card.
     (function () {
       function wireDialog(dialogId, linkId) {
@@ -496,6 +522,7 @@
       }
       wireDialog("collab", "collab-other");
       wireDialog("catalog-server", "catalog-server-other");
+      wireDialog("store-importer", "store-importer-other");
     })();
   </script>
   <!-- Privacy-friendly, cookie-free page-view counting (goatcounter.com) —

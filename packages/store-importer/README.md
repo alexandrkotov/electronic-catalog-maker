@@ -115,8 +115,8 @@ so the default "save to" folder is built from `SNAP_REAL_HOME` instead
 
 ## Not done yet
 
-The first actual release (running the workflow above), the Microsoft
-Store and Snap Store listings, and the landing page tile that links to
-them — its text is already in `site-src/i18n/`. The app's icon
-(`assets/icons/`) is already its own: the project's standard icon with an
-"I" badge.
+The Microsoft Store listing. Released so far: the direct downloads
+(`store-importer-latest` GitHub Release) and the
+[Snap Store](https://snapcraft.io/ecm-store-importer), both linked from the
+landing page's Store Importer tile. The app's icon (`assets/icons/`) is
+its own: the project's standard icon with an "I" badge.

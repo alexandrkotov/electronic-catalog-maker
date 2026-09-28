@@ -162,8 +162,8 @@
   a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
   .card-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 0 0 2rem; }
   .use-cases { grid-template-columns: repeat(2, 1fr); }
-  .apps-row { grid-template-columns: repeat(2, 1fr); }
-  .apps-row.web { grid-template-columns: repeat(3, 1fr); margin-bottom: 1rem; }
+  .apps-row { grid-template-columns: repeat(3, 1fr); }
+  .apps-row.web { margin-bottom: 1rem; }
   h3.apps-h { margin: 0 0 0.6rem; font-size: 1rem; color: var(--text-2); }
   .card { padding: 1.25rem; border: 1px solid var(--border); border-radius: 8px; }
   .card h2, .card h3 { margin: 0 0 0.4rem; font-size: 1.1rem; }
@@ -323,6 +323,14 @@
           <li><a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/catalog-server-latest" id="catalog-server-other">Other downloads (macOS, Chromebook, direct)</a></li>
         </ul>
       </div>
+      <div class="card">
+        <h2>Store Importer</h2>
+        <p>Turn your own Shopify or Payhip store into a photos folder and a table, ready for Grid Composer.</p>
+        <ul class="links">
+          <li><a href="https://snapcraft.io/ecm-store-importer">Snap Store (Linux)</a></li>
+          <li><a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/store-importer-latest" id="store-importer-other">Downloads (Windows, macOS, Linux, Chromebook)</a></li>
+        </ul>
+      </div>
     </div>
 
   <section class="benefits" aria-labelledby="benefits-h">
@@ -386,6 +394,24 @@
       </p>
       <p>
         <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-amd64.deb">direct download</a>, .deb file — see the <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/catalog-server-latest">release page</a> for setup
+      </p>
+    </dialog>
+
+    <dialog class="collab" id="store-importer" aria-labelledby="store-importer-h">
+      <button type="button" class="close" aria-label="Close">×</button>
+      <h2 id="store-importer-h">Store Importer downloads</h2>
+      <p>Run the Store Importer on your computer to turn your own Shopify or Payhip store into a folder of photos and a table — then build the catalog from them in the Grid Composer.</p>
+      <p>
+        <strong>Windows:</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-windows-x64.exe">direct download</a>, .exe file (Windows may warn on first run: "More info" → "Run anyway")
+      </p>
+      <p>
+        <strong>Linux:</strong> <a href="https://snapcraft.io/ecm-store-importer">Get it on Snap Store</a> (Ubuntu App Center, or <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-linux-x64">direct download</a> for other distros)
+      </p>
+      <p>
+        <strong>macOS:</strong> (requires macOS 13+) <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-macos-arm64.zip">direct download</a> (Apple Silicon, or <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-macos-x64.zip">Intel</a>) — unzip, then see the <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/store-importer-latest">release page</a> for the one-line Terminal command needed on first run
+      </p>
+      <p>
+        <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-amd64.deb">direct download</a>, .deb file — see the <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/store-importer-latest">release page</a> for setup
       </p>
     </dialog>
   </main>
@@ -497,7 +523,7 @@
     // "Other downloads"/"Downloads" opens the full per-platform list in a
     // dialog. Without JS the link goes to the GitHub release page, which
     // has the same files. One wiring function, called once per app card
-    // that has this pattern (collab-server, catalog-server) rather than a
+    // that has this pattern (collab-server, catalog-server, store-importer) rather than a
     // copy-pasted IIFE per card.
     (function () {
       function wireDialog(dialogId, linkId) {
@@ -512,6 +538,7 @@
       }
       wireDialog("collab", "collab-other");
       wireDialog("catalog-server", "catalog-server-other");
+      wireDialog("store-importer", "store-importer-other");
     })();
   </script>
   <!-- Privacy-friendly, cookie-free page-view counting (goatcounter.com) —

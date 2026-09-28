@@ -237,8 +237,15 @@ pause between them, and it backs off when the store asks it to.
 Like the other apps you run yourself, it has no window of its own: it opens
 its page in your browser, and closing the tab doesn't stop it — use
 **Quit Store Importer** at the bottom of the page. Nothing leaves your
-computer except the requests to your own store. It isn't packaged for
-download yet; to try it, run it from source (see "Development") — see
+computer except the requests to your own store. Get it for **Ubuntu**
+from the [Snap Store](https://snapcraft.io/ecm-store-importer)
+(`sudo snap install ecm-store-importer`, also listed in Ubuntu's App
+Center), or as a direct download for Windows, Linux, **macOS (13+)** and
+**Chromebook** (`.deb`) from its
+[latest release](https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/store-importer-latest)
+— with the same caveats as the other apps' direct downloads: they aren't
+code-signed, so Windows may warn on first run and macOS needs a one-line
+Terminal command (see the release page). See
 [`packages/store-importer`](packages/store-importer) for how it works and
 how to add another platform.
 
@@ -771,8 +778,9 @@ with catalogs of 30 and 138 items, from photos and table through to the
 editor, the viewer and the exported PDF. The Store Importer (see
 "Importing your online store") works end-to-end from source — live-tested
 on a real Shopify store (146 products in 12 folders) and on a real Payhip store's
-4 saved pages, through to a catalog built in the Grid Composer — but isn't
-packaged for download yet. [CI](.github/workflows/ci.yml)
+4 saved pages, through to a catalog built in the Grid Composer — and ships
+on the Snap Store and as direct downloads (the Windows build confirmed on a
+real machine). [CI](.github/workflows/ci.yml)
 typechecks and builds every package on each push/PR (plus runs the
 `shared`, `composer`, `collab-server` and `store-importer` test suites), rebuilds+recommits
 `ecm-viewer.js` if it's gone stale so the CDN URL can't silently drift
