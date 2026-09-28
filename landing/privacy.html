@@ -144,6 +144,24 @@
   <code>https://*.trycloudflare.com</code> URL instead of a local-network-only
   one.</p>
 
+  <h2>Importing your online store (optional)</h2>
+  <p>Another separate, optional tool,
+  <a href="https://github.com/alexandrkotov/electronic-catalog-maker/tree/main/packages/store-importer">
+  <code>@ecm/store-importer</code></a>, saves the products of your own
+  online store (Shopify or Payhip) as a folder of photos plus a table that
+  Grid Composer can build a catalog from. It's an app you run yourself on
+  your own computer; its page is only reachable from that same computer.</p>
+  <p>The only requests it makes are to the store whose address you enter
+  (and to the servers that store keeps its product photos on) — to read
+  the store's public product list and download the photos. For Payhip,
+  it makes no requests for the product list at all: you save the store's
+  pages in your browser and pick the saved files. Everything it downloads
+  is saved into the folder you choose, on your own computer; nothing is
+  sent to us or to anyone else. It remembers the folder you picked in a
+  small file on your computer (<code>~/.ecm-store-importer/config.json</code>),
+  which never leaves your device. It has no account, no sign-in, and no
+  analytics of any kind.</p>
+
   <h2>Opening a catalog from a URL</h2>
   <p>If you open a catalog via a remote link (for example, one of the demo
   catalogs, or a link someone shared with you), your browser makes a
@@ -177,6 +195,7 @@
     <li><a href="https://www.goatcounter.com/">GoatCounter</a> — anonymous page-view counting on the public website (see "Analytics" above).</li>
     <li>Whatever host serves a catalog file you open by URL (e.g. GitHub Pages for the demo catalogs).</li>
     <li>Whatever store a catalog's "Buy" button links to, if you choose to use it.</li>
+    <li>The online store you point the Store Importer at, if you use it (see "Importing your online store" above) — the tool reads that store's public pages and photos directly, as your own browser would.</li>
     <li><a href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a> — only if you start or join a real-time collaboration session, or someone uses catalog-server's Internet mode (see those sections above); routes that traffic, run by whoever started it, not by this project.</li>
   </ul>
   <p>None of these are things the Editor or Viewer apps themselves run,
@@ -193,7 +212,7 @@
   <footer>
     <a href="./">Electronic Catalog Maker</a> —
     <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Source on GitHub</a>
-    <div>Last updated: August 31, 2026.</div>
+    <div>Last updated: September 28, 2026.</div>
   </footer>
   <script>
     // Theme toggle (same behavior as the landing page). If an embedded viewer
