@@ -23,6 +23,15 @@ whole tile catalog in one go from a folder of photos and a spreadsheet
 that same viewer into any other page — even a plain static HTML file with
 no build step of its own (see "Embedding the viewer" below).
 
+How the apps fit together (the same map is on the
+[landing page](https://tapalog.com), also in
+[Russian](https://tapalog.com/ru/toolset.svg) and
+[Ukrainian](https://tapalog.com/uk/toolset.svg)):
+
+<p align="center">
+  <a href="landing/toolset.svg"><img src="landing/toolset.svg" width="100%" alt="Toolset map: an online store, photos + a table, or any picture go through the Store Importer, Grid Composer or Editor into one .ecatm catalog file (optionally password-locked, co-edited live via the Collab Server), which is shared as a file or link, on your website, through the Catalog Server or as a printed PDF + QR, and opened in the Viewer by shoppers, mechanics, DIY makers, students, gyms and diners — shoppers checking out in your own store."></a>
+</p>
+
 ## Getting started
 
 Just want to use the apps? They're hosted, free, nothing to install — see

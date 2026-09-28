@@ -1,7 +1,11 @@
 # Localized landing pages
 
-`landing/index.html`, `landing/schools.html` and their translated copies in
-`landing/<lang>/` are **generated** — don't edit them by hand.
+`landing/index.html`, `landing/schools.html`, the full toolset map
+`landing/toolset.svg` (linked from the landing's short map and shown in the
+repo README) and their translated copies in `landing/<lang>/` are
+**generated** — don't edit them by hand. `toolset.svg` is a standalone SVG
+(XML), so its `toolset.*` messages must not use HTML-only entities like
+`&nbsp;`.
 
 - `templates/` — one HTML template per page, shared by every language.
   `{{some.key}}` pulls a message from the dictionary; `{url_name}` an external

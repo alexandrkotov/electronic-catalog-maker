@@ -194,6 +194,29 @@
     min-width: 44px; min-height: 44px;
   }
   @media (max-width: 700px) { .card-row, .use-cases, .apps-row, .apps-row.web { grid-template-columns: 1fr; } }
+  /* Short toolset map at the top of "Apps" — the whole thing links to the full map (toolset.svg). */
+  .tm-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+  .toolset-map { display: block; margin: 0 0 1.5rem; color: inherit; text-decoration: none;
+    --tm-card: var(--bg); --tm-ink: #fff; }
+  :root[data-theme="dark"] .toolset-map { --tm-card: #1c1f26; --tm-ink: #0b1220; }
+  .toolset-map .tm-frame { display: block; padding: 1rem; background: var(--frame-bg); border: 1px solid var(--border); border-radius: 8px; }
+  .toolset-map:hover .tm-frame { border-color: var(--link); }
+  .toolset-map svg { display: block; width: 100%; height: auto; }
+  .toolset-map .tm-narrow { display: none; max-width: 360px; margin: 0 auto; }
+  @media (max-width: 700px) { .toolset-map .tm-wide { display: none; } .toolset-map .tm-narrow { display: block; } }
+  .toolset-map .tm-open { display: inline-block; margin-top: 0.5rem; font-size: 0.9rem; color: var(--link); }
+  .toolset-map:hover .tm-open { text-decoration: underline; }
+  /* Named fonts first: on Linux system-ui is often the wide DejaVu Sans, which overflows the blocks. */
+  .toolset-map text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Liberation Sans", Arial, system-ui, sans-serif; }
+  .tm-card { fill: var(--tm-card); stroke: var(--border); stroke-width: 1.5; }
+  .tm-hero { fill: var(--link); }
+  .tm-t { fill: var(--text); font-size: 18px; font-weight: 650; }
+  .tm-s { fill: var(--muted); font-size: 14px; }
+  .tm-ht { fill: var(--tm-ink); font-size: 24px; font-weight: 700; }
+  .tm-hs { fill: var(--tm-ink); font-size: 14px; opacity: 0.85; }
+  .tm-ic { color: var(--link); }
+  .tm-hic { color: var(--tm-ink); }
+  .tm-a { fill: none; stroke: var(--link); stroke-width: 3.5; stroke-linecap: round; }
   .benefits {
     margin: 0 0 2rem;
     padding: 1.25rem;
@@ -285,6 +308,47 @@
     </div>
 
     <h2>Застосунки</h2>
+    <svg class="tm-defs" width="0" height="0" aria-hidden="true" focusable="false">
+      <defs>
+      <marker id="tm-ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L10 5L0 10z" style="fill: var(--link)"/></marker>
+      <symbol id="tm-i-store" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16l1.5 5h-21z"/><path d="M4.5 9v11h15V9"/><path d="M10 20v-6h4v6"/></symbol>
+      <symbol id="tm-i-photos" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3" width="12" height="10" rx="1.5"/><path d="M2.5 11l3.5-3.5 3.5 3.5"/><rect x="10.5" y="11" width="11" height="10" rx="1"/><path d="M10.5 14.5h11M10.5 17.8h11M14.5 11v10"/></symbol>
+      <symbol id="tm-i-picture" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 17l5-4 4 3 3-2 6 4"/><circle cx="9" cy="9.5" r="1.8" fill="currentColor"/><circle cx="16" cy="9" r="1.8" fill="currentColor"/></symbol>
+      <symbol id="tm-i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2.5h8l5 5v14H6z"/><path d="M14 2.5v5h5"/><circle cx="10" cy="13" r="1.4" fill="currentColor"/><circle cx="15" cy="17" r="1.4" fill="currentColor"/></symbol>
+      <symbol id="tm-i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><path d="M12 15v2"/></symbol>
+      <symbol id="tm-i-web" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="2"/><path d="M2.5 8.5h19"/><path d="M9.5 12l-2.5 2.5 2.5 2.5M14.5 12l2.5 2.5-2.5 2.5"/></symbol>
+      <symbol id="tm-i-qr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM18 18h3v3h-3zM14 20.5h1.5M20.5 14v1.5"/></symbol>
+      <symbol id="tm-i-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="7" rx="1.5"/><rect x="4" y="13.5" width="16" height="7" rx="1.5"/><path d="M8 7h.01M8 17h.01"/></symbol>
+      <symbol id="tm-i-cart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.5 12h11L21 7H6"/></symbol>
+      <symbol id="tm-i-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+      <symbol id="tm-i-cap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2.2 9 2.2 12 0v-5"/><path d="M22 9v5"/></symbol>
+      <symbol id="tm-i-gym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6v12M3 9v6M18 6v12M21 9v6M6 12h12"/></symbol>
+      </defs>
+    </svg>
+    <!-- Short toolset map (wide on desktop, stacked on phones); opens the full one, landing/<lang>/toolset.svg. -->
+    <a class="toolset-map" href="toolset.svg" target="_blank" rel="noopener">
+      <span class="tm-frame">
+      <svg class="tm-wide" viewBox="20 30 1120 140" role="img" aria-label="Ваш магазин, фото чи будь-яке зображення стають одним каталогом .ecatm, який відкривається на будь-якому телефоні чи ПК — із сайту, за QR-кодом або через сервер каталогів.">
+      <path class="tm-a" d="M280 100H316" marker-end="url(#tm-ah)"/>
+      <path class="tm-a" d="M570 100H606" marker-end="url(#tm-ah)"/>
+      <path class="tm-a" d="M860 100H896" marker-end="url(#tm-ah)"/>
+      <g transform="translate(30 46)"><rect class="tm-card" width="250" height="108" rx="16"/><use href="#tm-i-store" class="tm-ic" x="47" y="12" width="36" height="36"/><use href="#tm-i-photos" class="tm-ic" x="107" y="12" width="36" height="36"/><use href="#tm-i-picture" class="tm-ic" x="167" y="12" width="36" height="36"/><text class="tm-t" x="125" y="76" text-anchor="middle">Ваш магазин, фото</text><text class="tm-t" x="125" y="97" text-anchor="middle">чи будь-яке зображення</text></g>
+      <g transform="translate(320 40)"><rect class="tm-hero" width="250" height="120" rx="18"/><use href="#tm-i-file" class="tm-hic" x="101" y="12" width="48" height="48"/><use href="#tm-i-lock" class="tm-hic" x="218" y="10" width="22" height="22"/><text class="tm-ht" x="125" y="90" text-anchor="middle">каталог .ecatm</text><text class="tm-hs" x="125" y="111" text-anchor="middle">один файл · можна під пароль</text></g>
+      <g transform="translate(610 46)"><rect class="tm-card" width="250" height="108" rx="16"/><use href="#tm-i-web" class="tm-ic" x="47" y="12" width="36" height="36"/><use href="#tm-i-qr" class="tm-ic" x="107" y="12" width="36" height="36"/><use href="#tm-i-server" class="tm-ic" x="167" y="12" width="36" height="36"/><text class="tm-t" x="125" y="76" text-anchor="middle">Сайт, QR</text><text class="tm-t" x="125" y="97" text-anchor="middle">чи сервер каталогів</text></g>
+      <g transform="translate(900 46)"><rect class="tm-card" width="230" height="108" rx="16"/><use href="#tm-i-cart" class="tm-ic" x="33" y="14" width="32" height="32"/><use href="#tm-i-wrench" class="tm-ic" x="77" y="14" width="32" height="32"/><use href="#tm-i-cap" class="tm-ic" x="121" y="14" width="32" height="32"/><use href="#tm-i-gym" class="tm-ic" x="165" y="14" width="32" height="32"/><text class="tm-t" x="115" y="76" text-anchor="middle">Телефон чи ПК</text><text class="tm-s" x="115" y="97" text-anchor="middle">магазини, сервіси, школи…</text></g>
+      </svg>
+      <svg class="tm-narrow" viewBox="-2 -2 324 574" role="img" aria-label="Ваш магазин, фото чи будь-яке зображення стають одним каталогом .ecatm, який відкривається на будь-якому телефоні чи ПК — із сайту, за QR-кодом або через сервер каталогів.">
+      <path class="tm-a" d="M160 110V146" marker-end="url(#tm-ah)"/>
+      <path class="tm-a" d="M160 272V308" marker-end="url(#tm-ah)"/>
+      <path class="tm-a" d="M160 422V458" marker-end="url(#tm-ah)"/>
+      <g transform="translate(0 0)"><rect class="tm-card" width="320" height="108" rx="16"/><use href="#tm-i-store" class="tm-ic" x="82" y="12" width="36" height="36"/><use href="#tm-i-photos" class="tm-ic" x="142" y="12" width="36" height="36"/><use href="#tm-i-picture" class="tm-ic" x="202" y="12" width="36" height="36"/><text class="tm-t" x="160" y="76" text-anchor="middle">Ваш магазин, фото</text><text class="tm-t" x="160" y="97" text-anchor="middle">чи будь-яке зображення</text></g>
+      <g transform="translate(0 150)"><rect class="tm-hero" width="320" height="120" rx="18"/><use href="#tm-i-file" class="tm-hic" x="136" y="12" width="48" height="48"/><use href="#tm-i-lock" class="tm-hic" x="288" y="10" width="22" height="22"/><text class="tm-ht" x="160" y="90" text-anchor="middle">каталог .ecatm</text><text class="tm-hs" x="160" y="111" text-anchor="middle">один файл · можна під пароль</text></g>
+      <g transform="translate(0 312)"><rect class="tm-card" width="320" height="108" rx="16"/><use href="#tm-i-web" class="tm-ic" x="82" y="12" width="36" height="36"/><use href="#tm-i-qr" class="tm-ic" x="142" y="12" width="36" height="36"/><use href="#tm-i-server" class="tm-ic" x="202" y="12" width="36" height="36"/><text class="tm-t" x="160" y="76" text-anchor="middle">Сайт, QR</text><text class="tm-t" x="160" y="97" text-anchor="middle">чи сервер каталогів</text></g>
+      <g transform="translate(0 462)"><rect class="tm-card" width="320" height="108" rx="16"/><use href="#tm-i-cart" class="tm-ic" x="78" y="14" width="32" height="32"/><use href="#tm-i-wrench" class="tm-ic" x="122" y="14" width="32" height="32"/><use href="#tm-i-cap" class="tm-ic" x="166" y="14" width="32" height="32"/><use href="#tm-i-gym" class="tm-ic" x="210" y="14" width="32" height="32"/><text class="tm-t" x="160" y="76" text-anchor="middle">Телефон чи ПК</text><text class="tm-s" x="160" y="97" text-anchor="middle">магазини, сервіси, школи…</text></g>
+      </svg>
+      </span>
+      <span class="tm-open">Відкрити повну схему ↗</span>
+    </a>
     <h3 class="apps-h">Працюють у браузері</h3>
     <div class="card-row apps-row web">
       <div class="card">
