@@ -199,13 +199,24 @@
   .toolset-map { display: block; margin: 0 0 1.5rem; color: inherit; text-decoration: none;
     --tm-card: var(--bg); --tm-ink: #fff; }
   :root[data-theme="dark"] .toolset-map { --tm-card: #1c1f26; --tm-ink: #0b1220; }
-  .toolset-map .tm-frame { display: block; padding: 1rem; background: var(--frame-bg); border: 1px solid var(--border); border-radius: 8px; }
+  .toolset-map .tm-frame { position: relative; display: block; padding: 1rem; background: var(--frame-bg); border: 1px solid var(--border); border-radius: 8px; }
   .toolset-map:hover .tm-frame { border-color: var(--link); }
   .toolset-map svg { display: block; width: 100%; height: auto; }
   .toolset-map .tm-narrow { display: none; max-width: 360px; margin: 0 auto; }
   @media (max-width: 700px) { .toolset-map .tm-wide { display: none; } .toolset-map .tm-narrow { display: block; } }
   .toolset-map .tm-open { display: inline-block; margin-top: 0.5rem; font-size: 0.9rem; color: var(--link); }
   .toolset-map:hover .tm-open { text-decoration: underline; }
+  /* Hover hint, centered on the frame's top border; touch screens have no hover and keep just the link below. */
+  .toolset-map .tm-tip {
+    position: absolute; top: 0; left: 50%; transform: translate(-50%, -40%);
+    padding: 0.3rem 0.8rem; border-radius: 999px; white-space: nowrap;
+    font-size: 0.85rem; background: var(--link); color: #fff;
+    opacity: 0; pointer-events: none;
+  }
+  :root[data-theme="dark"] .toolset-map .tm-tip { color: #0b1220; }
+  .toolset-map:hover .tm-tip, .toolset-map:focus-visible .tm-tip { opacity: 1; transform: translate(-50%, -50%); }
+  @media (prefers-reduced-motion: no-preference) { .toolset-map .tm-tip { transition: opacity 0.15s, transform 0.15s; } }
+  @media (hover: none) { .toolset-map .tm-tip { display: none; } }
   /* Named fonts first: on Linux system-ui is often the wide DejaVu Sans, which overflows the blocks. */
   .toolset-map text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Liberation Sans", Arial, system-ui, sans-serif; }
   .tm-card { fill: var(--tm-card); stroke: var(--border); stroke-width: 1.5; }
@@ -328,6 +339,7 @@
     <!-- Short toolset map (wide on desktop, stacked on phones); opens the full one, landing/<lang>/toolset.svg. -->
     <a class="toolset-map" href="toolset.svg" target="_blank" rel="noopener">
       <span class="tm-frame">
+      <span class="tm-tip" aria-hidden="true">Нажмите, чтобы открыть полную схему</span>
       <svg class="tm-wide" viewBox="20 30 1120 140" role="img" aria-label="Ваш магазин, фото или любая картинка превращаются в один каталог .ecatm, который открывается на любом телефоне или ПК — с сайта, по QR-коду или через сервер каталогов.">
       <path class="tm-a" d="M280 100H316" marker-end="url(#tm-ah)"/>
       <path class="tm-a" d="M570 100H606" marker-end="url(#tm-ah)"/>
