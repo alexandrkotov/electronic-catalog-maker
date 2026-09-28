@@ -54,7 +54,7 @@ export const THEME_VARS_CSS = `
     --danger: #f87171;
     --on-accent: #0b1220;
   }
-  .theme-toggle { min-width: 4.5rem; }
+  .theme-toggle { min-width: 6.5rem; }
 `;
 
 export const THEME_TOGGLE_BUTTON_HTML = `<button type="button" id="theme-toggle" class="secondary theme-toggle"></button>`;
@@ -63,7 +63,7 @@ export const THEME_TOGGLE_BUTTON_HTML = `<button type="button" id="theme-toggle"
 export const THEME_TOGGLE_SCRIPT = `
   var themeToggleBtn = document.getElementById("theme-toggle");
   function updateThemeToggleLabel() {
-    themeToggleBtn.textContent = document.documentElement.getAttribute("data-theme") === "dark" ? "Light" : "Dark";
+    themeToggleBtn.textContent = document.documentElement.getAttribute("data-theme") === "dark" ? "☀️ Light" : "🌙 Dark";
   }
   updateThemeToggleLabel();
   themeToggleBtn.addEventListener("click", function () {
