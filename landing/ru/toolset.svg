@@ -36,6 +36,8 @@
   .frame { fill: var(--frame); stroke: var(--border); stroke-width: 1.5; }
   .h { fill: var(--text); font-size: 22px; font-weight: 700; }
   .domain { fill: var(--muted); font-size: 15px; }
+  .domain-link { cursor: pointer; }
+  .domain-link:hover .domain { fill: var(--link); text-decoration: underline; }
   .card { fill: var(--card); stroke: var(--border); stroke-width: 1.5; }
   .side { stroke-dasharray: 6 5; }
   .group { fill: none; stroke: var(--border); stroke-width: 1.5; }
@@ -84,7 +86,7 @@
 
 <rect class="page" width="1140" height="1120"/>
 <text class="h" x="40" y="46">Electronic Catalog Maker — как связаны приложения</text>
-<text class="domain" x="1100" y="46" text-anchor="end">tapalog.com</text>
+<a class="domain-link" href="https://tapalog.com/ru/"><text class="domain" x="1100" y="46" text-anchor="end">tapalog.com</text></a>
 <rect class="frame" x="16" y="70" width="1108" height="1034" rx="16"/>
 
 <g transform="translate(12 80)">
