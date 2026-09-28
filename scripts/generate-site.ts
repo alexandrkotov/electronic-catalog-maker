@@ -52,10 +52,12 @@ function pageUrl(lang: string, page: string): string {
   return SITE_ORIGIN + LANGS[lang]!.path + (page === "index.html" ? "" : page);
 }
 
-// Shared across every page/lang: a real screenshot would need a build step,
-// but the app icon is already deployed (built by @ecm/editor) and on-brand —
-// good enough so a shared link isn't blank in LinkedIn/Facebook/X previews.
-const OG_IMAGE = SITE_ORIGIN + "/editor/icons/icon-512.png";
+// 1200x630 cards rendered from live demo screenshots (tooling lives outside git,
+// only the PNGs are committed in landing/ and copied by scripts/build-site.sh).
+const OG_IMAGES: Record<string, string> = {
+  "index.html": SITE_ORIGIN + "/og-default.png",
+  "schools.html": SITE_ORIGIN + "/og-schools.png",
+};
 const OG_LOCALE: Record<string, string> = { en: "en_US", ru: "ru_RU", uk: "uk_UA" };
 const escapeAttr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
@@ -81,6 +83,7 @@ function render(template: string, page: string, lang: string): string {
       const title = escapeAttr(dict[`${key}.title`]!);
       const description = escapeAttr(dict[key === "index" ? "index.hero.text" : "schools.tagline"]!);
       const url = pageUrl(lang, page);
+      const image = OG_IMAGES[page]!;
       return [
         `<meta property="og:type" content="website" />`,
         `<meta property="og:site_name" content="Electronic Catalog Maker" />`,
@@ -88,11 +91,13 @@ function render(template: string, page: string, lang: string): string {
         `<meta property="og:url" content="${url}" />`,
         `<meta property="og:title" content="${title}" />`,
         `<meta property="og:description" content="${description}" />`,
-        `<meta property="og:image" content="${OG_IMAGE}" />`,
-        `<meta name="twitter:card" content="summary" />`,
+        `<meta property="og:image" content="${image}" />`,
+        `<meta property="og:image:width" content="1200" />`,
+        `<meta property="og:image:height" content="630" />`,
+        `<meta name="twitter:card" content="summary_large_image" />`,
         `<meta name="twitter:title" content="${title}" />`,
         `<meta name="twitter:description" content="${description}" />`,
-        `<meta name="twitter:image" content="${OG_IMAGE}" />`,
+        `<meta name="twitter:image" content="${image}" />`,
       ].join("\n");
     },
     "@alternates": () =>
