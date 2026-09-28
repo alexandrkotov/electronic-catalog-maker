@@ -80,6 +80,15 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
+  packages/store-importer:
+    devDependencies:
+      '@types/bun':
+        specifier: ^1.2.0
+        version: 1.4.0
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
   packages/viewer:
     dependencies:
       '@ecm/shared':

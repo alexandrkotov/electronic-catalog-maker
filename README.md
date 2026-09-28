@@ -17,7 +17,8 @@ packaged as a single portable `.ecatm` file (a SQLite database under the
 hood, read and written entirely in the browser via
 [sql.js](https://github.com/sql-js/sql.js)). One file format, several ways
 to use it: the **editor** builds a catalog, the **Grid Composer** builds a
-whole tile catalog in one go from a folder of photos and a spreadsheet, the
+whole tile catalog in one go from a folder of photos and a spreadsheet
+(the **Store Importer** can pull both straight out of your online store), the
 **viewer** opens one as its own full-page app, and `<ecm-viewer>` embeds
 that same viewer into any other page — even a plain static HTML file with
 no build step of its own (see "Embedding the viewer" below).
@@ -186,6 +187,60 @@ itself only changes if you rebuild it in the composer.
 
 Like the Editor and Viewer, it runs entirely in your browser — the photos
 and the table never leave your computer.
+
+Already selling online? The Store Importer (next section) makes the photos
+folder and the table from your store for you.
+
+## Importing your online store
+
+Have a **Shopify** or **Payhip** store and want a printable catalog of it —
+with a QR code per product — or an offline one for a showroom or a trade
+show? The **Store Importer** is a small app you run on your own computer:
+give it your store's address, and it saves every product as a folder of
+photos plus a table in exactly the format the Grid Composer takes (see
+above). Then open both in the composer and build the catalog.
+
+1. **Store address** — e.g. `yourstore.com`. The platform is detected
+   automatically, or pick it by hand.
+2. **Save imports in this folder** — **Browse…** to choose where the
+   results go (by default `Documents\ECM Store Importer`). Each store gets
+   its own subfolder: `photos\1.jpg, 2.jpg, …` and `catalog.csv`.
+3. Confirm that it's **your store, or that you have the owner's permission**
+   to use its photos and texts — **Import** stays off until you do.
+4. **Import**. A report follows: how many products, grouped into which
+   folders, and which ones came without a photo, SKU or price.
+
+What goes into the table: name, SKU, description (as plain text), price —
+a product with several variants gets one tile, with its price as a range
+("13.99–69.95") when the variants differ — and a `buy_url` pointing at the
+product's own page in your store, so the catalog's **Buy** button and its
+printed QR codes always check out at your store's current price. The
+store's product type or category becomes the grid (folder) it's on;
+products left without one go to "Other".
+
+- **Shopify** reads the store's public product list directly — nothing to
+  set up, photos come already resized, a few hundred products take a
+  minute or two.
+- **Payhip** doesn't let apps read its store pages, so it takes one extra
+  step: open your store in your browser, save it (Ctrl+S, "Webpage, HTML
+  only"), give each page of the product list its own file name, and pick
+  all the saved files at once. The report says if a page of the list is
+  missing. Payhip's store page carries no SKU, description or category, so
+  every product lands in one grid.
+
+The catalog is a **snapshot**: prices and names are copied as of the
+import and drawn into the tile pictures. When the store changes, import
+again (it replaces that store's previous snapshot) and rebuild the catalog.
+The importer is gentle with the store — one request at a time with a
+pause between them, and it backs off when the store asks it to.
+
+Like the other apps you run yourself, it has no window of its own: it opens
+its page in your browser, and closing the tab doesn't stop it — use
+**Quit Store Importer** at the bottom of the page. Nothing leaves your
+computer except the requests to your own store. It isn't packaged for
+download yet; to try it, run it from source (see "Development") — see
+[`packages/store-importer`](packages/store-importer) for how it works and
+how to add another platform.
 
 ## Using the viewer
 
@@ -640,6 +695,10 @@ done in the browser with no server to offload to.
   Catalog Server (see "Sharing a folder of catalogs from your computer"
   above): same kind of standalone app, run by whoever wants to share a
   folder of catalogs from their own computer.
+- [`packages/store-importer`](packages/store-importer) — the Store
+  Importer (see "Importing your online store" above): same kind of
+  standalone app again, turning an online store into the photos folder and
+  table the Grid Composer takes. Each supported platform is a JSON preset.
 
 All the page-rendering apps render their own DOM directly — there's no
 UI framework, just the shared engine/data layer above.
@@ -654,6 +713,7 @@ pnpm dev:embed          # http://localhost:5175 (or next free port) — <ecm-vie
 pnpm dev:composer       # http://localhost:5173 (or next free port) — Grid Composer
 pnpm dev:collab-server  # http://localhost:8787 — see packages/collab-server for the rest
 pnpm dev:catalog-server # http://localhost:8899 — see packages/catalog-server for the rest
+pnpm dev:store-importer # http://localhost:8931 — see packages/store-importer for the rest
 pnpm -r build           # production build of editor/viewer/viewer-embed -> packages/*/dist
 ```
 
@@ -708,9 +768,13 @@ devices: a Windows host, an Ubuntu machine, and a real iPhone, both on the
 local network and over the internet. The Grid Composer (see "Building a
 tile catalog from photos and a table") works end-to-end as well — tested
 with catalogs of 30 and 138 items, from photos and table through to the
-editor, the viewer and the exported PDF. [CI](.github/workflows/ci.yml)
+editor, the viewer and the exported PDF. The Store Importer (see
+"Importing your online store") works end-to-end from source — live-tested
+on a real Shopify store (146 products in 12 folders) and on a real Payhip store's
+4 saved pages, through to a catalog built in the Grid Composer — but isn't
+packaged for download yet. [CI](.github/workflows/ci.yml)
 typechecks and builds every package on each push/PR (plus runs the
-`shared`, `composer` and `collab-server` test suites), rebuilds+recommits
+`shared`, `composer`, `collab-server` and `store-importer` test suites), rebuilds+recommits
 `ecm-viewer.js` if it's gone stale so the CDN URL can't silently drift
 from source, and redeploys the editor, viewer and composer to Pages — all on every push
 to `main`, no manual step.

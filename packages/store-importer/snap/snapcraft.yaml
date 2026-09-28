@@ -1,0 +1,68 @@
+name: ecm-store-importer
+title: ECM Store Importer
+base: core22
+version: '0.1.0'
+summary: Turn your online store into photos and a table for a tile catalog
+description: |
+  Saves the products of your own Shopify or Payhip store as a folder of
+  photos plus a table (CSV), in exactly the format Electronic Catalog
+  Maker's Grid Composer (https://tapalog.com/composer/) turns into a
+  printable, offline-capable tile catalog with a QR code per product.
+
+  Launch it and a page opens in your browser: enter your store's address,
+  pick where to save, and import. A report shows how many products came
+  in, grouped into which folders, and which ones had no photo, SKU or
+  price. Each product's Buy link points at its own page in your store.
+
+  Payhip doesn't let apps read its store pages, so for Payhip you save the
+  store's pages from your browser first and pick the saved files.
+
+  The importer only reads your store's public product pages, gently (one
+  request at a time), and saves everything on your own computer — no
+  account, no cloud. Settings live in ~/snap/ecm-store-importer/;
+  imports go to ~/Documents/ECM Store Importer by default.
+
+website: https://tapalog.com/
+contact: https://github.com/alexandrkotov/electronic-catalog-maker/issues
+issues: https://github.com/alexandrkotov/electronic-catalog-maker/issues
+source-code: https://github.com/alexandrkotov/electronic-catalog-maker
+license: MIT
+icon: assets/icons/icon-512.png
+
+grade: stable
+confinement: strict
+
+apps:
+  ecm-store-importer:
+    command: bin/ecm-store-importer-linux-x64
+    plugs:
+      - network # fetching the store's product list and photos
+      - network-bind # its own page, on 127.0.0.1
+      - home # saving imports under the person's home folder
+      # Saving to a USB drive or anything else under /media or /mnt — see
+      # catalog-server's snapcraft.yaml for how its absence shows up (a
+      # silent AppArmor denial, not an error).
+      - removable-media
+      # openInBrowser.ts spawns xdg-open for the app's own page and for
+      # "Open folder" — same fix as collab-server/catalog-server.
+      - desktop
+
+parts:
+  store-importer:
+    plugin: nil
+    # Only this package: unlike catalog-server, nothing here imports a
+    # sibling package's files.
+    source: .
+    build-packages:
+      - curl
+      - ca-certificates
+      - unzip
+    override-build: |
+      curl -fsSL https://bun.sh/install | bash
+      export BUN_INSTALL="$HOME/.bun"
+      export PATH="$BUN_INSTALL/bin:$PATH"
+      cd "$SNAPCRAFT_PART_SRC"
+      mkdir -p "$SNAPCRAFT_PART_INSTALL/bin"
+      bun build --compile --target=bun-linux-x64 \
+        src/main.ts \
+        --outfile "$SNAPCRAFT_PART_INSTALL/bin/ecm-store-importer-linux-x64"
