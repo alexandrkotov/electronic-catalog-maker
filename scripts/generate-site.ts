@@ -82,6 +82,7 @@ function render(template: string, page: string, lang: string): string {
     "@q": () => (lang === DEFAULT_LANG ? "" : `?lang=${lang}`),
     "@a": () => (lang === DEFAULT_LANG ? "" : `&lang=${lang}`),
     "@messages": messagesJson,
+    "@landingUrl": () => pageUrl(lang, "index.html"),
     "@og": () => {
       const key = page === "index.html" ? "index" : "schools";
       const title = escapeAttr(dict[`${key}.title`]!);
