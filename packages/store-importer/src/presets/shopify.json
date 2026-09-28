@@ -1,0 +1,41 @@
+{
+  "id": "shopify",
+  "name": "Shopify",
+  "kind": "json-feed",
+  "detect": {
+    "path": "/products.json?limit=1",
+    "expectArray": "products"
+  },
+  "source": {
+    "path": "/products.json",
+    "query": {
+      "limit": "250"
+    },
+    "pageParam": "page",
+    "firstPage": 1,
+    "itemsPath": "products",
+    "pageSize": 250,
+    "maxPages": 100
+  },
+  "fields": {
+    "name": "title",
+    "sku": "variants[0].sku",
+    "description": "body_html",
+    "folder": "product_type",
+    "image": "images[0].src"
+  },
+  "price": {
+    "path": "variants[*].price",
+    "mode": "range"
+  },
+  "buyUrl": "{origin}/products/{handle}",
+  "imageQuery": {
+    "width": "1000"
+  },
+  "clean": {
+    "description": {
+      "stripHtml": true,
+      "maxLength": 600
+    }
+  }
+}

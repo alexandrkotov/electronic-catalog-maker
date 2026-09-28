@@ -1,0 +1,42 @@
+{
+  "id": "payhip",
+  "name": "Payhip",
+  "kind": "saved-page",
+  "hosts": [
+    "payhip.com"
+  ],
+  "howToSave": {
+    "intro": "Payhip blocks automated access to its store pages, so the importer needs copies of them saved from your own browser:",
+    "steps": [
+      "Open your Payhip store and press Ctrl+S (Cmd+S on a Mac).",
+      "Set \"Save as type\" to \"Webpage, HTML only\".",
+      "Give the file a name with the page number, e.g. \"store-1.html\" — every page of the store has the same title, so the browser suggests the same file name each time.",
+      "If there are page numbers under the products (1, 2, 3… Next), open each page and save it the same way: store-2.html, store-3.html, …",
+      "Pick all the saved files below at once. Their order doesn't matter."
+    ]
+  },
+  "card": ".product-card-wrapper",
+  "pagination": {
+    "link": ".pagination a",
+    "nextIcon": ".icon-next"
+  },
+  "fields": {
+    "name": {
+      "selector": ".card__heading a",
+      "text": true
+    },
+    "price": {
+      "selector": ".price-item",
+      "text": true
+    },
+    "image": {
+      "selector": "img",
+      "attr": "srcset",
+      "pattern": "https://[\\w.-]+\\.s3\\.amazonaws\\.com/[^\\s,\"]+"
+    },
+    "buyUrl": {
+      "selector": ".card__heading a",
+      "attr": "href"
+    }
+  }
+}

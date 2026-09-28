@@ -1,0 +1,19 @@
+{
+  "name": "@ecm/store-importer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "compile:linux-x64": "bun build --compile --target=bun-linux-x64 src/main.ts --outfile dist/ecm-store-importer-linux-x64",
+    "compile:macos-arm64": "bun build --compile --target=bun-darwin-arm64 src/main.ts --outfile dist/ecm-store-importer-macos-arm64",
+    "compile:macos-x64": "bun build --compile --target=bun-darwin-x64 src/main.ts --outfile dist/ecm-store-importer-macos-x64",
+    "compile:windows-x64": "bun build --compile --target=bun-windows-x64 --windows-hide-console src/main.ts --outfile dist/ecm-store-importer-windows-x64.exe"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "typescript": "^5.6.3"
+  }
+}
