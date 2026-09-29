@@ -101,11 +101,15 @@ Both apps are also on the Microsoft Store for Windows, if you'd rather
 install from there:
 **[Editor](https://apps.microsoft.com/detail/9p4zk48txrln?hl=en-US&gl=US)**,
 **[Viewer](https://apps.microsoft.com/detail/9nb4shzt8fd1?hl=en-US&gl=US)**.
-So are the two optional apps you run yourself — the
+So is [Grid Composer](https://apps.microsoft.com/detail/9n9s9k9fhlk2?hl=en-US&gl=US)
+(see "Building a tile catalog from photos and a table").
+So are the three optional apps you run yourself — the
 [Collaboration Server](https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=en-US&gl=US)
-(see "Real-time collaboration") and the
+(see "Real-time collaboration"), the
 [Catalog Server](https://apps.microsoft.com/detail/9pl38zj5djmk?hl=en-US&gl=US)
-(see "Sharing a folder of catalogs from your computer").
+(see "Sharing a folder of catalogs from your computer"), and the
+[Store Importer](https://apps.microsoft.com/detail/9pnmbwb503bp?hl=en-US&gl=US)
+(see "Importing your online store").
 
 ## Using the editor
 
@@ -246,15 +250,16 @@ pause between them, and it backs off when the store asks it to.
 Like the other apps you run yourself, it has no window of its own: it opens
 its page in your browser, and closing the tab doesn't stop it — use
 **Quit Store Importer** at the bottom of the page. Nothing leaves your
-computer except the requests to your own store. Get it for **Ubuntu**
-from the [Snap Store](https://snapcraft.io/ecm-store-importer)
+computer except the requests to your own store. Get it for **Windows** from
+the [Microsoft Store](https://apps.microsoft.com/detail/9pnmbwb503bp?hl=en-US&gl=US),
+for **Ubuntu** from the [Snap Store](https://snapcraft.io/ecm-store-importer)
 (`sudo snap install ecm-store-importer`, also listed in Ubuntu's App
 Center), or as a direct download for Windows, Linux, **macOS (13+)** and
 **Chromebook** (`.deb`) from its
 [latest release](https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/store-importer-latest)
-— with the same caveats as the other apps' direct downloads: they aren't
-code-signed, so Windows may warn on first run and macOS needs a one-line
-Terminal command (see the release page). See
+— with the same caveats as the other apps' direct downloads: a raw Windows
+`.exe` isn't code-signed and shows a SmartScreen warning on first run, and
+macOS needs a one-line Terminal command (see the release page). See
 [`packages/store-importer`](packages/store-importer) for how it works and
 how to add another platform.
 
