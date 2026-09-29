@@ -473,6 +473,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   let pdfQrPlacement: QrPlacement = DEFAULT_PDF_EXPORT_OPTIONS.qrPlacement;
   let pdfDiagramPageMode: DiagramPageMode = DEFAULT_PDF_EXPORT_OPTIONS.diagramPageMode;
   let pdfQrSize: QrSize = DEFAULT_PDF_EXPORT_OPTIONS.qrSize;
+  let pdfShowTitle: boolean = DEFAULT_PDF_EXPORT_OPTIONS.showTitle;
   // Which single panel is shown below the mobile breakpoint (see .mobile-tabs
   // / .ecm-viewer-app[data-mobile-tab] in style.css) — irrelevant above it,
   // where all three panels sit side by side per the desktop grid regardless
@@ -1797,7 +1798,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     exportPdfBusy = true;
     render();
     try {
-      const bytes = await exportPdf(db, { qrPlacement: pdfQrPlacement, diagramPageMode: pdfDiagramPageMode, qrSize: pdfQrSize });
+      const bytes = await exportPdf(db, { qrPlacement: pdfQrPlacement, diagramPageMode: pdfDiagramPageMode, qrSize: pdfQrSize, showTitle: pdfShowTitle });
       const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -2590,6 +2591,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
             </label>
             <p class="hint">${te("pdf.size.hintGrid")}</p>
           </div>
+          <div class="field">
+            <label class="radio-option">
+              <input type="checkbox" id="pdf-show-title" ${pdfShowTitle ? "checked" : ""} />
+              ${te("pdf.showTitle.label")}
+            </label>
+            <p class="hint">${te("pdf.showTitle.hint")}</p>
+          </div>
           <div class="open-actions">
             <button type="button" id="pdf-options-cancel">${te("action.cancel")}</button>
             <button type="button" id="pdf-options-submit">${te("pdf.submit")}</button>
@@ -2893,6 +2901,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       input.addEventListener("change", () => {
         if (input.checked) pdfQrSize = input.value as QrSize;
       });
+    });
+    root.getElementById("pdf-show-title")?.addEventListener("change", (evt) => {
+      pdfShowTitle = (evt.target as HTMLInputElement).checked;
     });
     root.getElementById("share-view-include-key")?.addEventListener("change", (evt) => {
       shareViewIncludeKey = (evt.target as HTMLInputElement).checked;

@@ -187,6 +187,8 @@
   "pdf.qrSize.small": "Small",
   "pdf.qrSize.large": "Large — easier to aim at when a sheet has many codes",
   "pdf.size.hintGrid": "A tile grid always prints at page width, split between rows of tiles — a tile is never cut.",
+  "pdf.showTitle.label": "Show catalog title at the top",
+  "pdf.showTitle.hint": "A tile grid already shows its own title inside the image — turn this off for a one-page flyer to avoid repeating it.",
   "pdf.submit": "Export",
   "pdf.failed": "PDF export failed: {message}",
 
