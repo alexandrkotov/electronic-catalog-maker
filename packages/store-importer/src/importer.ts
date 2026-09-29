@@ -21,6 +21,8 @@ export interface ImportReport {
   noPhoto: number[];
   photoFailed: number[];
   noSku: number[];
+  /** The SKU column was left empty on purpose (ImportOptions.skipSku). */
+  skuSkipped: boolean;
   noPrice: number[];
   /** Products the store gave no type/category, put in UNSORTED_FOLDER. */
   noFolder: number[];
@@ -147,6 +149,12 @@ export interface ImportOptions {
   savedHtml?: string[];
   /** Parent folder; the store's own subfolder is created inside it. */
   outputRoot: string;
+  /**
+   * Leave the SKU column empty. Some stores fill the SKU field with
+   * something else (stock counts, weights) that shouldn't show up in the
+   * catalog as an article number.
+   */
+  skipSku?: boolean;
   pf: PoliteFetch;
   photoConcurrency: number;
   onProgress: (p: Progress) => void;
@@ -253,6 +261,8 @@ export async function runImport(opts: ImportOptions): Promise<ImportReport> {
       ? await collectFromSavedPage(opts.savedHtml ?? [], chosen, opts.input)
       : await collectFromFeed(opts.input, opts.presetId, opts.pf, opts.onProgress);
   const noFolder = fillMissingFolders(items);
+  const skuSkipped = opts.skipSku === true;
+  if (skuSkipped) for (const it of items) it.sku = "";
 
   const outDir = join(opts.outputRoot, outputFolderName(storeUrl));
   const photosDir = join(outDir, "photos");
@@ -296,7 +306,8 @@ export async function runImport(opts: ImportOptions): Promise<ImportReport> {
     folders: [...new Set(items.map((it) => it.folder))],
     noPhoto: noPhoto.sort((a, b) => a - b),
     photoFailed: photoFailed.sort((a, b) => a - b),
-    noSku: nos((it) => !it.sku),
+    noSku: skuSkipped ? [] : nos((it) => !it.sku),
+    skuSkipped,
     noPrice: nos((it) => !it.price),
     noFolder,
     pages,

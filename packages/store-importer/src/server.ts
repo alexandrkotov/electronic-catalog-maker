@@ -53,7 +53,7 @@ export function startServer(port: number): ServerHandle {
 
   const handle: ServerHandle = { port: 0, stop: () => bunServer.stop(true) };
 
-  function startJob(input: string, presetId: string, savedHtml: string[] | undefined) {
+  function startJob(input: string, presetId: string, savedHtml: string[] | undefined, skipSku: boolean) {
     job = { running: true, input, progress: null, report: null, error: null };
     const current = job;
     runImport({
@@ -61,6 +61,7 @@ export function startServer(port: number): ServerHandle {
       presetId,
       savedHtml,
       outputRoot: config.outputRoot,
+      skipSku,
       // One request every 300 ms, 3 photo downloads in flight at most —
       // a few hundred products take a minute or two, which is fine for a
       // one-off import and invisible in any store's traffic.
@@ -105,11 +106,11 @@ export function startServer(port: number): ServerHandle {
 
       if (url.pathname === "/import" && request.method === "POST") {
         if (job.running) return json({ ok: false, error: "An import is already running." }, 409);
-        const body = (await request.json().catch(() => null)) as { url?: string; preset?: string; pages?: unknown; ownerConfirmed?: unknown } | null;
+        const body = (await request.json().catch(() => null)) as { url?: string; preset?: string; pages?: unknown; ownerConfirmed?: unknown; skipSku?: unknown } | null;
         if (body?.ownerConfirmed !== true) return json({ ok: false, error: "Confirm that this is your store, or that you have the owner's permission." }, 400);
         const pages = Array.isArray(body?.pages) ? body.pages.filter((p): p is string => typeof p === "string") : undefined;
         if (!body?.url?.trim() && !pages?.length) return json({ ok: false, error: "Enter the store's address." }, 400);
-        startJob(body?.url ?? "", body?.preset || "auto", pages);
+        startJob(body?.url ?? "", body?.preset || "auto", pages, body?.skipSku === true);
         return json({ ok: true });
       }
 

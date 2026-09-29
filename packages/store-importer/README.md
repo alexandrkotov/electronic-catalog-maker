@@ -15,7 +15,10 @@ composer. No account, no cloud: everything is saved on your own computer.
    Starting it again while it's already running just reopens the page.
 2. On the page: the store's address, the platform (**Detect
    automatically** by default), the folder to save into (**Browse…** opens
-   the OS's own folder dialog, same code as `@ecm/catalog-server`), and a
+   the OS's own folder dialog, same code as `@ecm/catalog-server`), an
+   optional **Don't import SKUs** checkbox (leaves the `SKU` column empty —
+   for stores whose SKU field holds stock counts or weights rather than
+   article numbers), and a
    required "this is my store, or I have the owner's permission" checkbox —
    `/import` refuses a request without it too, not just the page.
 3. **Import** runs in the background and the page polls `/job.json` for
