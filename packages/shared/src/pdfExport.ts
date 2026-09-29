@@ -181,17 +181,21 @@ interface TableColumn {
 // use short words too, e.g. "Backrest"/"Seat"/"Leg") — wide enough for a
 // short word without wrapping every line, not just a single digit. A QR
 // column only exists when the diagram's own qrPlacement calls for one (see
-// PdfExportOptions) — Extra absorbs the width it would otherwise take.
-function tableColumns(withQrColumn: boolean, qrSize: number): TableColumn[] {
+// PdfExportOptions); a SKU column only exists when at least one row on
+// this page/section actually has one (a store whose SKU field held
+// something else — see Store Importer's "Don't import SKUs" — leaves every
+// row blank, and an all-empty column is pure wasted width). Extra absorbs
+// whichever of the two isn't there.
+function tableColumns(hasSku: boolean, withQrColumn: boolean, qrSize: number): TableColumn[] {
   const qrColumnWidth = qrSize + TABLE_CELL_PADDING * 2;
-  const extraWidth = CONTENT_WIDTH - 50 - 110 - 60 - 178 - (withQrColumn ? qrColumnWidth : 0);
+  const skuWidth = hasSku ? 60 : 0;
+  const extraWidth = CONTENT_WIDTH - 50 - 110 - skuWidth - 178 - (withQrColumn ? qrColumnWidth : 0);
   const columns: TableColumn[] = [
     { key: "no", header: "No.", width: 50 },
     { key: "name", header: "Name", width: 110 },
-    { key: "sku", header: "SKU", width: 60 },
-    { key: "description", header: "Description", width: 178 },
-    { key: "extra", header: "Extra", width: extraWidth },
   ];
+  if (hasSku) columns.push({ key: "sku", header: "SKU", width: skuWidth });
+  columns.push({ key: "description", header: "Description", width: 178 }, { key: "extra", header: "Extra", width: extraWidth });
   if (withQrColumn) columns.push({ key: "qr", header: "QR", width: qrColumnWidth });
   return columns;
 }
@@ -376,14 +380,15 @@ function drawTableHeader(cursor: Cursor, font: PDFFont, columns: TableColumn[]) 
 /** Draws the shared row table for one page/section — always its own header, paginating (with the header repeated) whenever a row doesn't fit. `withQrColumn` adds the extra QR column (see tableColumns) — only ever true for a diagram whose qrPlacement calls for one; a tile grid never passes it. */
 function drawTableRows(cursor: Cursor, font: PDFFont, entries: TableEntry[], withQrColumn: boolean) {
   if (entries.length === 0) return;
-  const columns = tableColumns(withQrColumn, cursor.qr.table);
+  const hasSku = entries.some((e) => e.row.sku);
+  const columns = tableColumns(hasSku, withQrColumn, cursor.qr.table);
   // Never a header stranded alone at the bottom of a page: keep room for it plus a couple of lines.
   ensureRoom(cursor, TABLE_LINE_HEIGHT * 3 + TABLE_CELL_PADDING * 2);
   drawTableHeader(cursor, font, columns);
 
   for (const { row, no, qrMatrix } of entries) {
-    const cellValues = [no, row.name, row.sku, row.description, extraCellText(row)];
-    const wrapped = columns.map((col, i) => (col.key === "qr" ? [] : wrapText(font, cellValues[i]!, TABLE_FONT_SIZE, col.width - TABLE_CELL_PADDING * 2)));
+    const cellText: Partial<Record<TableColumnKey, string>> = { no, name: row.name, sku: row.sku, description: row.description, extra: extraCellText(row) };
+    const wrapped = columns.map((col) => (col.key === "qr" ? [] : wrapText(font, cellText[col.key] ?? "", TABLE_FONT_SIZE, col.width - TABLE_CELL_PADDING * 2)));
     const textLineCount = Math.max(0, ...wrapped.map((w) => w.length));
     let rowHeight = textLineCount * TABLE_LINE_HEIGHT + TABLE_CELL_PADDING;
     if (withQrColumn && qrMatrix) rowHeight = Math.max(rowHeight, cursor.qr.table + TABLE_CELL_PADDING * 2);
