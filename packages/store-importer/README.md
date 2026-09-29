@@ -113,10 +113,10 @@ Inside a strictly confined snap `HOME` is the snap's own private folder,
 so the default "save to" folder is built from `SNAP_REAL_HOME` instead
 (see `src/config.ts`) — imports land in the real `~/Documents`.
 
-## Not done yet
+## Releases
 
-The Microsoft Store listing. Released so far: the direct downloads
-(`store-importer-latest` GitHub Release) and the
-[Snap Store](https://snapcraft.io/ecm-store-importer), both linked from the
-landing page's Store Importer tile. The app's icon (`assets/icons/`) is
-its own: the project's standard icon with an "I" badge.
+Direct downloads (`store-importer-latest` GitHub Release), the
+[Snap Store](https://snapcraft.io/ecm-store-importer), and the
+[Microsoft Store](https://apps.microsoft.com/detail/9pnmbwb503bp?hl=en-US&gl=US)
+— all linked from the landing page's Store Importer tile. The app's icon
+(`assets/icons/`) is its own: the project's standard icon with an "I" badge.

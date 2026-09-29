@@ -11,6 +11,7 @@
   "snap": "https://snapcraft.io/ecm-collab-server",
   "msComposer": "https://apps.microsoft.com/detail/9n9s9k9fhlk2?hl={hl}&amp;gl=US",
   "msCatalogServer": "https://apps.microsoft.com/detail/9pl38zj5djmk?hl={hl}&amp;gl=US",
+  "msStoreImporter": "https://apps.microsoft.com/detail/9pnmbwb503bp?hl={hl}&amp;gl=US",
   "catalogServerDlMacArm": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-macos-arm64.zip",
   "catalogServerDlMacIntel": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-macos-x64.zip",
   "catalogServerDlWin": "https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-windows-x64.exe",
