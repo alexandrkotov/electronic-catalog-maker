@@ -949,12 +949,16 @@ export async function exportCatalogPdf(
   const font = await doc.embedFont(fontBytes, { subset: true });
 
   const cursor: Cursor = { doc, page: newPage(doc), y: CONTENT_TOP, qr: qrSizes(options.qrSize) };
-  cursor.page.drawText(meta.catalogName || "Catalog", { x: MARGIN, y: cursor.y - 18, size: 18, font });
-  cursor.y -= 32;
+  if (options.showTitle) {
+    cursor.page.drawText(meta.catalogName || "Catalog", { x: MARGIN, y: cursor.y - 18, size: 18, font });
+    cursor.y -= 32;
+  }
   // True right after a heading/title has been drawn onto an otherwise-empty
   // page — lets a diagram share that page instead of forcing a fresh one
   // and stranding the heading alone (see renderDiagramPage's own comment).
   // Flips false the moment either a diagram or a tile grid actually draws.
+  // Also true when showTitle skipped the heading outright — the page is
+  // just as empty either way.
   let freshPage = true;
 
   const groups = groupImagesByFolder(listImages(db));
@@ -1017,6 +1021,18 @@ export async function exportCatalogPdf(
       await renderDiagramPage(cursor, doc, font, image, links, rows, meta, options);
     }
     await flush();
+  }
+
+  // Only when there's something to number — a one-page flyer gains nothing
+  // from a lone "1 / 1", and skipping it keeps that single page clean.
+  const pages = doc.getPages();
+  if (pages.length > 1) {
+    const size = 8.5;
+    pages.forEach((p, i) => {
+      const label = `${i + 1} / ${pages.length}`;
+      const width = font.widthOfTextAtSize(label, size);
+      p.drawText(label, { x: (PAGE_WIDTH - width) / 2, y: CONTENT_BOTTOM - 18, size, font, color: rgb(0.55, 0.55, 0.55) });
+    });
   }
 
   return doc.save();

@@ -199,6 +199,7 @@ let pdfOptionsDialogOpen = false;
 let pdfQrPlacement: QrPlacement = DEFAULT_PDF_EXPORT_OPTIONS.qrPlacement;
 let pdfDiagramPageMode: DiagramPageMode = DEFAULT_PDF_EXPORT_OPTIONS.diagramPageMode;
 let pdfQrSize: QrSize = DEFAULT_PDF_EXPORT_OPTIONS.qrSize;
+let pdfShowTitle: boolean = DEFAULT_PDF_EXPORT_OPTIONS.showTitle;
 // "Export protected…" dialog (see renderProtectDialog): the password, and the
 // public cover shown on the lock screen before it is entered. `protectCoverChoice`
 // is "none", "file" (the seller's own picture) or "image:<id>" (one of this
@@ -1093,7 +1094,7 @@ async function actionConfirmExportPdf() {
     // isn't pulled into this app's main bundle for everyone who never
     // clicks this button. See index.ts's own comment on that export.
     const [{ exportCatalogPdf }, fontBytes] = await Promise.all([import("../../shared/src/pdfExport.js"), pdfFontBytesPromise]);
-    const options: PdfExportOptions = { qrPlacement: pdfQrPlacement, diagramPageMode: pdfDiagramPageMode, qrSize: pdfQrSize };
+    const options: PdfExportOptions = { qrPlacement: pdfQrPlacement, diagramPageMode: pdfDiagramPageMode, qrSize: pdfQrSize, showTitle: pdfShowTitle };
     const bytes = await exportCatalogPdf(db, fontBytes, options);
     const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
     const a = document.createElement("a");
@@ -3150,6 +3151,13 @@ function renderPdfOptionsDialog(): string {
           </label>
           <p class="hint">${te("pdf.size.hintGrid")}</p>
         </div>
+        <div class="field">
+          <label class="radio-option">
+            <input type="checkbox" id="pdf-show-title" ${pdfShowTitle ? "checked" : ""} />
+            ${te("pdf.showTitle.label")}
+          </label>
+          <p class="hint">${te("pdf.showTitle.hint")}</p>
+        </div>
         <div class="confirm-actions">
           <button id="pdf-options-cancel">${te("action.cancel")}</button>
           <button id="pdf-options-submit">${te("pdf.submit")}</button>
@@ -3686,6 +3694,9 @@ function wireEvents(links: CatalogLink[]) {
     input.addEventListener("change", () => {
       if (input.checked) pdfQrSize = input.value as QrSize;
     });
+  });
+  document.getElementById("pdf-show-title")?.addEventListener("change", (evt) => {
+    pdfShowTitle = (evt.target as HTMLInputElement).checked;
   });
 
   document.getElementById("btn-copy-remote")?.addEventListener("click", actionOpenRemoteDialog);

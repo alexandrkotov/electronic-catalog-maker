@@ -37,12 +37,23 @@ export interface PdfExportOptions {
   qrPlacement: QrPlacement;
   diagramPageMode: DiagramPageMode;
   qrSize: QrSize;
+  /**
+   * Default true (existing behavior, unchanged for every catalog that
+   * doesn't touch this). A single composited tile grid (Grid Composer)
+   * draws its own title pill right into the image — for a catalog that's
+   * just one such grid, the page-1 heading repeats that same text with
+   * nothing else on the page above it, worth turning off for a one-page
+   * printed flyer. Left on by default since a real diagram (no baked-in
+   * title) or a multi-folder catalog still needs it.
+   */
+  showTitle: boolean;
 }
 
 export const DEFAULT_PDF_EXPORT_OPTIONS: PdfExportOptions = {
   qrPlacement: "table",
   diagramPageMode: "fit",
   qrSize: "small",
+  showTitle: true,
 };
 
 /**
