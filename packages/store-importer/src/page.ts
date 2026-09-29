@@ -94,6 +94,7 @@ ${THEME_VARS_CSS}
       <ol class="hint" id="how-to-save-steps"></ol>
       <div class="row"><input type="file" id="saved-files" multiple accept=".html,.htm,text/html" /></div>
     </div>
+    <label class="consent"><input type="checkbox" id="skip-sku" /> <span>Don't import SKUs — leave the SKU column empty (for stores whose SKU field holds something else, like stock counts).</span></label>
     <label class="field" for="output-root">Save imports in this folder</label>
     <div class="row">
       <input type="text" id="output-root" spellcheck="false" />
@@ -222,7 +223,8 @@ ${THEME_TOGGLE_SCRIPT}
       addRow("No photo in the store", listNos(r.noPhoto));
       addRow("Photo failed to download", listNos(r.photoFailed));
       addRow("No category in the store (moved to Other)", listNos(r.noFolder));
-      addRow("No SKU", listNos(r.noSku));
+      if (r.skuSkipped) addRow("SKU", "not imported (as requested)");
+      else addRow("No SKU", listNos(r.noSku));
       addRow("No price", listNos(r.noPrice));
       addRow("Saved to", r.outDir);
     }
@@ -306,7 +308,7 @@ ${THEME_TOGGLE_SCRIPT}
     var files = saved ? Array.prototype.slice.call($("saved-files").files) : [];
     if (saved && !files.length) return showError("Pick the saved " + saved.name + " page (or pages) first.");
     Promise.all(files.map(function (f) { return f.text(); })).then(function (pages) {
-      var body = { url: $("store-url").value, preset: saved ? saved.id : $("preset").value, ownerConfirmed: $("consent").checked };
+      var body = { url: $("store-url").value, preset: saved ? saved.id : $("preset").value, ownerConfirmed: $("consent").checked, skipSku: $("skip-sku").checked };
       if (saved) body.pages = pages;
       return postJson("/import", body);
     }).then(function (res) {

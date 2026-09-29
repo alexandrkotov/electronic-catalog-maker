@@ -97,6 +97,19 @@ describe("runImport (Shopify)", () => {
     expect(csv[252]).toBe("252,Even,Item 252,SKU-252,About 252,252.00,https://store.test/products/item-252");
   });
 
+  test("skipSku leaves the SKU column empty and reports no missing SKUs", async () => {
+    dir = mkdtempSync(join(tmpdir(), "ecm-si-"));
+    const { pf } = fakeStore([[shopifyProduct(1), shopifyProduct(2), shopifyProduct(3)]]);
+
+    const report = await runImport({ input: "store.test", presetId: "shopify", outputRoot: dir, pf, photoConcurrency: 1, skipSku: true, onProgress: () => {} });
+
+    expect(report.skuSkipped).toBe(true);
+    expect(report.noSku).toEqual([]);
+    const csv = readFileSync(report.csvPath, "utf-8").split("\r\n");
+    expect(csv[0]).toBe("﻿No.,Folder,Name,SKU,Description,Price,buy_url");
+    expect(csv[1]).toBe("1,Odd,Item 1,,About 1,1.00,https://store.test/products/item-1");
+  });
+
   test("re-import replaces the previous photos", async () => {
     dir = mkdtempSync(join(tmpdir(), "ecm-si-"));
     const first = fakeStore([[shopifyProduct(1), shopifyProduct(2), shopifyProduct(3)]]);
