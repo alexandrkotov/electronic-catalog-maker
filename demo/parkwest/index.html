@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
-<title>Parkwest Studio — stylists, looks & prices concept demo</title>
+<title>Parkwest Studio — stylists, portfolios & prices concept demo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Baskervville:ital@0;1&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet" />
@@ -30,7 +30,8 @@
   h2 { font: 700 33px/1.25 "Libre Baskerville", serif; text-align: center; margin: 0 24px 8px; }
   .lead { text-align: center; margin: 0 24px 22px; font-size: 20px; }
   .frame { max-width: 1240px; margin: 0 auto; padding: 14px; background: #eef0ec; border-radius: 44px; }
-  ecm-viewer { display: block; height: 820px; max-height: 88vh; border-radius: 32px; overflow: hidden; background: #fff; }
+  /* the stage behind a catalog image takes the page's own background colour, in either theme */
+  ecm-viewer { display: block; height: 820px; max-height: 88vh; border-radius: 32px; overflow: hidden; background: #cbdbd0; --ecm-stage-bg: #cbdbd0; }
   .how { max-width: 1240px; margin: 26px auto 0; padding: 0 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
   .how div { background: #eef0ec; border-radius: 22px; padding: 16px 20px; line-height: 1.4; }
   .how b { display: block; font-family: "Libre Baskerville", serif; font-size: 16px; margin-bottom: 4px; }
@@ -67,8 +68,7 @@
   <b>Concept demo</b> for Parkwest Studio, made by Alexander (Alec) Kotov with
   <a href="https://tapalog.com/" target="_blank" rel="noopener">Tapalog</a> — not the salon's own site.
   Photos and texts are from parkweststudio.com; professionals, services and prices are from the salon's Vagaro online
-  booking (October 2, 2026). Look names are written for the demo, and the service shown for a look is the closest one in
-  that stylist's list, matched by eye — not a quote.
+  booking (October 2, 2026).
 </div>
 
 <div class="hero">
@@ -90,8 +90,8 @@
 
 <main>
   <section id="lookbook">
-    <h2>Find Your Look And Your Stylist</h2>
-    <p class="lead">Pick a professional, then their looks or their price list. Tap a number — see the service, the price, and book it.</p>
+    <h2>Find Your Stylist, Their Work And Prices</h2>
+    <p class="lead">Pick a professional: their portfolio and Instagram first, then their price list. Tap a number — see the service, the price, and book it.</p>
     <div class="frame">
       <ecm-viewer id="catalog" mode="showcase" compact-zoom="0.8" src="https://tapalog.com/demo/parkwest/parkwest-lookbook.ecatm"></ecm-viewer>
     </div>
@@ -108,14 +108,14 @@
       })();
     </script>
     <div class="how">
-      <div><b>From "I like this" to booked.</b> Every photo carries the stylist, the service and their price — and a button straight to your Vagaro booking.</div>
+      <div><b>From "I like this" to booked.</b> Each stylist's folder opens with their work and a QR code to their Instagram; every service below it has their price and a button straight to your Vagaro booking.</div>
       <div><b>Every professional, every price.</b> All ten professionals from your online booking, each with their own price list — hair, waxing and laser in one place.</div>
       <div><b>Updated in minutes.</b> Add a new look or change a price in the Tapalog editor and upload one file — no web developer needed.</div>
     </div>
     <p class="book"><a class="btn" href="https://www.vagaro.com/parkweststudios/book-now" target="_blank" rel="noopener">Book Now</a></p>
     <p class="flyer">
       <a href="parkwest-price-list.pdf" target="_blank" rel="noopener">Download the printable price list (PDF)</a>
-      <small>Every look and service has its own QR code — it opens that professional's service on this page, one tap from booking.</small>
+      <small>Every service has its own QR code — it opens that professional's service on this page, one tap from booking. A stylist's portfolio carries the QR code to their Instagram.</small>
     </p>
   </section>
 
@@ -134,7 +134,7 @@
   contact us: <a href="mailto:parkweststudios310@gmail.com">parkweststudios310@gmail.com</a><br />
   <i>Available by appointment only</i>
   <small>
-    Lookbook viewer: <a href="https://tapalog.com/" target="_blank" rel="noopener">Tapalog</a> ·
+    Catalog viewer: <a href="https://tapalog.com/" target="_blank" rel="noopener">Tapalog</a> ·
     All photos © Parkwest Studio and its stylists, shown here only to demonstrate the idea to the salon.
   </small>
 </footer>
