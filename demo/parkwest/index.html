@@ -30,8 +30,14 @@
   h2 { font: 700 33px/1.25 "Libre Baskerville", serif; text-align: center; margin: 0 24px 8px; }
   .lead { text-align: center; margin: 0 24px 22px; font-size: 20px; }
   .frame { max-width: 1240px; margin: 0 auto; padding: 14px; background: #eef0ec; border-radius: 44px; }
-  /* the stage behind a catalog image takes the page's own background colour, in either theme */
-  ecm-viewer { display: block; height: 820px; max-height: 88vh; border-radius: 32px; overflow: hidden; background: #cbdbd0; --ecm-stage-bg: #cbdbd0; }
+  /* The widget wears the page's own colours instead of its light/dark theme: these are the viewer's theme variables,
+     set from outside (a page rule on the element wins over the widget's own :host rules, in either theme). */
+  ecm-viewer {
+    display: block; height: 820px; max-height: 88vh; border-radius: 32px; overflow: hidden; background: #cbdbd0;
+    --ecm-stage-bg: #cbdbd0; --bg-panel: #cbdbd0; --bg-page: #cbdbd0; --bg-elevated: #eef0ec;
+    --text: #1a1a1a; --muted: #44574a; --border: #a3b8aa; --accent: #4a7355;
+    --hotspot-bg: #fde047cc; --hotspot-border: #a16207; --hotspot-text: #1a1a1a; --hotspot-selected-bg: #f97316;
+  }
   .how { max-width: 1240px; margin: 26px auto 0; padding: 0 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
   .how div { background: #eef0ec; border-radius: 22px; padding: 16px 20px; line-height: 1.4; }
   .how b { display: block; font-family: "Libre Baskerville", serif; font-size: 16px; margin-bottom: 4px; }
