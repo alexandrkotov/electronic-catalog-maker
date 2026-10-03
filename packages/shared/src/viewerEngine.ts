@@ -2364,11 +2364,17 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     return { label, text };
   }
 
-  /** Showcase mode: a picker for switching diagrams when the catalog has several. */
+  /** Showcase mode: a picker for switching diagrams when the catalog has several — one <optgroup> per folder, same grouping as the image list. */
   function renderShowcaseImagePicker(images: CatalogImage[]): string {
     if (images.length < 2) return "";
+    const option = (img: CatalogImage) => `<option value="${img.id}" ${img.id === activeImageId ? "selected" : ""}>${escapeHtml(img.name)}</option>`;
     return `<select id="showcase-image" aria-label="${te("picker.image")}">
-      ${images.map((img) => `<option value="${img.id}" ${img.id === activeImageId ? "selected" : ""}>${escapeHtml(img.name)}</option>`).join("")}
+      ${groupImagesByFolder(images)
+        .map((group) => {
+          const options = group.images.map(option).join("");
+          return group.folder === "" ? options : `<optgroup label="${escapeHtml(group.folder)}">${options}</optgroup>`;
+        })
+        .join("")}
     </select>`;
   }
 
@@ -2739,7 +2745,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // commerce-flavored label/icon in the cart UI for an education-flavored
   // one, with identical behavior underneath either way.
   function cartIcon(): string {
-    return catalogMode === "education" ? "📚" : catalogMode === "fitness" ? "🏋️" : "🛒";
+    return catalogMode === "education" ? "📚" : catalogMode === "fitness" ? "🏋️" : catalogMode === "booking" ? "📅" : "🛒";
   }
   function cartLabel(): string {
     return t("cart.label");
