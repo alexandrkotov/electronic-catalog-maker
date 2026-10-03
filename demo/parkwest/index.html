@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Parkwest Studio — stylists, looks & prices concept demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Baskervville:ital@0;1&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; color: #000; background: #cbdbd0; font: 18px/1.5 Baskervville, "Times New Roman", serif; }
+  a { color: inherit; }
+  .demo-bar {
+    background: #f3f1ea; color: #2f4a38; border-bottom: 3px solid #4a7355;
+    font: 14px/1.4 system-ui, sans-serif; text-align: center; padding: 10px 16px;
+  }
+  .hero { background: #5e7a63 url("bg.png") center / cover no-repeat; color: #fff; padding-bottom: 56px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 44px; }
+  .logo img { display: block; width: 190px; height: 190px; }
+  nav { display: flex; gap: 56px; font-size: 16px; }
+  nav a { text-decoration: none; }
+  nav a.on { text-decoration: underline; text-underline-offset: 5px; }
+  h1 { font: 700 39px/1.25 "Libre Baskerville", serif; text-align: center; margin: 20px 24px 22px; }
+  .intro { max-width: 1340px; margin: 0 auto; padding: 0 44px; text-align: center; font-size: 21px; line-height: 1.35; }
+  .intro p { margin: 0 0 14px; }
+  .wave { display: block; width: 100%; height: 40px; margin-top: -39px; }
+  main { padding: 44px 0 0; }
+  h2 { font: 700 33px/1.25 "Libre Baskerville", serif; text-align: center; margin: 0 24px 8px; }
+  .lead { text-align: center; margin: 0 24px 22px; font-size: 20px; }
+  .frame { max-width: 1240px; margin: 0 auto; padding: 14px; background: #eef0ec; border-radius: 44px; }
+  ecm-viewer { display: block; height: 820px; max-height: 88vh; border-radius: 32px; overflow: hidden; background: #fff; }
+  .how { max-width: 1240px; margin: 26px auto 0; padding: 0 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .how div { background: #eef0ec; border-radius: 22px; padding: 16px 20px; line-height: 1.4; }
+  .how b { display: block; font-family: "Libre Baskerville", serif; font-size: 16px; margin-bottom: 4px; }
+  .btn {
+    display: inline-block; background: #4a7355; color: #fff; text-decoration: none; font-size: 15px;
+    padding: 18px 56px; border-radius: 8px;
+  }
+  .book { text-align: center; margin: 34px 16px 0; }
+  .flyer { text-align: center; margin: 18px 16px 0; font-size: 18px; }
+  .flyer small { display: block; margin-top: 6px; font-size: 15px; color: #2f4a38; }
+  .team { max-width: 1240px; margin: 56px auto 0; padding: 0 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 22px; text-align: center; }
+  .team img { width: 150px; height: 150px; border-radius: 50%; object-fit: cover; object-position: 50% 20%; display: block; margin: 0 auto 10px; }
+  .team b { display: block; font: 700 20px/1.3 "Libre Baskerville", serif; }
+  .team span { display: block; font-size: 15px; line-height: 1.35; }
+  .team a { font-size: 14px; }
+  footer { margin-top: 64px; padding: 44px 24px 48px; text-align: center; border-top: 3px solid #6f9279; font-size: 16px; line-height: 1.7; }
+  footer h3 { font: 700 26px/1.3 "Libre Baskerville", serif; margin: 0 0 14px; }
+  footer small { display: block; margin-top: 22px; color: #44574a; font: 13px/1.5 system-ui, sans-serif; }
+  @media (max-width: 760px) {
+    header { flex-direction: column; padding: 16px; }
+    .logo img { width: 130px; height: 130px; }
+    nav { gap: 22px; font-size: 15px; }
+    h1 { font-size: 28px; }
+    .intro { padding: 0 18px; font-size: 18px; }
+    h2 { font-size: 26px; }
+    .frame { padding: 0; border-radius: 0; background: none; }
+    ecm-viewer { height: 86vh; max-height: none; border-radius: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="demo-bar">
+  <b>Concept demo</b> for Parkwest Studio, made by Alexander (Alec) Kotov with
+  <a href="https://tapalog.com/" target="_blank" rel="noopener">Tapalog</a> — not the salon's own site.
+  Photos and texts are from parkweststudio.com; professionals, services and prices are from the salon's Vagaro online
+  booking (October 2, 2026). Look names are written for the demo, and the service shown for a look is the closest one in
+  that stylist's list, matched by eye — not a quote.
+</div>
+
+<div class="hero">
+  <header>
+    <a class="logo" href="https://www.parkweststudio.com/"><img src="logo.webp" alt="PW — Parkwest Studio" /></a>
+    <nav>
+      <a class="on" href="#lookbook">Services we offer</a>
+      <a href="https://www.parkweststudio.com/appointments">Special request</a>
+      <a href="#location">Location</a>
+    </nav>
+  </header>
+  <h1>Hair Services In Vancouver, WA For Women, Men And Kids</h1>
+  <div class="intro">
+    <p>Our hair services include custom cuts for women, men, and kids, plus professional barber services. Whether you're looking for a fresh new style, a classic cut, or a trim for the whole family, our experienced stylists will create the perfect look for you.</p>
+    <p>We specialize in all types of color services to match your vision. Choose from highlights, balayage, AirTouch, and stunning blonde shades. Our colorists are experts in modern techniques that create soft, blended results with natural-looking grow-out.</p>
+  </div>
+</div>
+<svg class="wave" viewBox="0 0 1440 40" preserveAspectRatio="none" aria-hidden="true"><path d="M0 22 C 240 2, 480 38, 760 20 S 1240 4, 1440 20 V40 H0 Z" fill="#cbdbd0" /></svg>
+
+<main>
+  <section id="lookbook">
+    <h2>Find Your Look And Your Stylist</h2>
+    <p class="lead">Pick a professional, then their looks or their price list. Tap a number — see the service, the price, and book it.</p>
+    <div class="frame">
+      <ecm-viewer id="catalog" mode="showcase" compact-zoom="0.8" src="https://tapalog.com/demo/parkwest/parkwest-lookbook.ecatm"></ecm-viewer>
+    </div>
+    <script>
+      // A shared link or printed QR can open this page as ?image=I&link=L (one professional's one service): hand those to the widget
+      // (it reads its attributes once, when the bundle below defines the element).
+      (function () {
+        var q = new URLSearchParams(location.search), el = document.getElementById("catalog");
+        if (q.get("image")) el.setAttribute("initial-image", q.get("image"));
+        if (q.get("link")) {
+          el.setAttribute("initial-link", q.get("link"));
+          addEventListener("load", function () { document.getElementById("lookbook").scrollIntoView(); });
+        }
+      })();
+    </script>
+    <div class="how">
+      <div><b>From "I like this" to booked.</b> Every photo carries the stylist, the service and their price — and a button straight to your Vagaro booking.</div>
+      <div><b>Every professional, every price.</b> All ten professionals from your online booking, each with their own price list — hair, waxing and laser in one place.</div>
+      <div><b>Updated in minutes.</b> Add a new look or change a price in the Tapalog editor and upload one file — no web developer needed.</div>
+    </div>
+    <p class="book"><a class="btn" href="https://www.vagaro.com/parkweststudios/book-now" target="_blank" rel="noopener">Book Now</a></p>
+    <p class="flyer">
+      <a href="parkwest-price-list.pdf" target="_blank" rel="noopener">Download the printable price list (PDF)</a>
+      <small>Every look and service has its own QR code — it opens that professional's service on this page, one tap from booking.</small>
+    </p>
+  </section>
+
+  <div class="team">
+    <div><img src="iryna.jpg" alt="Iryna" /><b>Iryna</b><span>Haircuts &amp; Coloring for Women, Perms.</span><a href="https://www.instagram.com/ira_cut_color" target="_blank" rel="noopener">@ira_cut_color</a></div>
+    <div><img src="tetiana.jpg" alt="Tetiana" /><b>Tetiana</b><span>Women, Men, and Kids Haircuts &amp; Coloring, Barber.</span><a href="https://www.instagram.com/hairstyle_by_tiana/" target="_blank" rel="noopener">@hairstyle_by_tiana</a></div>
+    <div><img src="natalia.jpg" alt="Natalia" /><b>Natalia</b><span>Women, Men, and Kids Haircuts &amp; Coloring.</span><a href="https://www.instagram.com/natalia_hairstylist_washington" target="_blank" rel="noopener">@natalia_hairstylist_washington</a></div>
+    <div><img src="inna.jpg" alt="Inna" /><b>Inna</b><span>Women, Men, and Kids Haircuts &amp; Coloring, Perm, Keratin Treatment, Makeup.</span><a href="https://www.instagram.com/innag_hairstylist" target="_blank" rel="noopener">@innag_hairstylist</a></div>
+    <div><img src="anna.jpg" alt="Anna" /><b>Anna</b><span>Women, Men, and Kids Haircuts &amp; Coloring, Makeup.</span><a href="https://www.instagram.com/au.farbhaus" target="_blank" rel="noopener">@au.farbhaus</a></div>
+  </div>
+</main>
+
+<footer id="location">
+  <h3>In The Heart Of Downtown Vancouver</h3>
+  310 West 8th Street, Vancouver, WA 98660<br />
+  contact us: <a href="mailto:parkweststudios310@gmail.com">parkweststudios310@gmail.com</a><br />
+  <i>Available by appointment only</i>
+  <small>
+    Lookbook viewer: <a href="https://tapalog.com/" target="_blank" rel="noopener">Tapalog</a> ·
+    All photos © Parkwest Studio and its stylists, shown here only to demonstrate the idea to the salon.
+  </small>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js"></script>
+</body>
+</html>
