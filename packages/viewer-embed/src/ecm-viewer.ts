@@ -66,6 +66,10 @@ const HOST_DEFAULTS_CSS = `
  *   percentage of the widget, e.g. "17,26" (the diagram gets the rest). Makes
  *   this widget ignore the panel widths saved in the visitor's browser (shared
  *   by every page on the site), so each widget keeps its own proportions.
+ *
+ * CSS custom property (set it on the element from the embedding page):
+ * - `--ecm-stage-bg` — the backdrop around the image, in both themes (e.g. the
+ *   page's own background colour, when the catalog's images are drawn on it).
  */
 class EcmViewerElement extends HTMLElement {
   private controller: ViewerController | null = null;
