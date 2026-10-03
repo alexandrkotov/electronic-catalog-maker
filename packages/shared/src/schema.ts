@@ -102,7 +102,7 @@ export const CATALOG_SCHEMA_META_DEFAULTS: Record<string, string> = {
   catalog_name: "Untitled catalog",
   created_by: "",
   created_at: "",
-  // "commercial" | "education" | "fitness" — see CatalogMeta.catalogMode for what this controls.
+  // "commercial" | "education" | "fitness" | "booking" — see CatalogMeta.catalogMode for what this controls.
   catalog_mode: "commercial",
   store_url: "",
   // "accumulate" | "instant" — see CatalogMeta.cartMode for what this controls.
