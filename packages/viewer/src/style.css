@@ -263,8 +263,9 @@ body {
   inset: 0;
   overflow: auto;
   /* Plain themed backdrop: a fitted image rarely fills the stage, and the empty
-     margin should read as margin, not as a transparency checkerboard. */
-  background: var(--bg-panel);
+     margin should read as margin, not as a transparency checkerboard.
+     --ecm-stage-bg: an embedding page's own colour for it (set on <ecm-viewer>). */
+  background: var(--ecm-stage-bg, var(--bg-panel));
 }
 
 .stage-inner {
@@ -1371,7 +1372,7 @@ button:disabled {
   /* Plain backdrop instead of the editor-style transparency checkerboard: a
      fitted image rarely fills the stage, and the empty margin should read as
      margin, not as a pattern. */
-  background: var(--bg-panel);
+  background: var(--ecm-stage-bg, var(--bg-panel));
 }
 
 .stage-scroll.fitted {
