@@ -976,8 +976,10 @@ export async function exportCatalogPdf(
         cursor.page = newPage(doc);
         cursor.y = CONTENT_TOP;
       }
-      cursor.page.drawText(group.folder, { x: MARGIN, y: cursor.y - 14, size: 13, font });
-      cursor.y -= 26;
+      if (options.showFolderHeadings !== false) {
+        cursor.page.drawText(group.folder, { x: MARGIN, y: cursor.y - 14, size: 13, font });
+        cursor.y -= 26;
+      }
       freshPage = true;
     }
     isFirstGroup = false;
