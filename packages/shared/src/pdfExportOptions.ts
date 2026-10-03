@@ -47,6 +47,13 @@ export interface PdfExportOptions {
    * title) or a multi-folder catalog still needs it.
    */
   showTitle: boolean;
+  /**
+   * Default (also when omitted) true. The folder name printed above a folder's first image. Off
+   * for a catalog whose images already carry the folder's name in their own
+   * artwork (a title drawn into each image), where the heading only repeats
+   * it. Each folder still starts on its own page. Not asked in the dialog.
+   */
+  showFolderHeadings?: boolean;
 }
 
 export const DEFAULT_PDF_EXPORT_OPTIONS: PdfExportOptions = {
@@ -54,6 +61,7 @@ export const DEFAULT_PDF_EXPORT_OPTIONS: PdfExportOptions = {
   diagramPageMode: "fit",
   qrSize: "small",
   showTitle: true,
+  showFolderHeadings: true,
 };
 
 /**
