@@ -1,5 +1,5 @@
 /**
- * Exports a whole catalog as a single printable A4 PDF — backlog item "PDF +
+ * Exports a whole catalog as a single printable PDF (A4, or US Letter — options.pageSize) — backlog item "PDF +
  * QR export". One PDF for the entire catalog (not one per image), built
  * with pdf-lib (pure TS, no native deps — fits this project's static/
  * serverless architecture) + @pdf-lib/fontkit so a real Unicode font can be
@@ -80,16 +80,27 @@ import { isNavLink } from "./navLink.js";
 import { groupImagesByFolder } from "./images.js";
 import { buildInstantBuyUrl } from "./cart.js";
 import { buildQrMatrix, type QrMatrix } from "./qrcode.js";
-import { DEFAULT_PDF_EXPORT_OPTIONS, detectGrid, type PdfExportOptions, type QrSize } from "./pdfExportOptions.js";
+import { DEFAULT_PDF_EXPORT_OPTIONS, detectGrid, type PdfExportOptions, type PdfPageSize, type QrSize } from "./pdfExportOptions.js";
 import type { CatalogImage, CatalogLink, CatalogMeta, CatalogRow } from "./types.js";
 
-// A4 in PDF points (1pt = 1/72in): 210mm x 297mm.
-const PAGE_WIDTH = 595.28;
-const PAGE_HEIGHT = 841.89;
+// Page sizes in PDF points (1pt = 1/72in): A4 is 210mm x 297mm, US Letter 8.5in x 11in.
+const PAGE_SIZES: Record<PdfPageSize, [number, number]> = { a4: [595.28, 841.89], letter: [612, 792] };
 const MARGIN = 36; // 0.5in
-const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
-const CONTENT_TOP = PAGE_HEIGHT - MARGIN;
 const CONTENT_BOTTOM = MARGIN;
+// The sheet being exported onto — A4 unless options.pageSize says otherwise.
+// Module-level (set once at the top of exportCatalogPdf) rather than threaded
+// through every draw helper below: one export runs at a time.
+let PAGE_WIDTH = PAGE_SIZES.a4[0];
+let PAGE_HEIGHT = PAGE_SIZES.a4[1];
+let CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
+let CONTENT_TOP = PAGE_HEIGHT - MARGIN;
+let CONTENT_HEIGHT = CONTENT_TOP - CONTENT_BOTTOM;
+function setPageSize(size: PdfPageSize) {
+  [PAGE_WIDTH, PAGE_HEIGHT] = PAGE_SIZES[size];
+  CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
+  CONTENT_TOP = PAGE_HEIGHT - MARGIN;
+  CONTENT_HEIGHT = CONTENT_TOP - CONTENT_BOTTOM;
+}
 
 const TILE_COLUMNS = 3;
 const TILE_GAP = 10;
@@ -144,7 +155,6 @@ const LEADER_MARGIN = 60;
  * that carries no print-DPI metadata of its own.
  */
 const REAL_SIZE_PT_PER_PX = 72 / 96;
-const CONTENT_HEIGHT = CONTENT_TOP - CONTENT_BOTTOM;
 // A safety cap, not a real limit anyone should hit: a genuinely huge source
 // image (or one with implausible pixel dimensions) shouldn't silently spin
 // the browser tab trying to lay out hundreds of A4 sheets one diagram asked
@@ -950,6 +960,7 @@ export async function exportCatalogPdf(
   fontBytes: Uint8Array,
   options: PdfExportOptions = DEFAULT_PDF_EXPORT_OPTIONS,
 ): Promise<Uint8Array> {
+  setPageSize(options.pageSize ?? "a4");
   const meta = readMeta(db);
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
