@@ -22,6 +22,8 @@
  *   across as many pages as needed, with one shared data table right after
  *   the last tile. Its QR (if the row has a buy_url) sits inset in the
  *   tile's own top-right corner, its hotspot number/label in the top-left.
+ * - No links at all: a plain picture — printed like a diagram (below), just
+ *   with nothing drawn on it; a table follows only if the image has rows.
  * - Two or more links: a "diagram". Two flavors, detected from the
  *   hotspots' own pixel positions (see detectGrid), not the schema:
  *   - Most diagrams (an exploded-view schematic, or a photograph with a
@@ -1000,19 +1002,20 @@ export async function exportCatalogPdf(
       const links = listLinksForImage(db, image.id).filter((l) => !isNavLink(l));
       const rows = listRowsForImage(db, image.id);
 
-      if (links.length <= 1) {
-        const link = links[0];
-        if (link) {
-          const row = rows.find((r) => r.url === link.url) ?? null;
-          tileBuffer.push({ image, link, row });
-        }
+      if (links.length === 1) {
+        const link = links[0]!;
+        const row = rows.find((r) => r.url === link.url) ?? null;
+        tileBuffer.push({ image, link, row });
         for (const r of rows) {
           if (tileSeenUrls.has(r.url)) continue;
           tileSeenUrls.add(r.url);
-          tileEntries.push({ row: r, no: link?.url === r.url ? link.name : "" });
+          tileEntries.push({ row: r, no: link.url === r.url ? link.name : "" });
         }
-        continue; // an unlinked image (0 links) has nothing to show as a tile — silently skipped
+        continue;
       }
+      // An image without hotspots (a cover, a portfolio page, an overview with
+      // only navigation markers) falls through to the diagram path: printed as
+      // a plain picture at page width, its rows (if any) in a table below.
 
       await flush();
       // Real-size mode always starts its first sheet on a fresh page of its
