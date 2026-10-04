@@ -67,6 +67,9 @@ const HOST_DEFAULTS_CSS = `
  *   already carry the item names; the image then takes the whole widget.
  *   The CSS custom property `--ecm-overview-label-scale` on the element then
  *   scales those markers' font (e.g. 0.6 in a desktop media query).
+ * - `nav-title` — showcase mode: tooltip of a navigation marker whose text
+ *   doesn't name its target (a "⌂" back to the overview), e.g. "Back to all
+ *   treatments". Default: the target image's name + "— open".
  * - `panels` — "images,table" opening widths of the two side panels as a
  *   percentage of the widget, e.g. "17,26" (the diagram gets the rest). Makes
  *   this widget ignore the panel widths saved in the visitor's browser (shared
@@ -116,6 +119,7 @@ class EcmViewerElement extends HTMLElement {
       initialLinkId: intAttr("initial-link"),
       compactZoom: floatAttr("compact-zoom"),
       overviewList: this.getAttribute("overview-list") !== "off",
+      navTitle: this.getAttribute("nav-title") || undefined,
       panelFractions,
       // Never rewrite the *embedding* page's address bar.
       updateAddressBar: false,

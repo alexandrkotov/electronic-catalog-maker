@@ -200,6 +200,12 @@ export interface MountViewerOptions {
    */
   overviewList?: boolean;
   /**
+   * Showcase mode. Tooltip of a navigation marker whose text doesn't name its
+   * target (a "⌂" back to the overview), in the page's own words — e.g.
+   * "Back to all treatments". Default: the target image's name + "— open".
+   */
+  navTitle?: string;
+  /**
    * Opening proportions of the side panels as fractions of the widget's width,
    * e.g. {images: 0.17, table: 0.26} (the stage takes the rest). For an embed
    * that knows its own catalog: it then ignores the panel widths saved in
@@ -2765,7 +2771,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const title =
       mode === "showcase"
         ? navName !== null && !isStatic && l.name !== navName
-          ? ` title="${te("hotspot.navAria", { name: navName })}"`
+          ? ` title="${options.navTitle ? escapeHtml(options.navTitle) : te("hotspot.navAria", { name: navName })}"`
           : ""
         : ` title="${navName !== null ? te("hotspot.navAria", { name: navName }) : escapeHtml(l.url)}"`;
     return `<div class="${classes.join(" ")}" data-id="${l.id}" data-url="${escapeHtml(l.url)}"${a11y} style="top:${l.top}px;left:${l.left}px;font-size:${overviewLabels ? `calc(${l.fontSize}px * var(--ecm-overview-label-scale, 1))` : `${l.fontSize}px`}"${title}>${escapeHtml(l.name)}</div>`;
