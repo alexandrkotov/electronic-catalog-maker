@@ -64,8 +64,7 @@ photos and a spreadsheet (the **Store Importer** can pull both straight out
 of your online store), the **viewer** opens one as its own full-page app,
 and `<ecm-viewer>` embeds that same viewer into any other page — even a
 plain static HTML file with no build step of its own (see "Embedding the
-viewer" below). Inspired by an earlier project of mine,
-[auto-parts-universal-catalog](https://github.com/alexandrkotov/auto-parts-universal-catalog).
+viewer" below).
 
 The same map is on the [landing page](https://tapalog.com), also in
 [Russian](https://tapalog.com/ru/toolset.svg) and
