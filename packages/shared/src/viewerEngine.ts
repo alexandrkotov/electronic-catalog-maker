@@ -187,6 +187,17 @@ export interface MountViewerOptions {
    */
   compactZoom?: number;
   /**
+   * Showcase mode. Default true: an overview image (only navigation markers)
+   * shows the details card with the list of the items its markers lead to.
+   * False for a catalog whose overview markers are already labelled with the
+   * item names — the list would only repeat them — so that image gets no
+   * card at all and the stage takes the whole widget. Those markers' font
+   * size is then multiplied by the CSS custom property
+   * --ecm-overview-label-scale (default 1), so an embedding page can size the
+   * names per device with a media query.
+   */
+  overviewList?: boolean;
+  /**
    * Opening proportions of the side panels as fractions of the widget's width,
    * e.g. {images: 0.17, table: 0.26} (the stage takes the rest). For an embed
    * that knows its own catalog: it then ignores the panel widths saved in
@@ -294,6 +305,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // the visitor zooms or presses Reset. Showcase mode fits by default anyway.
   let wholeFit = false;
   let resizeObserver: ResizeObserver | null = null;
+  // The image being rendered is an overview shown without its card (options.overviewList false): its
+  // markers are the item names, sized by the page through --ecm-overview-label-scale (see hotspotHtml).
+  let overviewLabels = false;
   let quizObserverDisconnect: (() => void) | null = null;
   // Last measured size of the stage's scroll box (showcase mode) — used to
   // center an image that, once fitted, is smaller than the stage on one axis.
@@ -2089,6 +2103,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         ? `.hotspot[data-id="${focusedEl.dataset.id}"]`
         : null;
     container.classList.add("ecm-viewer-app", `mode-${mode}`);
+    // options.overviewList === false: an overview image has no details card (see style.css .no-details).
+    const noDetails =
+      mode === "showcase" && options.overviewList === false && links.some(isNavLink) && showcaseItems(links).length === 0;
+    container.classList.toggle("no-details", noDetails);
+    overviewLabels = noDetails;
     // Read by the mobile breakpoint's CSS (.ecm-viewer-app[data-mobile-tab=...])
     // to decide which single panel to show — see mobileTab's declaration.
     // Set on `container` itself (not inside innerHTML below) so it survives
@@ -2206,7 +2225,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
         ${
           showcase
-            ? `<div class="showcase-divider" id="divider-showcase" title="${te("divider.tip")}"></div>
+            ? noDetails
+              ? ""
+              : `<div class="showcase-divider" id="divider-showcase" title="${te("divider.tip")}"></div>
                ${renderShowcaseDetails(rows.find((r) => r.url === selectedUrl) ?? null, links)}`
             : `<div class="panel-divider" id="divider-table" title="${te("divider.tip")}"></div>
 
@@ -2738,7 +2759,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           : ` role="button" tabindex="${tabbable ? 0 : -1}" aria-label="${te("hotspot.aria", { name: l.name })}" aria-pressed="${l.id === selectedLinkId}"`
         : "";
     const title = mode === "showcase" ? "" : ` title="${navName !== null ? te("hotspot.navAria", { name: navName }) : escapeHtml(l.url)}"`;
-    return `<div class="${classes.join(" ")}" data-id="${l.id}" data-url="${escapeHtml(l.url)}"${a11y} style="top:${l.top}px;left:${l.left}px;font-size:${l.fontSize}px"${title}>${escapeHtml(l.name)}</div>`;
+    return `<div class="${classes.join(" ")}" data-id="${l.id}" data-url="${escapeHtml(l.url)}"${a11y} style="top:${l.top}px;left:${l.left}px;font-size:${overviewLabels ? `calc(${l.fontSize}px * var(--ecm-overview-label-scale, 1))` : `${l.fontSize}px`}"${title}>${escapeHtml(l.name)}</div>`;
   }
 
   // catalog_mode's only effect (see CatalogMeta.catalogMode) — swaps every

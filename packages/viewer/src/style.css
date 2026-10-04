@@ -1193,6 +1193,13 @@ button:disabled {
   min-height: 480px;
 }
 
+/* An overview image shown without its details card (MountViewerOptions.overviewList
+   false): the stage takes the whole widget, in the stacked layout too. */
+.ecm-viewer-app.mode-showcase.no-details {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "stage";
+}
+
 /* Drag handle on the card's left edge — shares the card's grid cell, pinned
    to its start and straddling the border line. */
 .showcase-divider {
@@ -1408,6 +1415,10 @@ button:disabled {
       "details";
     height: auto;
     min-height: 0;
+  }
+
+  .ecm-viewer-app.mode-showcase.no-details {
+    grid-template-rows: 360px;
   }
 
   .mode-showcase .showcase-divider {

@@ -62,6 +62,11 @@ const HOST_DEFAULTS_CSS = `
  * - `compact-zoom` — showcase mode, narrow layout only: open each image at
  *   this zoom (e.g. "0.75") centered on the selected item instead of fitting
  *   it whole; the Fit button still shows the whole image.
+ * - `overview-list` — showcase mode: "off" drops the details card (the list
+ *   of items) on an overview image, for a catalog whose overview markers
+ *   already carry the item names; the image then takes the whole widget.
+ *   The CSS custom property `--ecm-overview-label-scale` on the element then
+ *   scales those markers' font (e.g. 0.6 in a desktop media query).
  * - `panels` — "images,table" opening widths of the two side panels as a
  *   percentage of the widget, e.g. "17,26" (the diagram gets the rest). Makes
  *   this widget ignore the panel widths saved in the visitor's browser (shared
@@ -110,6 +115,7 @@ class EcmViewerElement extends HTMLElement {
       initialImageId: intAttr("initial-image"),
       initialLinkId: intAttr("initial-link"),
       compactZoom: floatAttr("compact-zoom"),
+      overviewList: this.getAttribute("overview-list") !== "off",
       panelFractions,
       // Never rewrite the *embedding* page's address bar.
       updateAddressBar: false,
