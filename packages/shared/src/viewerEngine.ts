@@ -2760,7 +2760,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           ? ` role="button" tabindex="${tabbable ? 0 : -1}" aria-label="${te("hotspot.navAria", { name: navName })}"`
           : ` role="button" tabindex="${tabbable ? 0 : -1}" aria-label="${te("hotspot.aria", { name: l.name })}" aria-pressed="${l.id === selectedLinkId}"`
         : "";
-    const title = mode === "showcase" ? "" : ` title="${navName !== null ? te("hotspot.navAria", { name: navName }) : escapeHtml(l.url)}"`;
+    // Showcase: no tooltips, except on a navigation marker whose text doesn't say
+    // where it leads (a "⌂" back to the overview).
+    const title =
+      mode === "showcase"
+        ? navName !== null && !isStatic && l.name !== navName
+          ? ` title="${te("hotspot.navAria", { name: navName })}"`
+          : ""
+        : ` title="${navName !== null ? te("hotspot.navAria", { name: navName }) : escapeHtml(l.url)}"`;
     return `<div class="${classes.join(" ")}" data-id="${l.id}" data-url="${escapeHtml(l.url)}"${a11y} style="top:${l.top}px;left:${l.left}px;font-size:${overviewLabels ? `calc(${l.fontSize}px * var(--ecm-overview-label-scale, 1))` : `${l.fontSize}px`}"${title}>${escapeHtml(l.name)}</div>`;
   }
 
