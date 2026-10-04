@@ -1200,6 +1200,17 @@ button:disabled {
   grid-template-areas: "stage";
 }
 
+/* Its markers are the item names. The embedding page can make them a tidy
+   column of equal buttons: a common minimum width (in em, so it follows the
+   label's font size) and a corner radius. */
+.ecm-viewer-app.mode-showcase.no-details .hotspot {
+  box-sizing: border-box;
+  min-width: var(--ecm-overview-label-min-width, 0);
+  border-radius: var(--ecm-overview-label-radius, 3px);
+  padding: var(--ecm-overview-label-padding, 1px 5px);
+  text-align: center;
+}
+
 /* Drag handle on the card's left edge — shares the card's grid cell, pinned
    to its start and straddling the border line. */
 .showcase-divider {

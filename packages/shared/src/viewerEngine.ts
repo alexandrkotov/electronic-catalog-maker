@@ -194,7 +194,9 @@ export interface MountViewerOptions {
    * card at all and the stage takes the whole widget. Those markers' font
    * size is then multiplied by the CSS custom property
    * --ecm-overview-label-scale (default 1), so an embedding page can size the
-   * names per device with a media query.
+   * names per device with a media query; --ecm-overview-label-min-width,
+   * --ecm-overview-label-radius and --ecm-overview-label-padding shape them
+   * (e.g. equal-width pills).
    */
   overviewList?: boolean;
   /**
