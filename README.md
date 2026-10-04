@@ -10,8 +10,8 @@
 
 **Turn any picture into a clickable catalog.** Put hotspots on a photo or a
 diagram, link each one to a row of data (name, SKU, description, a Buy
-link), and keep the whole thing in one portable `.ecatm` file. No backend,
-no account, nothing to install —
+link), and keep the whole thing in one portable `.ecatm` file (Electronic
+CATalog Maker). No backend, no account, nothing to install —
 **[try the live demo](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fliving-room.ecatm)**
 or visit **[tapalog.com](https://tapalog.com/)**.
 
@@ -34,25 +34,42 @@ or visit **[tapalog.com](https://tapalog.com/)**.
   button that works with your existing checkout.
 - **Free and open source** (MIT).
 
-Inspired by an earlier project of mine,
+## Who it's for
+
+Each one opens a live demo, nothing to install:
+
+- **Furniture and home goods** — shop the look: tap a piece in a room photo
+  to see its details and a Buy button.
+  [Demo](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fliving-room.ecatm)
+- **Parts and equipment** — exploded views linked to part numbers: the
+  number on the diagram matches the row in the table.
+  [Demo](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fauto-spare-parts.ecatm)
+- **Paid and members-only catalogs** — sell a guide or a course as a
+  password-protected file (demo password: `stool-2026`).
+  [Demo](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fdiy-stool-en.ecatm)
+- **Teaching and learning** — explorable diagrams for lessons, no student
+  accounts. [Schools page](https://tapalog.com/schools.html)
+- **Gyms and fitness** — pick a muscle group, find the machine, print a
+  workout.
+  [Demo](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Ffitness-en.ecatm)
+- **Tests and self-check** — answer options sit on the picture, with a
+  running score.
+  [Demo](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fquiz-citizenship-en.ecatm)
+
+## How the apps fit together
+
+One file format, several ways to use it: the **editor** builds a catalog,
+the **Grid Composer** builds a whole tile catalog in one go from a folder of
+photos and a spreadsheet (the **Store Importer** can pull both straight out
+of your online store), the **viewer** opens one as its own full-page app,
+and `<ecm-viewer>` embeds that same viewer into any other page — even a
+plain static HTML file with no build step of its own (see "Embedding the
+viewer" below). Inspired by an earlier project of mine,
 [auto-parts-universal-catalog](https://github.com/alexandrkotov/auto-parts-universal-catalog).
 
-Build and view interactive image-hotspot catalogs — a schematic picture with
-clickable positions linked to a data table (name, SKU, characteristics) —
-packaged as a single portable `.ecatm` file (a SQLite database under the
-hood, read and written entirely in the browser via
-[sql.js](https://github.com/sql-js/sql.js)). One file format, several ways
-to use it: the **editor** builds a catalog, the **Grid Composer** builds a
-whole tile catalog in one go from a folder of photos and a spreadsheet
-(the **Store Importer** can pull both straight out of your online store), the
-**viewer** opens one as its own full-page app, and `<ecm-viewer>` embeds
-that same viewer into any other page — even a plain static HTML file with
-no build step of its own (see "Embedding the viewer" below).
-
-How the apps fit together (the same map is on the
-[landing page](https://tapalog.com), also in
+The same map is on the [landing page](https://tapalog.com), also in
 [Russian](https://tapalog.com/ru/toolset.svg) and
-[Ukrainian](https://tapalog.com/uk/toolset.svg)):
+[Ukrainian](https://tapalog.com/uk/toolset.svg):
 
 <p align="center">
   <a href="landing/toolset.svg"><img src="landing/toolset.svg" width="100%" alt="Toolset map: an online store, photos + a table, or any picture go through the Store Importer, Grid Composer or Editor into one .ecatm catalog file (optionally password-locked, co-edited live via the Collab Server), which is shared as a file or link, on your website, through the Catalog Server or as a printed PDF + QR, and opened in the Viewer by shoppers, mechanics, DIY makers, students, gyms and diners — shoppers checking out in your own store."></a>
@@ -826,6 +843,14 @@ typechecks and builds every package on each push/PR (plus runs the
 `ecm-viewer.js` if it's gone stale so the CDN URL can't silently drift
 from source, and redeploys the editor, viewer and composer to Pages — all on every push
 to `main`, no manual step.
+
+## Contributing
+
+Bug reports, ideas and pull requests are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for how to run the project and what CI
+checks, and look for issues labeled
+[good first issue](https://github.com/alexandrkotov/electronic-catalog-maker/labels/good%20first%20issue)
+or [help wanted](https://github.com/alexandrkotov/electronic-catalog-maker/labels/help%20wanted).
 
 ## License
 
