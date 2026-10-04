@@ -8,6 +8,32 @@
 ![pnpm](https://img.shields.io/badge/pnpm-F69220?logo=pnpm&logoColor=white)
 ![No backend](https://img.shields.io/badge/backend-none-brightgreen)
 
+**Turn any picture into a clickable catalog.** Put hotspots on a photo or a
+diagram, link each one to a row of data (name, SKU, description, a Buy
+link), and keep the whole thing in one portable `.ecatm` file. No backend,
+no account, nothing to install —
+**[try the live demo](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Ffurniture.ecatm)**
+or visit **[tapalog.com](https://tapalog.com/)**.
+
+<p align="center">
+  <a href="https://tapalog.com/"><img src="landing/og-default.png" width="720" alt="Tapalog: a living-room photo with numbered hotspots next to a table of the linked products"></a>
+</p>
+
+- **One file.** A catalog is a SQLite database with its images embedded —
+  email it, put it on a USB stick, host it as a static file, or embed it in
+  another page with `<ecm-viewer>`.
+- **Runs in the browser.** Editing and viewing happen locally via
+  [sql.js](https://github.com/sql-js/sql.js); nothing is uploaded unless you
+  choose to share a link. After the first visit the editor and viewer keep
+  working without a connection, and both install as desktop apps.
+- **Pictures link to data.** Diagrams, room photos, floor plans, anatomy
+  charts: a hotspot opens its table row, a Buy link, or another image.
+- **Private when you need it.** Password-protected catalogs are encrypted
+  client-side (AES-GCM), so a static host never sees the contents.
+- **Print and sell.** Export an A4 PDF with a QR code per item, or add a Buy
+  button that works with your existing checkout.
+- **Free and open source** (MIT).
+
 Inspired by an earlier project of mine,
 [auto-parts-universal-catalog](https://github.com/alexandrkotov/auto-parts-universal-catalog).
 
