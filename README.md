@@ -12,11 +12,11 @@
 diagram, link each one to a row of data (name, SKU, description, a Buy
 link), and keep the whole thing in one portable `.ecatm` file. No backend,
 no account, nothing to install —
-**[try the live demo](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Ffurniture.ecatm)**
+**[try the live demo](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fliving-room.ecatm)**
 or visit **[tapalog.com](https://tapalog.com/)**.
 
 <p align="center">
-  <a href="https://tapalog.com/"><img src="landing/og-default.png" width="720" alt="Tapalog: a living-room photo with numbered hotspots next to a table of the linked products"></a>
+  <a href="https://tapalog.com/"><img src="landing/demo-shop-the-look.gif" width="800" alt="Shop the look in the viewer: click the sofa in a living-room photo to open its close-up, add it to the cart, do the same with the floor lamp, then check out both items in the store"></a>
 </p>
 
 - **One file.** A catalog is a SQLite database with its images embedded —
