@@ -19,6 +19,10 @@ or visit **[tapalog.com](https://tapalog.com/)**.
   <a href="https://tapalog.com/"><img src="landing/demo-shop-the-look.gif" width="800" alt="Shop the look in the viewer: click the sofa in a living-room photo to open its close-up, add it to the cart, do the same with the floor lamp, then check out both items in the store"></a>
 </p>
 
+<p align="center">
+  <a href="https://tapalog.com/"><img src="landing/demo-editor-flow.gif" width="800" alt="Editor flow: add an image, place a hotspot, link it to a row, then open it in the viewer"></a>
+</p>
+
 - **One file.** A catalog is a SQLite database with its images embedded —
   email it, put it on a USB stick, host it as a static file, or embed it in
   another page with `<ecm-viewer>`.
