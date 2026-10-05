@@ -6,7 +6,7 @@
 <script>
   // Page language + the few strings the page scripts need (from the dictionary's js.* keys).
   var LANG = "ru";
-  var T = {"themeLight":"☀️ Светлая","themeDark":"🌙 Тёмная","demoLoadFailed":"Не удалось загрузить живое демо. Воспользуйтесь ссылкой «Открыть полное демо» ниже.","visits.one":"\u003cstrong>{n}\u003c/strong> визит на этот сайт на данный момент.","visits.few":"\u003cstrong>{n}\u003c/strong> визита на этот сайт на данный момент.","visits.many":"\u003cstrong>{n}\u003c/strong> визитов на этот сайт на данный момент.","visits.other":"\u003cstrong>{n}\u003c/strong> визита на этот сайт на данный момент."};
+  var T = {"themeLight":"☀️ Светлая","themeDark":"🌙 Тёмная","demoLoadFailed":"Не удалось загрузить живое демо. Воспользуйтесь ссылкой «Открыть полное демо» ниже.","demoBookingBack":"К списку услуг","visits.one":"\u003cstrong>{n}\u003c/strong> визит на этот сайт на данный момент.","visits.few":"\u003cstrong>{n}\u003c/strong> визита на этот сайт на данный момент.","visits.many":"\u003cstrong>{n}\u003c/strong> визитов на этот сайт на данный момент.","visits.other":"\u003cstrong>{n}\u003c/strong> визита на этот сайт на данный момент."};
 </script>
 <script>
   // Apply the saved (or OS-preferred) theme before first paint — no light flash.
@@ -289,12 +289,14 @@
       <p class="intro" data-hint="living-room">Нажмите на маркер, чтобы открыть крупный план предмета — там его описание и кнопка «Купить». ⌂ вернёт в комнату.</p>
       <p class="intro" data-hint="product-grid" hidden>Нажмите на номер на плитке, чтобы увидеть описание товара и кнопку «Купить». Список вверху переключает группы. <a href="../composer/?lang=ru">Есть фото и таблица? Конструктор сетки соберёт такую же за вас →</a></p>
       <p class="intro" data-hint="diy-stool-ru" hidden>Демо-пароль: <strong>stool-2026</strong>. Введите его на экране блокировки ниже; обложка и название видны и без пароля.</p>
+      <p class="intro" data-hint="cosmetologist-ru" hidden>Выберите услугу, чтобы увидеть, что это и как она проходит, — кнопка «Записаться» откроет календарь записи. ⌂ вернёт к списку.</p>
       <p class="intro" data-hint="*" hidden>Выберите точку или листайте стрелками, чтобы увидеть сведения о позиции. Кнопка «Вписать» показывает изображение целиком.</p>
       <div class="tabs" role="group" aria-label="Пример каталога">
         <button type="button" data-cat="living-room" aria-pressed="true">Товары в интерьере</button>
         <button type="button" data-cat="auto-spare-parts" aria-pressed="false">Разнесённая схема</button>
         <button type="button" data-cat="furniture" aria-pressed="false">Фото изделия</button>
         <button type="button" data-cat="product-grid" aria-pressed="false">Сетка товаров</button>
+        <button type="button" data-cat="cosmetologist-ru" aria-pressed="false">Услуги с записью</button>
         <button type="button" data-cat="diy-stool-ru" aria-pressed="false">Под паролем</button>
       </div>
       <div class="frame" id="frame"></div>
@@ -303,6 +305,7 @@
         <a id="edit-this" href="../editor/?src=..%2Fdemo%2Fliving-room.ecatm&lang=ru">Редактировать этот пример</a>
       </p>
       <p class="demo-note" id="demo-note">Кнопка «Купить» ведёт на оформление заказа в нашем демо-магазине, где любая позиция стоит $0.</p>
+      <p class="demo-note" id="demo-note-booking" hidden>Кнопка «Записаться» открывает демо-календарь — записи в нём ненастоящие.</p>
       <p class="steps-line"><strong>Сделайте свой каталог:</strong> добавьте изображение → отметьте детали точками → сохраните файл каталога и откройте его в Просмотрщике.</p>
       <p class="steps-line"><strong>Разместите на своём сайте:</strong> демо выше — это и есть встраиваемый виджет. Чтобы поставить его к себе на страницу, нужны один тег <code>&lt;script&gt;</code> и одна строка <code>&lt;ecm-viewer&gt;</code>. <a href="../demo/embed-demo.html">Пример на сайте магазина →</a> · <a href="https://github.com/alexandrkotov/electronic-catalog-maker#embedding-the-viewer">Как встроить →</a></p>
       <noscript><p>Для живого демо нужен JavaScript — воспользуйтесь ссылкой «Открыть полное демо» выше.</p></noscript>
@@ -315,6 +318,7 @@
       <div class="card"><h3>Платные и закрытые каталоги</h3><p>Продавайте инструкцию или курс, либо делитесь одними каталогами со всеми, а другими — только с теми, кому дали пароль. Один пароль на файл — без аккаунтов и сервера; открыть может любой, у кого есть пароль. Защищённую копию вы создаёте в редакторе. <a href="../viewer/?src=..%2Fdemo%2Fdiy-stool-ru.ecatm&lang=ru">Открыть демо (пароль: stool-2026) →</a></p></div>
       <div class="card"><h3>Обучение</h3><p>Схемы, которые можно исследовать, для уроков и школьных проектов — без учётных записей учеников и без облака. <a href="schools.html">Страница для школ →</a></p></div>
       <div class="card"><h3>Залы и фитнес</h3><p>Выберите группу мышц, найдите тренажёр, узнайте, как его настроить, и распечатайте тренировку — без приложения и аккаунта. <a href="../viewer/?src=..%2Fdemo%2Ffitness-ru.ecatm&lang=ru">Открыть демо →</a></p></div>
+      <div class="card"><h3>Услуги и запись</h3><p>Список услуг с фото: клиент выбирает услугу, читает, как она проходит, и нажимает «Записаться» — открывается ваш календарь записи. <a href="#demo" data-demo-cat="cosmetologist-ru">Открыть демо →</a></p></div>
       <div class="card"><h3>Тесты и самопроверка</h3><p>Варианты ответа прямо на картинке: нажмите — станет зелёным или красным, счёт считается сам. Демо на английском. <a href="../viewer/?src=..%2Fdemo%2Fquiz-citizenship-en.ecatm&lang=ru">Открыть демо →</a></p></div>
     </div>
 
@@ -509,10 +513,14 @@
       var buttons = document.querySelectorAll(".tabs button");
       var scriptLoaded = false;
       // [image id, hotspot id] to show selected on load, per example catalog.
-      var START = { "living-room": [1, 1], "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-ru": [1, 1], "product-grid": [1, 1] };
+      var START = { "living-room": [1, 1], "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-ru": [1, 1], "product-grid": [1, 1], "cosmetologist-ru": [1, 1] };
       // Password-protected demo: it opens on a lock screen (the password is printed
       // under the frame), and a protected file cannot be opened in the editor.
       var LOCKED = "diy-stool-ru";
+      // Services-with-booking demo: its first image is a list of services whose
+      // markers are the service names, so it opens without the details card and
+      // "Book" goes to a booking calendar instead of the demo store.
+      var BOOKING = "cosmetologist-ru";
       var BUNDLE = "https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js";
       function loadScript(cb) {
         if (scriptLoaded) return cb();
@@ -544,7 +552,8 @@
         document.getElementById("open-full").href = "../viewer/?src=..%2Fdemo%2F" + cat + ".ecatm&lang=ru";
         document.getElementById("edit-this").href = "../editor/?src=..%2Fdemo%2F" + cat + ".ecatm&lang=ru";
         document.getElementById("edit-this").style.display = cat === LOCKED ? "none" : "";
-        document.getElementById("demo-note").hidden = cat === LOCKED;
+        document.getElementById("demo-note").hidden = cat === LOCKED || cat === BOOKING;
+        document.getElementById("demo-note-booking").hidden = cat !== BOOKING;
         loadScript(function () {
           frame.textContent = "";
           var el = document.createElement("ecm-viewer");
@@ -558,11 +567,23 @@
           // markers, so open close-up on the selected item (Fit shows it all).
           // The living-room photo reads fine whole, so it stays fitted.
           if (cat !== "living-room") el.setAttribute("compact-zoom", "0.75");
+          if (cat === BOOKING) {
+            el.setAttribute("overview-list", "off");
+            el.setAttribute("nav-title", T.demoBookingBack);
+            // Service names as equal-width pills, smaller on a wide screen.
+            el.style.setProperty("--ecm-overview-label-min-width", "12em");
+            el.style.setProperty("--ecm-overview-label-radius", "999px");
+            el.style.setProperty("--ecm-overview-label-padding", "0.12em 0.4em");
+            if (window.matchMedia("(min-width: 701px)").matches) el.style.setProperty("--ecm-overview-label-scale", "0.65");
+          }
           el.setAttribute("src", new URL("../demo/" + cat + ".ecatm", location.href).href);
           frame.appendChild(el);
         });
       }
       buttons.forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.cat); }); });
+      // A "Who it's for" link that opens its example in the widget above
+      // (the href scrolls there) rather than in the full viewer.
+      document.querySelectorAll("a[data-demo-cat]").forEach(function (a) { a.addEventListener("click", function () { show(a.dataset.demoCat); }); });
       show("living-room");
     })();
   </script>

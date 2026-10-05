@@ -6,7 +6,7 @@
 <script>
   // Page language + the few strings the page scripts need (from the dictionary's js.* keys).
   var LANG = "en";
-  var T = {"themeLight":"☀️ Light","themeDark":"🌙 Dark","demoLoadFailed":"The live demo couldn’t load. Use “Open full demo” below.","visits.one":"\u003cstrong>{n}\u003c/strong> visit to this site so far.","visits.other":"\u003cstrong>{n}\u003c/strong> visits to this site so far."};
+  var T = {"themeLight":"☀️ Light","themeDark":"🌙 Dark","demoLoadFailed":"The live demo couldn’t load. Use “Open full demo” below.","demoBookingBack":"Back to all services","visits.one":"\u003cstrong>{n}\u003c/strong> visit to this site so far.","visits.other":"\u003cstrong>{n}\u003c/strong> visits to this site so far."};
 </script>
 <script>
   // Apply the saved (or OS-preferred) theme before first paint — no light flash.
@@ -289,12 +289,14 @@
       <p class="intro" data-hint="living-room">Select a marker to open a close-up of that piece — its details and Buy are there. ⌂ takes you back to the room.</p>
       <p class="intro" data-hint="product-grid" hidden>Select a number on a tile to see the product’s details and Buy. The list at the top switches between groups. <a href="composer/">Have photos and a spreadsheet? Grid Composer builds a grid like this for you →</a></p>
       <p class="intro" data-hint="diy-stool-en" hidden>Demo password: <strong>stool-2026</strong>. Type it on the lock screen below; the cover and title are visible without it.</p>
+      <p class="intro" data-hint="cosmetologist-en" hidden>Select a service to see what it is and how it goes — “Book” opens the booking calendar. ⌂ takes you back to the list.</p>
       <p class="intro" data-hint="*" hidden>Select a marker or use the arrows to explore item details. Use Fit to see the whole image.</p>
       <div class="tabs" role="group" aria-label="Example catalog">
         <button type="button" data-cat="living-room" aria-pressed="true">Shop the look</button>
         <button type="button" data-cat="auto-spare-parts" aria-pressed="false">Exploded view</button>
         <button type="button" data-cat="furniture" aria-pressed="false">Product photo</button>
         <button type="button" data-cat="product-grid" aria-pressed="false">Product grid</button>
+        <button type="button" data-cat="cosmetologist-en" aria-pressed="false">Services with booking</button>
         <button type="button" data-cat="diy-stool-en" aria-pressed="false">Password-protected</button>
       </div>
       <div class="frame" id="frame"></div>
@@ -303,6 +305,7 @@
         <a id="edit-this" href="editor/?src=..%2Fdemo%2Fliving-room.ecatm">Edit this example</a>
       </p>
       <p class="demo-note" id="demo-note">Buy opens our demo store checkout, where every item costs $0.</p>
+      <p class="demo-note" id="demo-note-booking" hidden>“Book” opens a demo booking calendar — appointments made there are not real.</p>
       <p class="steps-line"><strong>Build your own:</strong> add an image → mark the details with hotspots → save the catalog file and open it in Viewer.</p>
       <p class="steps-line"><strong>Put it on your own site:</strong> the demo above is the embeddable widget itself — one <code>&lt;script&gt;</code> tag and one <code>&lt;ecm-viewer&gt;</code> line put it on your page. <a href="demo/embed-demo.html">See it on a sample store site →</a> · <a href="https://github.com/alexandrkotov/electronic-catalog-maker#embedding-the-viewer">How to embed →</a></p>
       <noscript><p>The live demo needs JavaScript — use “Open full demo” above.</p></noscript>
@@ -315,6 +318,7 @@
       <div class="card"><h3>Paid and members-only catalogs</h3><p>Sell a guide or a course, or share some catalogs with everyone and keep others for the people you give the password to. One password per file — no accounts, no server; anyone who has the password can open it. You create the protected copy in the Editor. <a href="viewer/?src=..%2Fdemo%2Fdiy-stool-en.ecatm">Open the demo (password: stool-2026) →</a></p></div>
       <div class="card"><h3>Teaching and learning</h3><p>Explorable diagrams for lessons and class projects — no student accounts, no cloud. <a href="schools.html">See the schools page →</a></p></div>
       <div class="card"><h3>Gyms and fitness</h3><p>Pick a muscle group, find the machine, see how to set it up and print a workout — no app, no account. <a href="viewer/?src=..%2Fdemo%2Ffitness-en.ecatm">Open the demo →</a></p></div>
+      <div class="card"><h3>Services and booking</h3><p>A photo list of your services: a client picks one, reads how it goes and taps “Book” — your booking calendar opens. <a href="#demo" data-demo-cat="cosmetologist-en">Try the demo →</a></p></div>
       <div class="card"><h3>Tests and self-check</h3><p>Answer options sit on the picture — tap one and it turns green or red, with a running score. <a href="viewer/?src=..%2Fdemo%2Fquiz-citizenship-en.ecatm">Try the demo →</a></p></div>
     </div>
 
@@ -509,10 +513,14 @@
       var buttons = document.querySelectorAll(".tabs button");
       var scriptLoaded = false;
       // [image id, hotspot id] to show selected on load, per example catalog.
-      var START = { "living-room": [1, 1], "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-en": [1, 1], "product-grid": [1, 1] };
+      var START = { "living-room": [1, 1], "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-en": [1, 1], "product-grid": [1, 1], "cosmetologist-en": [1, 1] };
       // Password-protected demo: it opens on a lock screen (the password is printed
       // under the frame), and a protected file cannot be opened in the editor.
       var LOCKED = "diy-stool-en";
+      // Services-with-booking demo: its first image is a list of services whose
+      // markers are the service names, so it opens without the details card and
+      // "Book" goes to a booking calendar instead of the demo store.
+      var BOOKING = "cosmetologist-en";
       var BUNDLE = "https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js";
       function loadScript(cb) {
         if (scriptLoaded) return cb();
@@ -544,7 +552,8 @@
         document.getElementById("open-full").href = "viewer/?src=..%2Fdemo%2F" + cat + ".ecatm";
         document.getElementById("edit-this").href = "editor/?src=..%2Fdemo%2F" + cat + ".ecatm";
         document.getElementById("edit-this").style.display = cat === LOCKED ? "none" : "";
-        document.getElementById("demo-note").hidden = cat === LOCKED;
+        document.getElementById("demo-note").hidden = cat === LOCKED || cat === BOOKING;
+        document.getElementById("demo-note-booking").hidden = cat !== BOOKING;
         loadScript(function () {
           frame.textContent = "";
           var el = document.createElement("ecm-viewer");
@@ -558,11 +567,23 @@
           // markers, so open close-up on the selected item (Fit shows it all).
           // The living-room photo reads fine whole, so it stays fitted.
           if (cat !== "living-room") el.setAttribute("compact-zoom", "0.75");
+          if (cat === BOOKING) {
+            el.setAttribute("overview-list", "off");
+            el.setAttribute("nav-title", T.demoBookingBack);
+            // Service names as equal-width pills, smaller on a wide screen.
+            el.style.setProperty("--ecm-overview-label-min-width", "12em");
+            el.style.setProperty("--ecm-overview-label-radius", "999px");
+            el.style.setProperty("--ecm-overview-label-padding", "0.12em 0.4em");
+            if (window.matchMedia("(min-width: 701px)").matches) el.style.setProperty("--ecm-overview-label-scale", "0.65");
+          }
           el.setAttribute("src", new URL("demo/" + cat + ".ecatm", location.href).href);
           frame.appendChild(el);
         });
       }
       buttons.forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.cat); }); });
+      // A "Who it's for" link that opens its example in the widget above
+      // (the href scrolls there) rather than in the full viewer.
+      document.querySelectorAll("a[data-demo-cat]").forEach(function (a) { a.addEventListener("click", function () { show(a.dataset.demoCat); }); });
       show("living-room");
     })();
   </script>

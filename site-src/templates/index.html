@@ -273,12 +273,14 @@
       <p class="intro" data-hint="living-room">{{index.demo.hint.livingRoom}}</p>
       <p class="intro" data-hint="product-grid" hidden>{{index.demo.hint.grid}} <a href="{{@base}}composer/{{@q}}">{{index.demo.hint.gridComposer}}</a></p>
       <p class="intro" data-hint="diy-stool-{{@lang}}" hidden>{{index.demo.noteProtected}}</p>
+      <p class="intro" data-hint="cosmetologist-{{@lang}}" hidden>{{index.demo.hint.booking}}</p>
       <p class="intro" data-hint="*" hidden>{{index.demo.intro}}</p>
       <div class="tabs" role="group" aria-label="{{index.demo.tabsLabel}}">
         <button type="button" data-cat="living-room" aria-pressed="true">{{index.demo.tabs.livingRoom}}</button>
         <button type="button" data-cat="auto-spare-parts" aria-pressed="false">{{index.demo.tabs.autoParts}}</button>
         <button type="button" data-cat="furniture" aria-pressed="false">{{index.demo.tabs.furniture}}</button>
         <button type="button" data-cat="product-grid" aria-pressed="false">{{index.demo.tabs.grid}}</button>
+        <button type="button" data-cat="cosmetologist-{{@lang}}" aria-pressed="false">{{index.demo.tabs.booking}}</button>
         <button type="button" data-cat="diy-stool-{{@lang}}" aria-pressed="false">{{index.demo.tabs.protected}}</button>
       </div>
       <div class="frame" id="frame"></div>
@@ -287,6 +289,7 @@
         <a id="edit-this" href="{{@base}}editor/?src=..%2Fdemo%2Fliving-room.ecatm{{@a}}">{{index.demo.editThis}}</a>
       </p>
       <p class="demo-note" id="demo-note">{{index.demo.note}}</p>
+      <p class="demo-note" id="demo-note-booking" hidden>{{index.demo.noteBooking}}</p>
       <p class="steps-line">{{index.demo.steps}}</p>
       <p class="steps-line">{{index.demo.embed}} <a href="{{@base}}demo/embed-demo.html">{{index.demo.embed.sample}}</a> · <a href="https://github.com/alexandrkotov/electronic-catalog-maker#embedding-the-viewer">{{index.demo.embed.howto}}</a></p>
       <noscript><p>{{index.demo.noscript}}</p></noscript>
@@ -299,6 +302,7 @@
       <div class="card"><h3>{{index.who.protected.title}}</h3><p>{{index.who.protected.text}} <a href="{{@base}}viewer/?src=..%2Fdemo%2Fdiy-stool-{{@lang}}.ecatm{{@a}}">{{index.who.protected.link}}</a></p></div>
       <div class="card"><h3>{{index.who.teaching.title}}</h3><p>{{index.who.teaching.text}}</p></div>
       <div class="card"><h3>{{index.who.fitness.title}}</h3><p>{{index.who.fitness.text}} <a href="{{@base}}viewer/?src=..%2Fdemo%2Ffitness-{{@lang}}.ecatm{{@a}}">{{index.who.fitness.link}}</a></p></div>
+      <div class="card"><h3>{{index.who.booking.title}}</h3><p>{{index.who.booking.text}} <a href="#demo" data-demo-cat="cosmetologist-{{@lang}}">{{index.who.booking.link}}</a></p></div>
       <div class="card"><h3>{{index.who.quiz.title}}</h3><p>{{index.who.quiz.text}} <a href="{{@base}}viewer/?src=..%2Fdemo%2Fquiz-citizenship-en.ecatm{{@a}}">{{index.who.quiz.link}}</a></p></div>
     </div>
 
@@ -493,10 +497,14 @@
       var buttons = document.querySelectorAll(".tabs button");
       var scriptLoaded = false;
       // [image id, hotspot id] to show selected on load, per example catalog.
-      var START = { "living-room": [1, 1], "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-{{@lang}}": [1, 1], "product-grid": [1, 1] };
+      var START = { "living-room": [1, 1], "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-{{@lang}}": [1, 1], "product-grid": [1, 1], "cosmetologist-{{@lang}}": [1, 1] };
       // Password-protected demo: it opens on a lock screen (the password is printed
       // under the frame), and a protected file cannot be opened in the editor.
       var LOCKED = "diy-stool-{{@lang}}";
+      // Services-with-booking demo: its first image is a list of services whose
+      // markers are the service names, so it opens without the details card and
+      // "Book" goes to a booking calendar instead of the demo store.
+      var BOOKING = "cosmetologist-{{@lang}}";
       var BUNDLE = "https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js";
       function loadScript(cb) {
         if (scriptLoaded) return cb();
@@ -528,7 +536,8 @@
         document.getElementById("open-full").href = "{{@base}}viewer/?src=..%2Fdemo%2F" + cat + ".ecatm{{@a}}";
         document.getElementById("edit-this").href = "{{@base}}editor/?src=..%2Fdemo%2F" + cat + ".ecatm{{@a}}";
         document.getElementById("edit-this").style.display = cat === LOCKED ? "none" : "";
-        document.getElementById("demo-note").hidden = cat === LOCKED;
+        document.getElementById("demo-note").hidden = cat === LOCKED || cat === BOOKING;
+        document.getElementById("demo-note-booking").hidden = cat !== BOOKING;
         loadScript(function () {
           frame.textContent = "";
           var el = document.createElement("ecm-viewer");
@@ -542,11 +551,23 @@
           // markers, so open close-up on the selected item (Fit shows it all).
           // The living-room photo reads fine whole, so it stays fitted.
           if (cat !== "living-room") el.setAttribute("compact-zoom", "0.75");
+          if (cat === BOOKING) {
+            el.setAttribute("overview-list", "off");
+            el.setAttribute("nav-title", T.demoBookingBack);
+            // Service names as equal-width pills, smaller on a wide screen.
+            el.style.setProperty("--ecm-overview-label-min-width", "12em");
+            el.style.setProperty("--ecm-overview-label-radius", "999px");
+            el.style.setProperty("--ecm-overview-label-padding", "0.12em 0.4em");
+            if (window.matchMedia("(min-width: 701px)").matches) el.style.setProperty("--ecm-overview-label-scale", "0.65");
+          }
           el.setAttribute("src", new URL("{{@base}}demo/" + cat + ".ecatm", location.href).href);
           frame.appendChild(el);
         });
       }
       buttons.forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.cat); }); });
+      // A "Who it's for" link that opens its example in the widget above
+      // (the href scrolls there) rather than in the full viewer.
+      document.querySelectorAll("a[data-demo-cat]").forEach(function (a) { a.addEventListener("click", function () { show(a.dataset.demoCat); }); });
       show("living-room");
     })();
   </script>
