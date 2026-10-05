@@ -61,16 +61,27 @@ Each one opens a live demo, nothing to install:
 
 ## What a catalog can be
 
-Every catalog is one pick from each of four levels: how people reach a
-picture, what is on it, how an item's data is shown, and what a tap does.
-The examples at the bottom are the live demos written that way. The same
-picture is a section of the [landing page](https://tapalog.com), also in
-[Russian](https://tapalog.com/ru/catalog-types.svg) and
-[Ukrainian](https://tapalog.com/uk/catalog-types.svg):
+Every catalog is one pick from each of four levels: how you move between
+pictures, what is on a picture, how an item's data is shown, and what a tap
+does. The examples at the bottom of the picture are live demos — open them
+here:
+
+[Product grid](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fproduct-grid.ecatm) ·
+[Auto parts](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fauto-spare-parts.ecatm) ·
+[Furniture](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Ffurniture.ecatm) ·
+[Living room](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fliving-room.ecatm) ·
+[Cell biology](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fcell-biology.ecatm) ·
+[Fitness](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Ffitness-en.ecatm) ·
+[Beauty services](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fcosmetologist-en.ecatm) ·
+[Quiz](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fquiz-citizenship-en.ecatm)
 
 <p align="center">
-  <a href="landing/catalog-types.svg"><img src="landing/catalog-types.svg" width="100%" alt="Catalog types in four levels. Navigation: one picture, a picture list or a home picture. Picture: one item, a photo with hotspots, an exploded view or a tile grid. Details: a table or a card. Action: buy, learn more, exercise, book, answer or no action. Below, eight live demos written as one pick from each level."></a>
+  <a href="https://tapalog.com/#types-h"><img src="landing/catalog-types.svg" width="100%" alt="Catalog types in four levels. Navigation: one picture, a picture list or a home picture. Picture: one item, a photo with hotspots, an exploded view or a tile grid. Details: a table or a card. Action: buy, learn more, exercise, book, answer or no action. Below, eight live demos written as one pick from each level."></a>
 </p>
+
+The picture itself opens the same section on the [landing page](https://tapalog.com/#types-h),
+also in [Russian](https://tapalog.com/ru/#types-h) and
+[Ukrainian](https://tapalog.com/uk/#types-h).
 
 ## How the apps fit together
 
