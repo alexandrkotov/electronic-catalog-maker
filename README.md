@@ -63,25 +63,28 @@ Each one opens a live demo, nothing to install:
 
 Every catalog is one pick from each of four levels: how you move between
 pictures, what is on a picture, how an item's data is shown, and what a tap
-does. The examples at the bottom of the picture are live demos — open them
-here:
-
-[Product grid](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fproduct-grid.ecatm) ·
-[Auto parts](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fauto-spare-parts.ecatm) ·
-[Furniture](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Ffurniture.ecatm) ·
-[Living room](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fliving-room.ecatm) ·
-[Cell biology](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fcell-biology.ecatm) ·
-[Fitness](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Ffitness-en.ecatm) ·
-[Beauty services](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fcosmetologist-en.ecatm) ·
-[Quiz](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fquiz-citizenship-en.ecatm)
+does. The same levels are a section of the
+[landing page](https://tapalog.com/#types-h), also in
+[Russian](https://tapalog.com/ru/#types-h) and
+[Ukrainian](https://tapalog.com/uk/#types-h).
 
 <p align="center">
-  <a href="https://tapalog.com/#types-h"><img src="landing/catalog-types.svg" width="100%" alt="Catalog types in four levels. Navigation: one picture, a picture list or a home picture. Picture: one item, a photo with hotspots, an exploded view or a tile grid. Details: a table or a card. Action: buy, learn more, exercise, book, answer or no action. Below, eight live demos written as one pick from each level."></a>
+  <a href="https://tapalog.com/#types-h"><img src="landing/catalog-types.svg" width="100%" alt="Catalog types in four levels. Navigation: one picture, a picture list or a home picture. Picture: one item, a photo with hotspots, an exploded view or a tile grid. Details: a table or a card. Action: buy, learn more, exercise, book, answer or no action."></a>
 </p>
 
-The picture itself opens the same section on the [landing page](https://tapalog.com/#types-h),
-also in [Russian](https://tapalog.com/ru/#types-h) and
-[Ukrainian](https://tapalog.com/uk/#types-h).
+The live demos, written as their picks (every catalog has both the table and
+the card, so level 3 is left out):
+
+| Live demo | Navigation | Picture | Action |
+|---|---|---|---|
+| [Product grid](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fproduct-grid.ecatm) | From a list | Tile grid | Buy, into a cart |
+| [Auto parts](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fauto-spare-parts.ecatm) | From a list | Exploded view | Buy, into a cart |
+| [Furniture](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Ffurniture.ecatm) | From a list | Photo with hotspots | Buy, into a cart |
+| [Living room](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fliving-room.ecatm) | From a home picture | One item | Buy, into a cart |
+| [Cell biology](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fcell-biology.ecatm) | One picture only | Exploded view | Learn more, into a collection |
+| [Fitness](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Ffitness-en.ecatm) | From a list | Photo with hotspots | Exercise, into a workout |
+| [Beauty services](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fcosmetologist-en.ecatm) | From a home picture | One item | Book, right away |
+| [Quiz](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fquiz-citizenship-en.ecatm) | From a list | Photo with hotspots | Answer |
 
 ## How the apps fit together
 
