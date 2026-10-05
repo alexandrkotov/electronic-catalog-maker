@@ -25,12 +25,14 @@ cp landing/index.html site/index.html
 cp landing/schools.html site/schools.html
 cp landing/privacy.html site/privacy.html
 cp landing/toolset.svg site/toolset.svg
+cp landing/catalog-types.svg site/catalog-types.svg
 # Translated copies of the landing/schools pages (generated and committed — see site-src/README.md).
 for lang in ru uk; do
   mkdir -p "site/$lang"
   cp "landing/$lang/index.html" "site/$lang/index.html"
   cp "landing/$lang/schools.html" "site/$lang/schools.html"
   cp "landing/$lang/toolset.svg" "site/$lang/toolset.svg"
+  cp "landing/$lang/catalog-types.svg" "site/$lang/catalog-types.svg"
 done
 cp landing/CNAME site/CNAME
 cp landing/favicon-16.png site/favicon-16.png

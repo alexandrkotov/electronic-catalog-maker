@@ -1,6 +1,7 @@
 /**
  * Generates the localized static pages (landing/index.html, landing/schools.html,
- * the toolset map landing/toolset.svg, and their translated copies under
+ * the toolset map landing/toolset.svg, the catalog-types picture
+ * landing/catalog-types.svg, and their translated copies under
  * landing/<lang>/) from the shared
  * templates in site-src/templates/ and the per-language dictionaries in
  * site-src/i18n/. The generated files are COMMITTED (the deploy script and
@@ -13,6 +14,7 @@
  *   {url_name}     -> an external URL from site-src/links.json (also usable
  *                     inside messages, so translators keep every link intact)
  *   {{@lang}} {{@base}} {{@q}} {{@a}} {{@alternates}} {{@switch}} {{@messages}} -> per-page values
+ *   {{@typeIcons}} -> the catalog-type pictograms (templates/_catalog-type-icons.svg)
  *
  * Usage: bun scripts/generate-site.ts [--check]
  */
@@ -44,8 +46,11 @@ const LANGS: Record<string, LangConfig> = {
 const DEFAULT_LANG = "en";
 // toolset.svg is the full toolset map the landing's short one links to (and
 // README.md shows) — a standalone SVG, so its messages must stay XML-safe
-// (no HTML-only entities like &nbsp;).
-const PAGES = ["index.html", "schools.html", "toolset.svg"];
+// (no HTML-only entities like &nbsp;). catalog-types.svg is the same kind of
+// file: the landing's "What a catalog can be" section as one picture, for README.md.
+const PAGES = ["index.html", "schools.html", "toolset.svg", "catalog-types.svg"];
+// One set of pictograms for both the landing section and catalog-types.svg.
+const typeIcons = readFileSync(join(ROOT, "site-src/templates/_catalog-type-icons.svg"), "utf8");
 
 const readJson = (path: string) => JSON.parse(readFileSync(join(ROOT, path), "utf8")) as Record<string, string>;
 const links = readJson("site-src/links.json");
@@ -82,6 +87,7 @@ function render(template: string, page: string, lang: string): string {
     "@q": () => (lang === DEFAULT_LANG ? "" : `?lang=${lang}`),
     "@a": () => (lang === DEFAULT_LANG ? "" : `&lang=${lang}`),
     "@messages": messagesJson,
+    "@typeIcons": () => typeIcons,
     "@landingUrl": () => pageUrl(lang, "index.html"),
     "@og": () => {
       const key = page === "index.html" ? "index" : "schools";

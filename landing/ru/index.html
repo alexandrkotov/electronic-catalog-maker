@@ -194,6 +194,33 @@
     min-width: 44px; min-height: 44px;
   }
   @media (max-width: 700px) { .card-row, .use-cases, .apps-row, .apps-row.web { grid-template-columns: 1fr; } }
+  /* "What a catalog can be": four levels of pictograms + live demos written as one pick per level.
+     The same picture as one image is catalog-types.svg (README). */
+  .ct { margin: 0 0 2rem; }
+  .ct > h2 { margin-bottom: 0.75rem; }
+  .ct .intro { margin: 0 0 0.75rem; color: var(--text-2); }
+  .ct > h3 { margin: 1.25rem 0 0.25rem; font-size: 1.1rem; }
+  .ct-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+  .ct-level { display: flex; gap: 1rem; align-items: flex-start; padding: 1rem; margin: 0 0 0.6rem; background: var(--frame-bg); border: 1px solid var(--border); border-radius: 8px; }
+  .ct-head { display: flex; gap: 0.6rem; align-items: flex-start; flex: 0 0 13rem; }
+  .ct-head strong { display: block; }
+  .ct-head small { display: block; font-size: 0.85rem; color: var(--muted); }
+  .ct-num { flex: none; width: 1.75rem; height: 1.75rem; border-radius: 50%; background: var(--link); color: var(--bg); font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; }
+  .ct-opts, .ct-examples { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; }
+  .ct-opts { gap: 0.75rem 0.5rem; flex: 1 1 auto; align-self: stretch; }
+  .ct-opts li { width: 6rem; display: flex; flex-direction: column; align-items: center; gap: 0.3rem; text-align: center; font-size: 0.8rem; font-weight: 600; line-height: 1.25; }
+  .ct-tile { display: block; width: 76px; height: 56px; padding: 6px 8px; box-sizing: border-box; background: var(--bg); border: 1.5px solid var(--border); border-radius: 10px; }
+  .ct-tile.ct-mini { width: 52px; height: 38px; padding: 4px 6px; border-radius: 8px; }
+  .ct-examples { gap: 1rem 1.5rem; }
+  .ct-examples li { flex: 0 0 calc(25% - 1.125rem); min-width: 12.5rem; }
+  .ct-examples a { display: block; margin-bottom: 0.3rem; font-size: 0.9rem; font-weight: 600; text-decoration: none; }
+  .ct-examples a:hover { text-decoration: underline; }
+  .ct-formula { display: flex; align-items: center; gap: 0.35rem; }
+  .ct-formula i { font-style: normal; color: var(--muted); }
+  .ct-legend { margin: 1rem 0 0; font-size: 0.85rem; color: var(--muted); }
+  .ct-legend svg { width: 1rem; height: 1rem; vertical-align: -0.2em; }
+  @media (max-width: 700px) { .ct-level { flex-direction: column; gap: 0.75rem; } .ct-head { flex-basis: auto; } .ct-examples li { flex-basis: calc(50% - 0.75rem); min-width: 0; } }
+  @media (max-width: 420px) { .ct-opts li { width: calc(33.33% - 0.34rem); } .ct-examples li { flex-basis: 100%; } }
   /* Short toolset map at the top of "Apps" — the whole thing links to the full map (toolset.svg). */
   .tm-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
   .toolset-map { display: block; margin: 0 0 1.5rem; color: inherit; text-decoration: none;
@@ -321,6 +348,90 @@
       <div class="card"><h3>Услуги и запись</h3><p>Список услуг с фото: клиент выбирает услугу, читает, как она проходит, и нажимает «Записаться» — открывается ваш календарь записи. <a href="#demo" data-demo-cat="cosmetologist-ru">Открыть демо →</a></p></div>
       <div class="card"><h3>Тесты и самопроверка</h3><p>Варианты ответа прямо на картинке: нажмите — станет зелёным или красным, счёт считается сам. Демо на английском. <a href="../viewer/?src=..%2Fdemo%2Fquiz-citizenship-en.ecatm&lang=ru">Открыть демо →</a></p></div>
     </div>
+
+    <section class="ct" aria-labelledby="types-h">
+      <h2 id="types-h">Каким бывает каталог</h2>
+      <!-- Pictograms shared with landing/<lang>/catalog-types.svg (the README picture). -->
+      <svg class="ct-defs" width="0" height="0" aria-hidden="true" focusable="false">
+<style>
+  /* Catalog-type pictograms — shared by the landing section and catalog-types.svg (see scripts/generate-site.ts {{@typeIcons}}). */
+  .ct-ic { fill: none; stroke: var(--text); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .ct-ic .ct-dot { fill: var(--link); stroke: none; }
+  .ct-ic .ct-soft { fill: var(--muted); stroke: none; opacity: .3; }
+  .ct-ic .ct-faint { opacity: .45; }
+  .ct-ic .ct-ok { stroke: var(--yes); }
+  .ct-ic .ct-bad { stroke: var(--no); }
+  .ct-badge { fill: var(--yes); }
+  .ct-badge-plus { fill: none; stroke: var(--bg); stroke-width: 2; stroke-linecap: round; }
+</style>
+<defs>
+  <symbol id="ct-i-single" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-21" y="-15" width="42" height="30" rx="3"/><path d="M-21 9L-9 -3L1 7L7 2L21 11"/><circle cx="10" cy="-7" r="3"/></g></symbol>
+  <symbol id="ct-i-list" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-24" y="-14" width="11" height="7" rx="1.5"/><rect x="-24" y="-3.5" width="11" height="7" rx="1.5"/><rect x="-24" y="7" width="11" height="7" rx="1.5"/><rect x="-8" y="-15" width="32" height="30" rx="3"/></g></symbol>
+  <symbol id="ct-i-home" viewBox="-30 -22 60 44"><g class="ct-ic"><path d="M-17 0L0 -15L17 0M-11 -4V14H11V-4M-3 14V5H3V14"/></g></symbol>
+  <symbol id="ct-i-one" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-24" y="-16" width="48" height="32" rx="3"/><path class="ct-faint" d="M-24 10L-10 -2L0 8L8 2L24 12"/><circle class="ct-dot" cx="0" cy="-5" r="4"/></g></symbol>
+  <symbol id="ct-i-photo" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-24" y="-16" width="48" height="32" rx="3"/><path class="ct-faint" d="M-24 10L-10 -2L0 8L8 2L24 12"/><circle class="ct-dot" cx="-11" cy="-6" r="3.5"/><circle class="ct-dot" cx="3" cy="-8" r="3.5"/><circle class="ct-dot" cx="14" cy="-2" r="3.5"/></g></symbol>
+  <symbol id="ct-i-exploded" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-24" y="-16" width="48" height="32" rx="3"/><circle class="ct-dot" cx="-14" cy="-6" r="3"/><circle class="ct-dot" cx="-2" cy="4" r="3"/><circle class="ct-dot" cx="8" cy="-8" r="3"/><circle class="ct-dot" cx="16" cy="6" r="3"/><circle class="ct-dot" cx="-12" cy="9" r="3"/><circle class="ct-dot" cx="0" cy="-9" r="3"/></g></symbol>
+  <symbol id="ct-i-tiles" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-22" y="-14" width="12" height="12" rx="2"/><rect x="-6" y="-14" width="12" height="12" rx="2"/><rect x="10" y="-14" width="12" height="12" rx="2"/><rect x="-22" y="2" width="12" height="12" rx="2"/><rect x="-6" y="2" width="12" height="12" rx="2"/><rect x="10" y="2" width="12" height="12" rx="2"/></g></symbol>
+  <symbol id="ct-i-table" viewBox="-30 -22 60 44"><g class="ct-ic"><rect class="ct-soft" x="-22" y="-15" width="44" height="9"/><rect x="-22" y="-15" width="44" height="30" rx="3"/><path d="M-22 -6H22M-22 4H22M-8 -15V15M7 -15V15"/></g></symbol>
+  <symbol id="ct-i-card" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-22" y="-15" width="44" height="30" rx="3"/><rect class="ct-soft" x="-17" y="-10" width="14" height="13"/><path d="M2 -7H17M2 -1H13M-17 9H17"/></g></symbol>
+  <symbol id="ct-i-buy" viewBox="-30 -22 60 44"><g class="ct-ic"><path d="M-22 -12H-15L-9 5H9L13 -6H-13"/><circle cx="-6" cy="11" r="2.5"/><circle cx="7" cy="11" r="2.5"/></g></symbol>
+  <symbol id="ct-i-learn" viewBox="-30 -22 60 44"><g class="ct-ic"><path d="M-2 -9C-8 -13,-15 -13,-21 -11V11C-15 9,-8 9,-2 13C4 9,11 9,17 11V-11C11 -13,4 -13,-2 -9ZM-2 -9V13"/></g></symbol>
+  <symbol id="ct-i-exercise" viewBox="-30 -22 60 44"><g class="ct-ic"><path d="M-10 2H8"/><rect x="-16" y="-8" width="6" height="20" rx="1.5"/><rect x="8" y="-8" width="6" height="20" rx="1.5"/><path d="M-20 -2V6M18 -2V6"/></g></symbol>
+  <symbol id="ct-i-book" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-17" y="-11" width="32" height="26" rx="3"/><path d="M-17 -3H15M-9 -15V-8M7 -15V-8M-7 5L-2 10L6 1"/></g></symbol>
+  <symbol id="ct-i-answer" viewBox="-30 -22 60 44"><g class="ct-ic"><circle class="ct-ok" cx="-11" cy="0" r="9"/><path class="ct-ok" d="M-15 0L-12 3.5L-7 -3"/><circle class="ct-bad" cx="11" cy="0" r="9"/><path class="ct-bad" d="M7.5 -3.5L14.5 3.5M14.5 -3.5L7.5 3.5"/></g></symbol>
+  <symbol id="ct-i-look" viewBox="-30 -22 60 44"><g class="ct-ic"><path d="M-20 0C-10 -14,10 -14,20 0C10 14,-10 14,-20 0Z"/><circle cx="0" cy="0" r="5"/></g></symbol>
+  <symbol id="ct-i-plus" viewBox="-30 -22 60 44"><circle class="ct-badge" cx="20" cy="-13" r="7"/><path class="ct-badge-plus" d="M16.5 -13H23.5M20 -16.5V-9.5"/></symbol>
+</defs>
+      </svg>
+      <div class="ct-level">
+        <div class="ct-head"><span class="ct-num">1</span><span><strong>Навигация</strong><small>как переходят</small></span></div>
+        <ul class="ct-opts">
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-single" x="-30" y="-22" width="60" height="44"/></svg><span>Без переходов</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-list" x="-30" y="-22" width="60" height="44"/></svg><span>По списку</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-home" x="-30" y="-22" width="60" height="44"/></svg><span>С главной картинки</span></li>
+        </ul>
+      </div>
+      <div class="ct-level">
+        <div class="ct-head"><span class="ct-num">2</span><span><strong>Картинка</strong><small>что на ней</small></span></div>
+        <ul class="ct-opts">
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-one" x="-30" y="-22" width="60" height="44"/></svg><span>Одна позиция</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-photo" x="-30" y="-22" width="60" height="44"/></svg><span>Фото с точками</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-exploded" x="-30" y="-22" width="60" height="44"/></svg><span>Разнесённая схема</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-tiles" x="-30" y="-22" width="60" height="44"/></svg><span>Плитки</span></li>
+        </ul>
+      </div>
+      <div class="ct-level">
+        <div class="ct-head"><span class="ct-num">3</span><span><strong>Описание</strong><small>как показаны данные</small></span></div>
+        <ul class="ct-opts">
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-table" x="-30" y="-22" width="60" height="44"/></svg><span>Таблица</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-card" x="-30" y="-22" width="60" height="44"/></svg><span>Карточка</span></li>
+        </ul>
+      </div>
+      <div class="ct-level">
+        <div class="ct-head"><span class="ct-num">4</span><span><strong>Действие</strong><small>что делает нажатие</small></span></div>
+        <ul class="ct-opts">
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-buy" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg><span>Купить</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-learn" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg><span>Узнать больше</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-exercise" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg><span>Упражнение</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-book" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg><span>Записаться</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-answer" x="-30" y="-22" width="60" height="44"/></svg><span>Ответить</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-look" x="-30" y="-22" width="60" height="44"/></svg><span>Без действия</span></li>
+        </ul>
+      </div>
+      <h3>Примеры</h3>
+      <p class="intro">Живые демо и то, что в них выбрано на уровнях 1, 2 и 4 (таблица и карточка есть у каждого каталога).</p>
+      <ul class="ct-examples">
+        <li><a href="../viewer/?src=..%2Fdemo%2Fproduct-grid.ecatm&lang=ru">Сетка товаров</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-list" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-tiles" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-buy" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+        <li><a href="../viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm&lang=ru">Автозапчасти</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-list" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-exploded" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-buy" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+        <li><a href="../viewer/?src=..%2Fdemo%2Ffurniture.ecatm&lang=ru">Мебель</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-list" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-photo" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-buy" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+        <li><a href="../viewer/?src=..%2Fdemo%2Fliving-room.ecatm&lang=ru">Гостиная</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-home" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-one" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-buy" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+        <li><a href="../viewer/?src=..%2Fdemo%2Fcell-biology.ecatm&lang=ru">Биология клетки</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-single" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-exploded" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-learn" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+        <li><a href="../viewer/?src=..%2Fdemo%2Ffitness-ru.ecatm&lang=ru">Фитнес</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-list" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-photo" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-exercise" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+        <li><a href="../viewer/?src=..%2Fdemo%2Fcosmetologist-ru.ecatm&lang=ru">Косметолог</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-home" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-one" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-book" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+        <li><a href="../viewer/?src=..%2Fdemo%2Fquiz-citizenship-en.ecatm&lang=ru">Тест</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-list" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-photo" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-answer" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+      </ul>
+      <p class="ct-legend"><svg viewBox="12 -21 16 16" aria-hidden="true"><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg> с плюсом выбранное копится в списке (корзина, коллекция, тренировка, мои записи), без плюса действие срабатывает сразу. Это переключается в настройках каталога</p>
+    </section>
 
     <h2>Приложения</h2>
     <svg class="tm-defs" width="0" height="0" aria-hidden="true" focusable="false">

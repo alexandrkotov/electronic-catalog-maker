@@ -2,16 +2,20 @@
 
 `landing/index.html`, `landing/schools.html`, the full toolset map
 `landing/toolset.svg` (linked from the landing's short map and shown in the
-repo README) and their translated copies in `landing/<lang>/` are
-**generated** — don't edit them by hand. `toolset.svg` is a standalone SVG
-(XML), so its `toolset.*` messages must not use HTML-only entities like
-`&nbsp;`.
+repo README), the catalog-types picture `landing/catalog-types.svg` (the
+landing's "What a catalog can be" section as one image, for the repo README)
+and their translated copies in `landing/<lang>/` are **generated** — don't
+edit them by hand. The two `.svg` files are standalone SVG (XML), so the
+`toolset.*` and `types.*` messages must not use HTML-only entities like
+`&nbsp;`. `templates/_catalog-type-icons.svg` is not a page: it holds the
+pictograms both the landing section and `catalog-types.svg` pull in with
+`{{@typeIcons}}`.
 
 - `templates/` — one HTML template per page, shared by every language.
   `{{some.key}}` pulls a message from the dictionary; `{url_name}` an external
   link from `links.json` (also usable inside messages, so a translation can't
   silently lose a link); `{{@lang}}`, `{{@base}}`, `{{@alternates}}`,
-  `{{@switch}}`, `{{@messages}}` are per-page values (see
+  `{{@switch}}`, `{{@messages}}`, `{{@typeIcons}}` are per-page values (see
   `scripts/generate-site.ts`).
 - `i18n/<lang>.json` — flat `key: message` dictionaries (messages are trusted
   HTML). `en.json` is the source of truth; every other language is checked

@@ -59,6 +59,19 @@ Each one opens a live demo, nothing to install:
   running score.
   [Demo](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fquiz-citizenship-en.ecatm)
 
+## What a catalog can be
+
+Every catalog is one pick from each of four levels: how people reach a
+picture, what is on it, how an item's data is shown, and what a tap does.
+The examples at the bottom are the live demos written that way. The same
+picture is a section of the [landing page](https://tapalog.com), also in
+[Russian](https://tapalog.com/ru/catalog-types.svg) and
+[Ukrainian](https://tapalog.com/uk/catalog-types.svg):
+
+<p align="center">
+  <a href="landing/catalog-types.svg"><img src="landing/catalog-types.svg" width="100%" alt="Catalog types in four levels. Navigation: one picture, a picture list or a home picture. Picture: one item, a photo with hotspots, an exploded view or a tile grid. Details: a table or a card. Action: buy, learn more, exercise, book, answer or no action. Below, eight live demos written as one pick from each level."></a>
+</p>
+
 ## How the apps fit together
 
 One file format, several ways to use it: the **editor** builds a catalog,

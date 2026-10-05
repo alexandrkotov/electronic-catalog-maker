@@ -1,0 +1,29 @@
+<style>
+  /* Catalog-type pictograms — shared by the landing section and catalog-types.svg (see scripts/generate-site.ts {{@typeIcons}}). */
+  .ct-ic { fill: none; stroke: var(--text); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .ct-ic .ct-dot { fill: var(--link); stroke: none; }
+  .ct-ic .ct-soft { fill: var(--muted); stroke: none; opacity: .3; }
+  .ct-ic .ct-faint { opacity: .45; }
+  .ct-ic .ct-ok { stroke: var(--yes); }
+  .ct-ic .ct-bad { stroke: var(--no); }
+  .ct-badge { fill: var(--yes); }
+  .ct-badge-plus { fill: none; stroke: var(--bg); stroke-width: 2; stroke-linecap: round; }
+</style>
+<defs>
+  <symbol id="ct-i-single" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-21" y="-15" width="42" height="30" rx="3"/><path d="M-21 9L-9 -3L1 7L7 2L21 11"/><circle cx="10" cy="-7" r="3"/></g></symbol>
+  <symbol id="ct-i-list" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-24" y="-14" width="11" height="7" rx="1.5"/><rect x="-24" y="-3.5" width="11" height="7" rx="1.5"/><rect x="-24" y="7" width="11" height="7" rx="1.5"/><rect x="-8" y="-15" width="32" height="30" rx="3"/></g></symbol>
+  <symbol id="ct-i-home" viewBox="-30 -22 60 44"><g class="ct-ic"><path d="M-17 0L0 -15L17 0M-11 -4V14H11V-4M-3 14V5H3V14"/></g></symbol>
+  <symbol id="ct-i-one" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-24" y="-16" width="48" height="32" rx="3"/><path class="ct-faint" d="M-24 10L-10 -2L0 8L8 2L24 12"/><circle class="ct-dot" cx="0" cy="-5" r="4"/></g></symbol>
+  <symbol id="ct-i-photo" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-24" y="-16" width="48" height="32" rx="3"/><path class="ct-faint" d="M-24 10L-10 -2L0 8L8 2L24 12"/><circle class="ct-dot" cx="-11" cy="-6" r="3.5"/><circle class="ct-dot" cx="3" cy="-8" r="3.5"/><circle class="ct-dot" cx="14" cy="-2" r="3.5"/></g></symbol>
+  <symbol id="ct-i-exploded" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-24" y="-16" width="48" height="32" rx="3"/><circle class="ct-dot" cx="-14" cy="-6" r="3"/><circle class="ct-dot" cx="-2" cy="4" r="3"/><circle class="ct-dot" cx="8" cy="-8" r="3"/><circle class="ct-dot" cx="16" cy="6" r="3"/><circle class="ct-dot" cx="-12" cy="9" r="3"/><circle class="ct-dot" cx="0" cy="-9" r="3"/></g></symbol>
+  <symbol id="ct-i-tiles" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-22" y="-14" width="12" height="12" rx="2"/><rect x="-6" y="-14" width="12" height="12" rx="2"/><rect x="10" y="-14" width="12" height="12" rx="2"/><rect x="-22" y="2" width="12" height="12" rx="2"/><rect x="-6" y="2" width="12" height="12" rx="2"/><rect x="10" y="2" width="12" height="12" rx="2"/></g></symbol>
+  <symbol id="ct-i-table" viewBox="-30 -22 60 44"><g class="ct-ic"><rect class="ct-soft" x="-22" y="-15" width="44" height="9"/><rect x="-22" y="-15" width="44" height="30" rx="3"/><path d="M-22 -6H22M-22 4H22M-8 -15V15M7 -15V15"/></g></symbol>
+  <symbol id="ct-i-card" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-22" y="-15" width="44" height="30" rx="3"/><rect class="ct-soft" x="-17" y="-10" width="14" height="13"/><path d="M2 -7H17M2 -1H13M-17 9H17"/></g></symbol>
+  <symbol id="ct-i-buy" viewBox="-30 -22 60 44"><g class="ct-ic"><path d="M-22 -12H-15L-9 5H9L13 -6H-13"/><circle cx="-6" cy="11" r="2.5"/><circle cx="7" cy="11" r="2.5"/></g></symbol>
+  <symbol id="ct-i-learn" viewBox="-30 -22 60 44"><g class="ct-ic"><path d="M-2 -9C-8 -13,-15 -13,-21 -11V11C-15 9,-8 9,-2 13C4 9,11 9,17 11V-11C11 -13,4 -13,-2 -9ZM-2 -9V13"/></g></symbol>
+  <symbol id="ct-i-exercise" viewBox="-30 -22 60 44"><g class="ct-ic"><path d="M-10 2H8"/><rect x="-16" y="-8" width="6" height="20" rx="1.5"/><rect x="8" y="-8" width="6" height="20" rx="1.5"/><path d="M-20 -2V6M18 -2V6"/></g></symbol>
+  <symbol id="ct-i-book" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-17" y="-11" width="32" height="26" rx="3"/><path d="M-17 -3H15M-9 -15V-8M7 -15V-8M-7 5L-2 10L6 1"/></g></symbol>
+  <symbol id="ct-i-answer" viewBox="-30 -22 60 44"><g class="ct-ic"><circle class="ct-ok" cx="-11" cy="0" r="9"/><path class="ct-ok" d="M-15 0L-12 3.5L-7 -3"/><circle class="ct-bad" cx="11" cy="0" r="9"/><path class="ct-bad" d="M7.5 -3.5L14.5 3.5M14.5 -3.5L7.5 3.5"/></g></symbol>
+  <symbol id="ct-i-look" viewBox="-30 -22 60 44"><g class="ct-ic"><path d="M-20 0C-10 -14,10 -14,20 0C10 14,-10 14,-20 0Z"/><circle cx="0" cy="0" r="5"/></g></symbol>
+  <symbol id="ct-i-plus" viewBox="-30 -22 60 44"><circle class="ct-badge" cx="20" cy="-13" r="7"/><path class="ct-badge-plus" d="M16.5 -13H23.5M20 -16.5V-9.5"/></symbol>
+</defs>
