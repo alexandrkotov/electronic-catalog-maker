@@ -131,7 +131,7 @@
     <rect class="card" width="260" height="84" rx="14"/>
     <use href="#i-store" class="ic" x="16" y="22" width="40" height="40"/>
     <text class="t" x="70" y="38">Інтернет-магазин</text>
-    <text class="s" x="70" y="60">Shopify · Payhip</text>
+    <text class="s" x="70" y="60">Shopify · Squarespace · Payhip</text>
   </g>
   <g transform="translate(450 30)">
     <rect class="card" width="260" height="84" rx="14"/>

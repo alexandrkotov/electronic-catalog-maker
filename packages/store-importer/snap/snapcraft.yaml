@@ -4,8 +4,8 @@ base: core22
 version: '0.1.0'
 summary: Turn your online store into photos and a table for a tile catalog
 description: |
-  Saves the products of your own Shopify or Payhip store as a folder of
-  photos plus a table (CSV), in exactly the format Electronic Catalog
+  Saves the products of your own Shopify, Squarespace or Payhip store as a
+  folder of photos plus a table (CSV), in exactly the format Electronic Catalog
   Maker's Grid Composer (https://tapalog.com/composer/) turns into a
   printable, offline-capable tile catalog with a QR code per product.
 

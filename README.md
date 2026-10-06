@@ -264,7 +264,7 @@ folder and the table from your store for you.
 
 ## Importing your online store
 
-Have a **Shopify** or **Payhip** store and want a printable catalog of it —
+Have a **Shopify**, **Squarespace** or **Payhip** store and want a printable catalog of it —
 with a QR code per product — or an offline one for a showroom or a trade
 show? The **Store Importer** is a small app you run on your own computer:
 give it your store's address, and it saves every product as a folder of
@@ -292,6 +292,9 @@ products left without one go to "Other".
 - **Shopify** reads the store's public product list directly — nothing to
   set up, photos come already resized, a few hundred products take a
   minute or two.
+- **Squarespace** works the same way: the importer finds your store page
+  on the site by itself, and a product in a nested category goes to the
+  grid of its main category.
 - **Payhip** doesn't let apps read its store pages, so it takes one extra
   step: open your store in your browser, save it (Ctrl+S, "Webpage, HTML
   only"), give each page of the product list its own file name, and pick
@@ -849,7 +852,8 @@ tile catalog from photos and a table") works end-to-end as well — tested
 with catalogs of 30 and 138 items, from photos and table through to the
 editor, the viewer and the exported PDF. The Store Importer (see
 "Importing your online store") works end-to-end from source — live-tested
-on a real Shopify store (146 products in 12 folders) and on a real Payhip store's
+on a real Shopify store (146 products in 12 folders), a real Squarespace
+store (40 products in 8 folders) and a real Payhip store's
 4 saved pages, through to a catalog built in the Grid Composer — and ships
 on the Snap Store and as direct downloads (the Windows build confirmed on a
 real machine). [CI](.github/workflows/ci.yml)

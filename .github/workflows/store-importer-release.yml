@@ -196,8 +196,8 @@ jobs:
             'Maintainer: Alexander Kotov <alexandrkotov@users.noreply.github.com>' \
             'Homepage: https://tapalog.com/' \
             'Description: Turn your online store into photos and a table for a tile catalog' \
-            ' Saves the products of your own Shopify or Payhip store as a folder' \
-            ' of photos plus a CSV table, ready for the Grid Composer of Electronic' \
+            ' Saves the products of your own Shopify, Squarespace or Payhip store' \
+            ' as a folder of photos plus a CSV table, ready for the Grid Composer of Electronic' \
             ' Catalog Maker. Launch it from the Linux apps menu; it opens its page' \
             ' in your browser, and its Quit button there stops it again.' \
             > "$PKGROOT/DEBIAN/control"
@@ -345,7 +345,7 @@ jobs:
           tag_name: store-importer-latest
           name: "store-importer v${{ steps.version.outputs.version }}"
           body: |
-            Saves the products of your own Shopify or Payhip store as a folder of photos plus a table, ready for Electronic Catalog Maker's [Grid Composer](https://tapalog.com/composer/) to build a printable tile catalog from.
+            Saves the products of your own Shopify, Squarespace or Payhip store as a folder of photos plus a table, ready for Electronic Catalog Maker's [Grid Composer](https://tapalog.com/composer/) to build a printable tile catalog from.
 
             - `ecm-store-importer-windows-x64.exe` — Windows, portable, no installer
             - `ecm-store-importer-linux-x64` — Linux, portable, no installer
