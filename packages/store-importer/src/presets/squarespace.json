@@ -33,7 +33,8 @@
     "sku": "structuredContent.variants[0].sku",
     "description": "excerpt",
     "folder": "categoryIds[0]",
-    "image": "assetUrl"
+    "image": "items[0].assetUrl",
+    "imageFallback": "assetUrl"
   },
   "folderNames": {
     "path": "nestedCategories.categories[*]",

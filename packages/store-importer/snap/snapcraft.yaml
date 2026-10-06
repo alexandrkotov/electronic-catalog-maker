@@ -1,7 +1,7 @@
 name: ecm-store-importer
 title: ECM Store Importer
 base: core22
-version: '0.2.0'
+version: '0.2.1'
 summary: Turn your online store into photos and a table for a tile catalog
 description: |
   Saves the products of your own Shopify, Squarespace or Payhip store as a

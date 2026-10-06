@@ -104,6 +104,9 @@ describe("Squarespace preset", () => {
     expect(mapProduct(product(8, "soaps", ["12.00", "8.50"]), squarespace, "https://store.test", names).price).toBe("8.50–12.00");
     // an id the category tree doesn't know is no folder, not a raw id in the catalog
     expect(mapProduct(product(8, "gone"), squarespace, "https://store.test", names).folder).toBe("");
+    // the photo the store shows is the gallery's first; the product's own asset can be another photo, or a blank placeholder
+    const withGallery = { ...product(8, null), items: [{ assetUrl: "https://cdn.test/front.jpg" }, { assetUrl: "https://cdn.test/back.jpg" }] };
+    expect(mapProduct(withGallery, squarespace, "https://store.test", names).imageUrl).toBe("https://cdn.test/front.jpg?format=1000w");
     // older sites name the category on the product itself
     expect(mapProduct({ ...product(8, null), categories: ["Sprinkles", "Gift"] }, squarespace, "https://store.test", names).folder).toBe("Sprinkles");
   });

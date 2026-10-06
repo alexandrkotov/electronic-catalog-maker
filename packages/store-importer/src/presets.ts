@@ -58,7 +58,8 @@ export interface JsonFeedPreset {
     /** The response itself says where the next page starts: the value at `path` goes into `param`; no value = last page. */
     | { cursor: { param: string; path: string } }
   );
-  fields: { name: string; sku: string; description: string; folder: string; image: string };
+  /** `imageFallback`: where to look when `image` has nothing (a Squarespace product's photos are its gallery; one without a gallery has only its own, sometimes blank, asset). */
+  fields: { name: string; sku: string; description: string; folder: string; image: string; imageFallback?: string };
   /**
    * For a feed whose products carry a category id rather than its name:
    * `fields.folder` then points at the id, and the names come from a

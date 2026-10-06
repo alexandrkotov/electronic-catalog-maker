@@ -116,6 +116,6 @@ export function mapProduct(product: unknown, preset: JsonFeedPreset, origin: str
     folder: decodeEntities(folder),
     price: extractPrice(product, preset.price),
     buyUrl: buildUrl(preset.buyUrl, product, origin),
-    imageUrl: resolveImageUrl(selectText(product, f.image), origin, preset.imageQuery),
+    imageUrl: resolveImageUrl(selectText(product, f.image) || (f.imageFallback ? selectText(product, f.imageFallback) : ""), origin, preset.imageQuery),
   };
 }
