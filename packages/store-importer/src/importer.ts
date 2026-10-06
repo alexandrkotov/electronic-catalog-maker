@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { toCsv } from "./csv";
-import { selectAll } from "./jsonPath";
+import { selectAll, selectText } from "./jsonPath";
 import { mapProduct, type ImportedItem } from "./normalize";
 import { mapLimit, type PoliteFetch } from "./politeFetch";
 import { PRESETS, getPreset, savedPagePresetForHost, type JsonFeedPreset, type SavedPagePreset } from "./presets";
@@ -96,11 +96,23 @@ function arrayAt(body: unknown, path: string): unknown[] | null {
   return Array.isArray(v) ? v : null;
 }
 
+/** The store pages a platform's feed lives under — [""] when it's one fixed address per site. */
+async function discoverStores(origin: string, preset: JsonFeedPreset, pf: PoliteFetch): Promise<string[]> {
+  if (!preset.discover) return [""];
+  const res = await pf(origin + preset.discover.path);
+  if (!res.ok) return [];
+  const found = new Set<string>();
+  for (const m of (await res.text()).matchAll(new RegExp(preset.discover.pattern, "g"))) if (m[1]) found.add(m[1]);
+  return [...found];
+}
+
 export async function detectPreset(origin: string, pf: PoliteFetch): Promise<JsonFeedPreset | null> {
   for (const preset of PRESETS) {
     if (preset.kind !== "json-feed") continue;
     try {
-      const body = await readJson(await pf(origin + preset.detect.path));
+      const [store] = await discoverStores(origin, preset, pf);
+      if (store === undefined) continue;
+      const body = await readJson(await pf(origin + preset.detect.path.replace("{store}", store)));
       if (arrayAt(body, preset.detect.expectArray)) return preset;
     } catch {
       // unreachable or timed out for this probe — try the next platform
@@ -109,26 +121,57 @@ export async function detectPreset(origin: string, pf: PoliteFetch): Promise<Jso
   return null;
 }
 
-export async function fetchAllProducts(origin: string, preset: JsonFeedPreset, pf: PoliteFetch, onProgress: (p: Progress) => void): Promise<unknown[]> {
-  const s = preset.source;
-  const all: unknown[] = [];
-  for (let i = 0; i < s.maxPages; i++) {
-    const page = s.firstPage + i;
-    const url = new URL(origin + s.path);
-    for (const [k, v] of Object.entries(s.query)) url.searchParams.set(k, v);
-    url.searchParams.set(s.pageParam, String(page));
-    const res = await pf(url.toString());
-    const body = await readJson(res);
-    const items = arrayAt(body, s.itemsPath);
-    if (!items) {
-      if (i === 0) throw new Error(`The store didn't return a product list (HTTP ${res.status}) — it may have its public feed turned off.`);
-      break; // some platforms answer past-the-end pages with an error instead of an empty list
+/** Adds one response's category tree to `names` (id -> name of its top-level category). */
+function collectFolderNames(body: unknown, rule: NonNullable<JsonFeedPreset["folderNames"]>, names: Map<string, string>) {
+  const walk = (nodes: unknown[], top: string | null) => {
+    for (const node of nodes) {
+      const name = top ?? selectText(node, rule.name);
+      const id = selectText(node, rule.id);
+      if (id) names.set(id, name);
+      walk(selectAll(node, rule.children), name);
     }
-    all.push(...items);
-    onProgress({ stage: "listing", page, products: all.length });
-    if (items.length < s.pageSize) break;
+  };
+  walk(selectAll(body, rule.path), null);
+}
+
+export interface Feed {
+  products: unknown[];
+  /** Category id -> folder name; empty unless the preset has a `folderNames` rule. */
+  folderNames: Map<string, string>;
+}
+
+export async function fetchAllProducts(origin: string, preset: JsonFeedPreset, pf: PoliteFetch, onProgress: (p: Progress) => void): Promise<Feed> {
+  const s = preset.source;
+  const stores = await discoverStores(origin, preset, pf);
+  if (stores.length === 0) throw new Error(`Couldn't find a store page on this site — is it a ${preset.name} store with products published?`);
+  const all: unknown[] = [];
+  const folderNames = new Map<string, string>();
+  let pageNo = 0;
+  for (const store of stores) {
+    let cursor = "";
+    for (let i = 0; i < s.maxPages; i++) {
+      const url = new URL(origin + s.path.replace("{store}", store));
+      for (const [k, v] of Object.entries(s.query)) url.searchParams.set(k, v);
+      if (!("cursor" in s)) url.searchParams.set(s.pageParam, String(s.firstPage + i));
+      else if (cursor) url.searchParams.set(s.cursor.param, cursor);
+      const res = await pf(url.toString());
+      const body = await readJson(res);
+      const items = arrayAt(body, s.itemsPath);
+      if (!items) {
+        if (i === 0) throw new Error(`The store didn't return a product list (HTTP ${res.status}) — it may have its public feed turned off.`);
+        break; // some platforms answer past-the-end pages with an error instead of an empty list
+      }
+      all.push(...items);
+      if (preset.folderNames) collectFolderNames(body, preset.folderNames, folderNames);
+      onProgress({ stage: "listing", page: ++pageNo, products: all.length });
+      if ("cursor" in s) {
+        const next = selectText(body, s.cursor.path);
+        if (!next || next === cursor) break;
+        cursor = next;
+      } else if (items.length < s.pageSize) break;
+    }
   }
-  return all;
+  return { products: all, folderNames };
 }
 
 const EXT_BY_TYPE: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/avif": "avif" };
@@ -194,10 +237,10 @@ async function collectFromFeed(input: string, presetId: string, pf: PoliteFetch,
     if (!p || p.kind !== "json-feed") throw new Error(`Unknown platform "${presetId}".`);
     preset = p;
   }
-  const raw = await fetchAllProducts(origin, preset, pf, onProgress);
+  const { products: raw, folderNames } = await fetchAllProducts(origin, preset, pf, onProgress);
   if (raw.length === 0) throw new Error("The store's product feed is empty.");
   const feed = preset;
-  return { platform: feed.name, storeUrl: origin, items: raw.map((p) => mapProduct(p, feed, origin)), pages: null };
+  return { platform: feed.name, storeUrl: origin, items: raw.map((p) => mapProduct(p, feed, origin, folderNames)), pages: null };
 }
 
 async function collectFromSavedPage(pages: string[], preset: SavedPagePreset, input: string): Promise<Collected> {

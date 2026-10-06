@@ -94,7 +94,8 @@ export function resolveImageUrl(raw: string, origin: string, query: Record<strin
   return url.toString();
 }
 
-export function mapProduct(product: unknown, preset: JsonFeedPreset, origin: string): ImportedItem {
+/** `folderNames`: category id -> name, for a preset with a `folderNames` rule (see collectFolderNames in importer.ts). */
+export function mapProduct(product: unknown, preset: JsonFeedPreset, origin: string, folderNames?: Map<string, string>): ImportedItem {
   const f = preset.fields;
   const rawDescription = selectText(product, f.description);
   const clean = preset.clean.description;
@@ -103,7 +104,7 @@ export function mapProduct(product: unknown, preset: JsonFeedPreset, origin: str
     name: decodeEntities(selectText(product, f.name)),
     sku: selectText(product, f.sku),
     description,
-    folder: decodeEntities(selectText(product, f.folder)),
+    folder: decodeEntities(preset.folderNames ? (folderNames?.get(selectText(product, f.folder)) ?? "") : selectText(product, f.folder)),
     price: extractPrice(product, preset.price),
     buyUrl: buildUrl(preset.buyUrl, product, origin),
     imageUrl: resolveImageUrl(selectText(product, f.image), origin, preset.imageQuery),

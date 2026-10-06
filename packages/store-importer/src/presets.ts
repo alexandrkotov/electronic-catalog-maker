@@ -1,12 +1,13 @@
 import payhip from "./presets/payhip.json";
 import shopify from "./presets/shopify.json";
+import squarespace from "./presets/squarespace.json";
 
 /**
  * A preset is plain JSON (src/presets/*.json), so adding a platform is a
  * data change an outside contributor can make without touching the engine.
  * Two kinds:
  *  - "json-feed": the store serves a public product feed the importer
- *    pages through itself — Shopify (paths are jsonPath.ts paths, relative to one
+ *    pages through itself — Shopify, Squarespace (paths are jsonPath.ts paths, relative to one
  *    product; `source.itemsPath`/`detect.expectArray` to a whole page).
  *  - "saved-page": the platform blocks automated access, so the person
  *    saves their store page from their own browser and the importer reads
@@ -16,22 +17,43 @@ export interface JsonFeedPreset {
   id: string;
   name: string;
   kind: "json-feed";
+  /**
+   * For a platform whose feed lives on the store page rather than at a fixed
+   * address (Squarespace: /shop on one site, /store on another): `pattern`
+   * is run over the text at `path`, and every distinct first capture group
+   * is one store page — the `{store}` in `detect.path`/`source.path`. A site
+   * with several store pages gets them all imported.
+   */
+  discover?: { path: string; pattern: string };
   /** One cheap request that tells whether a store runs this platform. */
   detect: { path: string; expectArray: string };
   source: {
     /** Appended to the store's origin. */
     path: string;
     query: Record<string, string>;
-    pageParam: string;
-    firstPage: number;
     /** Where the page's product array sits ("" = the response itself). */
     itemsPath: string;
-    /** A page shorter than this is the last one. */
-    pageSize: number;
     /** Hard stop, so a feed that ignores the page parameter can't loop forever. */
     maxPages: number;
-  };
+  } & (
+    | {
+        pageParam: string;
+        firstPage: number;
+        /** A page shorter than this is the last one. */
+        pageSize: number;
+      }
+    /** The response itself says where the next page starts: the value at `path` goes into `param`; no value = last page. */
+    | { cursor: { param: string; path: string } }
+  );
   fields: { name: string; sku: string; description: string; folder: string; image: string };
+  /**
+   * For a feed whose products carry a category id rather than its name:
+   * `fields.folder` then points at the id, and the names come from a
+   * category tree in the same response (`path` = every top-level category).
+   * A nested category resolves to its top-level ancestor — one Composer grid
+   * per main category, not one per leaf.
+   */
+  folderNames?: { path: string; id: string; name: string; children: string };
   /**
    * A product with variants still gets one tile. "range" shows "19.00–35.00"
    * when variant prices differ, "first" only the first variant's price.
@@ -77,7 +99,7 @@ export interface SavedPagePreset {
 
 export type Preset = JsonFeedPreset | SavedPagePreset;
 
-export const PRESETS: Preset[] = [shopify as JsonFeedPreset, payhip as SavedPagePreset];
+export const PRESETS: Preset[] = [shopify as JsonFeedPreset, squarespace as JsonFeedPreset, payhip as SavedPagePreset];
 
 export function getPreset(id: string): Preset | undefined {
   return PRESETS.find((p) => p.id === id);

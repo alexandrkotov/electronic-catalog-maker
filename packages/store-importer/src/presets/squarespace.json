@@ -1,0 +1,52 @@
+{
+  "id": "squarespace",
+  "name": "Squarespace",
+  "kind": "json-feed",
+  "discover": {
+    "path": "/sitemap.xml",
+    "pattern": "<loc>https?://[^/<]+(/[^<]*?)/p/[^/<]+</loc>"
+  },
+  "detect": {
+    "path": "{store}?format=json",
+    "expectArray": "items"
+  },
+  "source": {
+    "path": "{store}",
+    "query": {
+      "format": "json"
+    },
+    "cursor": {
+      "param": "offset",
+      "path": "pagination.nextPageOffset"
+    },
+    "itemsPath": "items",
+    "maxPages": 100
+  },
+  "fields": {
+    "name": "title",
+    "sku": "structuredContent.variants[0].sku",
+    "description": "excerpt",
+    "folder": "categoryIds[0]",
+    "image": "assetUrl"
+  },
+  "folderNames": {
+    "path": "nestedCategories.categories[*]",
+    "id": "id",
+    "name": "displayName",
+    "children": "children[*]"
+  },
+  "price": {
+    "path": "structuredContent.variants[*].priceMoney.value",
+    "mode": "range"
+  },
+  "buyUrl": "{origin}{fullUrl}",
+  "imageQuery": {
+    "format": "1000w"
+  },
+  "clean": {
+    "description": {
+      "stripHtml": true,
+      "maxLength": 600
+    }
+  }
+}
