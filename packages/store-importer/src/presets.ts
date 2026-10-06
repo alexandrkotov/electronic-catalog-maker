@@ -23,8 +23,13 @@ export interface JsonFeedPreset {
    * is run over the text at `path`, and every distinct first capture group
    * is one store page — the `{store}` in `detect.path`/`source.path`. A site
    * with several store pages gets them all imported.
+   *
+   * `fallbackPattern` is tried when `pattern` finds nothing (older Squarespace
+   * sites have no "/p/" in a product's address, so a store page looks like
+   * any other section there): its captures are only guesses, each asked for
+   * its feed and kept if `source.only` holds.
    */
-  discover?: { path: string; pattern: string };
+  discover?: { path: string; pattern: string; fallbackPattern?: string };
   /** One cheap request that tells whether a store runs this platform. */
   detect: { path: string; expectArray: string };
   source: {
@@ -35,6 +40,14 @@ export interface JsonFeedPreset {
     itemsPath: string;
     /** Hard stop, so a feed that ignores the page parameter can't loop forever. */
     maxPages: number;
+    /** A response counts as a product list only if the value at `path` is `equals` (a Squarespace blog answers `?format=json` with `items` too). */
+    only?: { path: string; equals: string };
+    /**
+     * Where a response names its store page ("Stickers", "Gift bags"). On a
+     * site with several store pages, a product without a category takes this
+     * as its folder; with a single store page it's left alone.
+     */
+    storeTitle?: string;
   } & (
     | {
         pageParam: string;
@@ -51,14 +64,21 @@ export interface JsonFeedPreset {
    * `fields.folder` then points at the id, and the names come from a
    * category tree in the same response (`path` = every top-level category).
    * A nested category resolves to its top-level ancestor — one Composer grid
-   * per main category, not one per leaf.
+   * per main category, not one per leaf. `fallback` is where a product
+   * carries the category's name directly, for feeds without the tree.
    */
-  folderNames?: { path: string; id: string; name: string; children: string };
+  folderNames?: { path: string; id: string; name: string; children: string; fallback?: string };
   /**
    * A product with variants still gets one tile. "range" shows "19.00–35.00"
    * when variant prices differ, "first" only the first variant's price.
    */
-  price: { path: string; mode: "range" | "first"; minorUnitsPath?: string };
+  price: {
+    path: string;
+    mode: "range" | "first";
+    minorUnitsPath?: string;
+    /** Discounted variants: `flag` and `path` run parallel to `path` (one value per variant); where the flag is true, the sale price replaces the regular one. */
+    sale?: { flag: string; path: string };
+  };
   /** `{origin}` = the store's origin, `{field}` = that top-level product field. */
   buyUrl: string;
   /** Added to every photo URL — e.g. Shopify's CDN resizes on `width=`. */

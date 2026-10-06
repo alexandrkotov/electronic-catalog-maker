@@ -50,15 +50,22 @@ field). Two kinds:
   every photo URL (Shopify's CDN resizes on `width=`, so a 2.7 MB original
   arrives as ~220 KB). `price.minorUnitsPath` handles feeds that give
   prices in cents.
-  [`squarespace.json`](src/presets/squarespace.json) uses three optional
+  [`squarespace.json`](src/presets/squarespace.json) uses a few optional
   pieces more, because a Squarespace feed is the store page itself with
   `?format=json`: `discover` finds that page (`/shop` on one site, `/store`
   on another) from the product addresses in `sitemap.xml` and fills
-  `{store}` in the paths; `source.cursor` pages by the offset the response
-  itself names instead of a page number; `folderNames` turns a product's
-  category id into a name from the category tree in the same response — a
-  nested category becomes its top-level one, so the catalog gets a grid per
-  main category rather than per leaf.
+  `{store}` in the paths — on older sites, whose product addresses have no
+  `/p/`, `fallbackPattern` takes every section as a guess (20 at most) and
+  `source.only` keeps the ones that answer as a product list rather than a
+  blog; `source.cursor` pages by the offset the response itself names
+  instead of a page number; `folderNames` turns a product's category id
+  into a name from the category tree in the same response — a nested
+  category becomes its top-level one, so the catalog gets a grid per main
+  category rather than per leaf — with `fallback` for older feeds that name
+  the category on the product; `source.storeTitle` gives an uncategorized
+  product the title of its store page as a folder when the site has
+  several store pages; `price.sale` swaps in a variant's sale price while
+  it's on sale.
 - **`saved-page`** ([`payhip.json`](src/presets/payhip.json)) — for
   platforms that block automated access (Payhip's store pages sit behind a
   Cloudflare challenge; it has no product-list API). The person saves the
@@ -86,7 +93,7 @@ instead.
 Squarespace's stock `robots.txt` asks crawlers to stay off `?format=json`
 addresses. The importer reads that feed anyway, on purpose: it isn't a
 crawler but a one-off export the store's owner (or someone with their
-permission — the required checkbox) starts by hand, two or three requests
+permission — the required checkbox) starts by hand, a handful of requests
 plus the photos, and the feed is where the SKUs and full descriptions are.
 
 ## Running the tests
@@ -97,8 +104,8 @@ bun test
 
 Covers the path language, text/price normalization, the CSV format,
 pagination and re-import against a fake Shopify store, store-page
-discovery, offset paging and category names against a fake Squarespace
-site, the Payhip saved-page extraction and page-coverage report, retries,
+discovery (newer and older sites), offset paging, category names and sale
+prices against a fake Squarespace site, the Payhip saved-page extraction and page-coverage report, retries,
 and that the
 page's inline script still parses (it lives inside a TypeScript template
 literal, where a stray `\` breaks it silently).

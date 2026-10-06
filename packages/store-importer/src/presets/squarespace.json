@@ -4,7 +4,8 @@
   "kind": "json-feed",
   "discover": {
     "path": "/sitemap.xml",
-    "pattern": "<loc>https?://[^/<]+(/[^<]*?)/p/[^/<]+</loc>"
+    "pattern": "<loc>https?://[^/<]+(/[^<]*?)/p/[^/<]+</loc>",
+    "fallbackPattern": "<loc>https?://[^/<]+(/[^/<]+)/[^/<]+</loc>"
   },
   "detect": {
     "path": "{store}?format=json",
@@ -20,6 +21,11 @@
       "path": "pagination.nextPageOffset"
     },
     "itemsPath": "items",
+    "only": {
+      "path": "collection.typeName",
+      "equals": "products"
+    },
+    "storeTitle": "collection.title",
     "maxPages": 100
   },
   "fields": {
@@ -33,11 +39,16 @@
     "path": "nestedCategories.categories[*]",
     "id": "id",
     "name": "displayName",
-    "children": "children[*]"
+    "children": "children[*]",
+    "fallback": "categories[0]"
   },
   "price": {
     "path": "structuredContent.variants[*].priceMoney.value",
-    "mode": "range"
+    "mode": "range",
+    "sale": {
+      "flag": "structuredContent.variants[*].onSale",
+      "path": "structuredContent.variants[*].salePriceMoney.value"
+    }
   },
   "buyUrl": "{origin}{fullUrl}",
   "imageQuery": {

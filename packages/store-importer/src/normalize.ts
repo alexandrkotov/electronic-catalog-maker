@@ -58,7 +58,13 @@ function formatAmount(n: number): string {
 }
 
 export function extractPrice(product: unknown, rule: JsonFeedPreset["price"]): string {
-  let values = selectAll(product, rule.path).map(toNumber).filter((n): n is number => n !== null);
+  let raw = selectAll(product, rule.path);
+  if (rule.sale) {
+    const flags = selectAll(product, rule.sale.flag);
+    const sale = selectAll(product, rule.sale.path);
+    if (flags.length === raw.length && sale.length === raw.length) raw = raw.map((v, i) => (flags[i] === true ? sale[i] : v));
+  }
+  let values = raw.map(toNumber).filter((n): n is number => n !== null);
   if (rule.minorUnitsPath) {
     const minor = toNumber(select(product, rule.minorUnitsPath)) ?? 0;
     values = values.map((n) => n / 10 ** minor);
@@ -100,11 +106,14 @@ export function mapProduct(product: unknown, preset: JsonFeedPreset, origin: str
   const rawDescription = selectText(product, f.description);
   const clean = preset.clean.description;
   const description = truncate(clean.stripHtml ? stripHtml(rawDescription) : rawDescription.trim(), clean.maxLength);
+  const names = preset.folderNames;
+  const rawFolder = selectText(product, f.folder);
+  const folder = names ? (folderNames?.get(rawFolder) ?? (names.fallback ? selectText(product, names.fallback) : "")) : rawFolder;
   return {
     name: decodeEntities(selectText(product, f.name)),
     sku: selectText(product, f.sku),
     description,
-    folder: decodeEntities(preset.folderNames ? (folderNames?.get(selectText(product, f.folder)) ?? "") : selectText(product, f.folder)),
+    folder: decodeEntities(folder),
     price: extractPrice(product, preset.price),
     buyUrl: buildUrl(preset.buyUrl, product, origin),
     imageUrl: resolveImageUrl(selectText(product, f.image), origin, preset.imageQuery),

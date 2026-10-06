@@ -96,24 +96,37 @@ function arrayAt(body: unknown, path: string): unknown[] | null {
   return Array.isArray(v) ? v : null;
 }
 
+/** On a site whose store pages can only be guessed at, no more sections than this are asked for a feed. */
+const MAX_GUESSED_STORES = 20;
+
 /** The store pages a platform's feed lives under — [""] when it's one fixed address per site. */
 async function discoverStores(origin: string, preset: JsonFeedPreset, pf: PoliteFetch): Promise<string[]> {
-  if (!preset.discover) return [""];
-  const res = await pf(origin + preset.discover.path);
+  const d = preset.discover;
+  if (!d) return [""];
+  const res = await pf(origin + d.path);
   if (!res.ok) return [];
-  const found = new Set<string>();
-  for (const m of (await res.text()).matchAll(new RegExp(preset.discover.pattern, "g"))) if (m[1]) found.add(m[1]);
-  return [...found];
+  const text = await res.text();
+  const captures = (pattern: string) => [...new Set([...text.matchAll(new RegExp(pattern, "g"))].flatMap((m) => (m[1] ? [m[1]] : [])))];
+  const found = captures(d.pattern);
+  if (found.length > 0 || !d.fallbackPattern) return found;
+  return captures(d.fallbackPattern).slice(0, MAX_GUESSED_STORES);
+}
+
+/** The response's product array, or null when it isn't a product list at all. */
+function productsIn(body: unknown, preset: JsonFeedPreset, path: string): unknown[] | null {
+  const only = preset.source.only;
+  if (only && selectText(body, only.path) !== only.equals) return null;
+  return arrayAt(body, path);
 }
 
 export async function detectPreset(origin: string, pf: PoliteFetch): Promise<JsonFeedPreset | null> {
   for (const preset of PRESETS) {
     if (preset.kind !== "json-feed") continue;
     try {
-      const [store] = await discoverStores(origin, preset, pf);
-      if (store === undefined) continue;
-      const body = await readJson(await pf(origin + preset.detect.path.replace("{store}", store)));
-      if (arrayAt(body, preset.detect.expectArray)) return preset;
+      for (const store of await discoverStores(origin, preset, pf)) {
+        const body = await readJson(await pf(origin + preset.detect.path.replace("{store}", store)));
+        if (productsIn(body, preset, preset.detect.expectArray)) return preset;
+      }
     } catch {
       // unreachable or timed out for this probe — try the next platform
     }
@@ -138,16 +151,18 @@ export interface Feed {
   products: unknown[];
   /** Category id -> folder name; empty unless the preset has a `folderNames` rule. */
   folderNames: Map<string, string>;
+  /** Per product, the title of the store page it came from — "" unless the site has several (see `source.storeTitle`). */
+  storeTitles: string[];
 }
 
 export async function fetchAllProducts(origin: string, preset: JsonFeedPreset, pf: PoliteFetch, onProgress: (p: Progress) => void): Promise<Feed> {
   const s = preset.source;
-  const stores = await discoverStores(origin, preset, pf);
-  if (stores.length === 0) throw new Error(`Couldn't find a store page on this site — is it a ${preset.name} store with products published?`);
   const all: unknown[] = [];
   const folderNames = new Map<string, string>();
+  const titles: string[] = [];
+  let stores = 0;
   let pageNo = 0;
-  for (const store of stores) {
+  for (const store of await discoverStores(origin, preset, pf)) {
     let cursor = "";
     for (let i = 0; i < s.maxPages; i++) {
       const url = new URL(origin + s.path.replace("{store}", store));
@@ -156,12 +171,14 @@ export async function fetchAllProducts(origin: string, preset: JsonFeedPreset, p
       else if (cursor) url.searchParams.set(s.cursor.param, cursor);
       const res = await pf(url.toString());
       const body = await readJson(res);
-      const items = arrayAt(body, s.itemsPath);
+      const items = productsIn(body, preset, s.itemsPath);
       if (!items) {
-        if (i === 0) throw new Error(`The store didn't return a product list (HTTP ${res.status}) — it may have its public feed turned off.`);
-        break; // some platforms answer past-the-end pages with an error instead of an empty list
+        if (i === 0 && !preset.discover) throw new Error(`The store didn't return a product list (HTTP ${res.status}) — it may have its public feed turned off.`);
+        break; // not a store page after all, or a platform that answers past-the-end pages with an error instead of an empty list
       }
+      if (i === 0) stores++;
       all.push(...items);
+      titles.push(...items.map(() => (s.storeTitle ? selectText(body, s.storeTitle) : "")));
       if (preset.folderNames) collectFolderNames(body, preset.folderNames, folderNames);
       onProgress({ stage: "listing", page: ++pageNo, products: all.length });
       if ("cursor" in s) {
@@ -171,7 +188,18 @@ export async function fetchAllProducts(origin: string, preset: JsonFeedPreset, p
       } else if (items.length < s.pageSize) break;
     }
   }
-  return { products: all, folderNames };
+  if (stores === 0) throw new Error(`Couldn't find a store page with products on this site — is it a ${preset.name} store?`);
+  return { products: all, folderNames, storeTitles: stores > 1 ? titles : titles.map(() => "") };
+}
+
+/** Detection and listing ask for some of the same addresses — each is fetched once. */
+function rememberResponses(pf: PoliteFetch): PoliteFetch {
+  const seen = new Map<string, Promise<Response>>();
+  return async (url) => {
+    let first = seen.get(url);
+    if (!first) seen.set(url, (first = pf(url)));
+    return (await first).clone() as Response;
+  };
 }
 
 const EXT_BY_TYPE: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/avif": "avif" };
@@ -223,7 +251,8 @@ interface Collected {
   pages: PageCoverage | null;
 }
 
-async function collectFromFeed(input: string, presetId: string, pf: PoliteFetch, onProgress: (p: Progress) => void): Promise<Collected> {
+async function collectFromFeed(input: string, presetId: string, politeFetch: PoliteFetch, onProgress: (p: Progress) => void): Promise<Collected> {
+  const pf = rememberResponses(politeFetch);
   const origin = normalizeStoreUrl(input);
   const hostPreset = savedPagePresetForHost(new URL(origin).hostname);
   if (hostPreset) throw new Error(`${hostPreset.name} store — choose ${hostPreset.name} as the platform and pick the saved page instead.`);
@@ -237,10 +266,15 @@ async function collectFromFeed(input: string, presetId: string, pf: PoliteFetch,
     if (!p || p.kind !== "json-feed") throw new Error(`Unknown platform "${presetId}".`);
     preset = p;
   }
-  const { products: raw, folderNames } = await fetchAllProducts(origin, preset, pf, onProgress);
+  const { products: raw, folderNames, storeTitles } = await fetchAllProducts(origin, preset, pf, onProgress);
   if (raw.length === 0) throw new Error("The store's product feed is empty.");
   const feed = preset;
-  return { platform: feed.name, storeUrl: origin, items: raw.map((p) => mapProduct(p, feed, origin, folderNames)), pages: null };
+  const items = raw.map((p, i) => {
+    const item = mapProduct(p, feed, origin, folderNames);
+    if (!item.folder) item.folder = storeTitles[i] ?? "";
+    return item;
+  });
+  return { platform: feed.name, storeUrl: origin, items, pages: null };
 }
 
 async function collectFromSavedPage(pages: string[], preset: SavedPagePreset, input: string): Promise<Collected> {
