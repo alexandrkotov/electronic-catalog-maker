@@ -5,7 +5,7 @@
  * fixture — the import must never look like a scrape storm.
  */
 
-export const USER_AGENT = "ECM-Store-Importer/0.1 (+https://tapalog.com)";
+export const USER_AGENT = "ECM-Store-Importer/0.2 (+https://tapalog.com)";
 
 export interface PoliteFetchOptions {
   /** Minimum gap between the start of two requests from this fetcher, ms. */

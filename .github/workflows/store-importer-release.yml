@@ -354,7 +354,7 @@ jobs:
             - `ecm-store-importer-macos-x64.zip` — macOS, Intel, portable, no installer
 
             Ubuntu users can instead install from the
-            [Snap Store](https://snapcraft.io/ecm-store-importer) (`sudo snap install ecm-store-importer`), once published there.
+            [Snap Store](https://snapcraft.io/ecm-store-importer) (`sudo snap install ecm-store-importer`).
 
             On a Chromebook, [turn on Linux (Crostini)](https://support.google.com/chromebook/answer/9145439?hl=en) once in Settings, then download the `.deb` file and double-click it in the Files app — ChromeOS offers to install it, and afterward it shows up as "ECM Store Importer" in the Linux apps folder of your app launcher.
 
