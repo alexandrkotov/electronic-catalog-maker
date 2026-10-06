@@ -118,5 +118,5 @@
 <g transform="translate(1030 522)"><rect class="card" x="-38" y="-28" width="76" height="56" rx="10"/><use href="#ct-i-look" x="-30" y="-22" width="60" height="44"/><text class="t" y="48" text-anchor="middle">No action</text></g>
 
 <circle class="ct-badge" cx="32" cy="620" r="7"/><path class="ct-badge-plus" d="M28.5 620H35.5M32 616.5V623.5"/>
-<text class="s" x="48" y="624">with the plus, picks collect in a list (cart, collection, workout, picks); without it the action happens right away. It is a setting of the catalog</text>
+<text class="s" x="48" y="624">with the plus, picks collect in a list (cart, collection, workout, picks); without it the action happens right away. It is a setting of the catalog.</text>
 </svg>

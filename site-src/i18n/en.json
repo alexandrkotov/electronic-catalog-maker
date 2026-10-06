@@ -238,5 +238,5 @@
   "types.ex.fitness": "Fitness",
   "types.ex.beauty": "Beauty services",
   "types.ex.quiz": "Quiz",
-  "types.plus": "with the plus, picks collect in a list (cart, collection, workout, picks); without it the action happens right away. It is a setting of the catalog"
+  "types.plus": "with the plus, picks collect in a list (cart, collection, workout, picks); without it the action happens right away. It is a setting of the catalog."
 }
