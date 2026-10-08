@@ -551,9 +551,13 @@ by default anywhere). In a browser without it nothing changes at all.
 
 What an agent can't do:
 
-- **Open a link on its own.** `perform_action` shows the visitor a dialog
-  naming the item and the site; the page opens only on their own click.
-  Clicking Buy by hand works exactly as before, with no dialog.
+- **Open a link with a tool call alone.** `perform_action` only puts a dialog
+  on the page, naming the item and the site, and waits; the link opens when
+  its Open button is pressed. Clicking Buy by hand works exactly as before,
+  with no dialog. The dialog is a visible step, not a barrier: an agent that
+  also controls the page (clicks for you) can press it, just as it could
+  press Buy itself — what such an agent may do is decided by its own
+  permission prompts, not by the page.
 - **Read a password-protected catalog** before the visitor has unlocked it —
   a locked catalog has no tools.
 - **Read a quiz's answers** — a quiz offers `get_catalog_info` only.

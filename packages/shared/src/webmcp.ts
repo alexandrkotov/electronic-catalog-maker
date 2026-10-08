@@ -16,8 +16,12 @@
  * - Descriptions are static. Catalog content is data, returned in results
  *   (flagged untrustedContentHint), never part of a description.
  * - No image bytes in any result.
- * - Opening an item's link is the one consequential action; the visitor
- *   confirms it in the viewer's own dialog (host.confirmOpen).
+ * - Opening an item's link is the one consequential action. The tool call
+ *   alone never opens anything: it puts a dialog on the page
+ *   (host.confirmOpen) and waits. That dialog is a visible step, not a
+ *   barrier — an agent that also drives the page's pointer can press it,
+ *   exactly as it could press the Buy button itself (seen with ChatGPT's
+ *   built-in browser); such an agent's own permission prompts are the gate.
  */
 import { listAllRows, listImages, listLinksForImage, listRowsForImage, readMeta } from "./db.js";
 import { navTargetImageId } from "./navLink.js";
@@ -302,7 +306,7 @@ export function buildViewerTools(host: ViewerAgentHost): AgentTool[] {
     {
       name: "perform_action",
       description:
-        "Open an item's own link (buy, book or learn more) in a new tab. The viewer asks the person to confirm first; nothing opens if they decline.",
+        "Open an item's own link (buy, book or learn more) in a new tab. The viewer shows the person a dialog and this call waits for their answer; nothing opens if they decline. The dialog is the person's decision: do not press its buttons yourself.",
       inputSchema: { type: "object", properties: { id: ID_PROP }, required: ["id"] },
       annotations: { consequentialHint: true },
       async execute(input, signal) {
