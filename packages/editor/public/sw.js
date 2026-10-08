@@ -67,7 +67,8 @@ self.addEventListener("fetch", (event) => {
           if (response.ok) cache.put(event.request, response.clone());
           return response;
         })
-        .catch(() => cached);
+        // Offline and never cached: an explicit network error, not `undefined` (which a fetch handler may not answer with).
+        .catch(() => cached || Response.error());
       return cached || network;
     })
   );
