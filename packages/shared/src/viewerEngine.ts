@@ -44,6 +44,7 @@ import {
   type QuizScore,
 } from "./quiz.js";
 import { isListMode, type CatalogImage, type CatalogLink, type CatalogMode, type CatalogRow } from "./types.js";
+import { buildViewerTools, createAgentToolsHandle, safeWebUrl, type ViewerAgentHost } from "./webmcp.js";
 import type { Database, SqlJsStatic } from "sql.js";
 
 /**
@@ -490,6 +491,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // two questions in PdfExportOptions before the actual export runs;
   // chosen values persist across dialog opens within this session (last
   // choice wins), reset only to their documented defaults on first load.
+  // WebMCP (see webmcp.ts): an AI agent in the visitor's browser asked to open
+  // an item's link (its perform_action tool). Nothing opens until the visitor
+  // presses the dialog's own button — which is also the click a browser wants
+  // before it lets a new tab open. Clicking Buy by hand never comes through here.
+  let agentConfirm: { name: string; url: string; settle: (opened: boolean) => void } | null = null;
+  const agentTools = createAgentToolsHandle();
   let exportPdfBusy = false;
   let pdfOptionsDialogOpen = false;
   let pdfQrPlacement: QrPlacement = DEFAULT_PDF_EXPORT_OPTIONS.qrPlacement;
@@ -874,6 +881,80 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    * loaded (a stale link from an edited-since catalog silently falls
    * back to that same default instead of throwing).
    */
+  const agentHost: ViewerAgentHost = {
+    db: () => db,
+    state: () => ({
+      catalogMode,
+      // Same condition as the toolbar's cart button (see render): without it there is nowhere to review the list.
+      listEnabled: mode === "full" && cartMode === "accumulate" && catalogMode !== "quiz",
+      activeImageId,
+      selectedUrl:
+        db && activeImageId !== null && selectedLinkId !== null
+          ? (listLinksForImage(db, activeImageId).find((l) => l.id === selectedLinkId && !isNavLink(l))?.url ?? null)
+          : null,
+      list: [...cartItems],
+    }),
+    actionLabel: () => directOpenLabel(),
+    openScreen: (imageId) => actionSelectImage(imageId),
+    openItem: (imageId, url) => actionGoToSearchResult(imageId, url),
+    addToList: (url) => {
+      if (!cartItems.has(url)) actionToggleCart(url);
+    },
+    confirmOpen: ({ name, url }, signal) =>
+      new Promise<boolean>((resolve) => {
+        closeAgentConfirm(); // a newer request replaces one still waiting
+        if (signal?.aborted) {
+          resolve(false);
+          return;
+        }
+        const request = {
+          name,
+          url,
+          settle: (opened: boolean) => {
+            signal?.removeEventListener("abort", onAbort);
+            resolve(opened);
+          },
+        };
+        const onAbort = () => {
+          if (agentConfirm !== request) return;
+          closeAgentConfirm();
+          render();
+        };
+        signal?.addEventListener("abort", onAbort);
+        agentConfirm = request;
+        render();
+        root.getElementById("agent-confirm-cancel")?.focus();
+      }),
+  };
+
+  /** Answers a waiting agent request with "not opened" — the catalog changed, or the visitor declined. */
+  function closeAgentConfirm() {
+    const pending = agentConfirm;
+    agentConfirm = null;
+    pending?.settle(false);
+  }
+
+  function actionAgentConfirmCancel() {
+    closeAgentConfirm();
+    render();
+  }
+
+  function actionAgentConfirmOpen() {
+    const pending = agentConfirm;
+    if (!pending) return;
+    agentConfirm = null;
+    window.open(pending.url, "_blank", "noopener,noreferrer");
+    pending.settle(true);
+    render();
+  }
+
+  /** Offers the open catalog's tools to a browser agent, or withdraws them when there is no open catalog. */
+  function syncAgentTools() {
+    closeAgentConfirm();
+    if (db) agentTools.set(buildViewerTools(agentHost));
+    else agentTools.clear();
+  }
+
   function applyInitialSelection() {
     if (!db) return;
     if (options.initialImageId !== undefined && listImages(db).some((i) => i.id === options.initialImageId)) {
@@ -1159,6 +1240,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       // conflict.
       resetShareViewState();
     }
+    syncAgentTools();
     render();
   }
 
@@ -1189,6 +1271,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       resetShareViewState();
     }
     statusMessage = t("status.locked", { name: info.name });
+    syncAgentTools();
     render();
   }
 
@@ -2284,6 +2367,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
         ${mode === "full" && updateAddressBar ? renderShareViewDialog() : ""}
         ${renderPdfOptionsDialog()}
+        ${renderAgentConfirmDialog()}
     `;
 
     // catalog_mode "quiz": the question card is shrunk to the stage's width
@@ -2573,6 +2657,24 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                      </div>`
                   : ""
           }
+        </div>
+      </div>
+    `;
+  }
+
+  /** The visitor's say on an agent's request to open an item's link — see agentConfirm. Shown in every mode. */
+  function renderAgentConfirmDialog(): string {
+    if (!agentConfirm) return "";
+    const host = safeWebUrl(agentConfirm.url) ? new URL(agentConfirm.url).hostname.replace(/^www\./, "") : agentConfirm.url;
+    return `
+      <div class="open-overlay" id="agent-confirm-overlay">
+        <div class="open-box" role="alertdialog" aria-labelledby="agent-confirm-title">
+          <h2 id="agent-confirm-title">${te("agent.confirm.title")}</h2>
+          <p>${te("agent.confirm.body", { name: agentConfirm.name, host })}</p>
+          <div class="open-actions">
+            <button type="button" id="agent-confirm-cancel">${te("action.cancel")}</button>
+            <button type="button" id="agent-confirm-open">${te("agent.confirm.open")}</button>
+          </div>
         </div>
       </div>
     `;
@@ -2958,6 +3060,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const shareViewLinkInput = root.getElementById("share-view-link-input") as HTMLTextAreaElement | null;
     shareViewLinkInput?.addEventListener("click", () => shareViewLinkInput.select());
 
+    root.getElementById("agent-confirm-cancel")?.addEventListener("click", actionAgentConfirmCancel);
+    root.getElementById("agent-confirm-open")?.addEventListener("click", actionAgentConfirmOpen);
+    root.getElementById("agent-confirm-overlay")?.addEventListener("keydown", (evt) => {
+      if ((evt as KeyboardEvent).key === "Escape") actionAgentConfirmCancel();
+    });
+
     root.getElementById("btn-search")?.addEventListener("click", actionToggleSearch);
     const searchInput = root.getElementById("search-input") as HTMLInputElement | null;
     searchInput?.addEventListener("input", () => {
@@ -3144,6 +3252,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   return {
     destroy() {
+      closeAgentConfirm();
+      agentTools.clear();
       container.innerHTML = "";
       resizeObserver?.disconnect();
       quizObserverDisconnect?.();

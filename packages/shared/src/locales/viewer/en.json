@@ -3,6 +3,9 @@
 
   "action.cancel": "Cancel",
   "action.close": "Close",
+  "agent.confirm.title": "Open this page?",
+  "agent.confirm.body": "Your AI assistant asked to open “{name}” on {host}.",
+  "agent.confirm.open": "Open",
 
   "toolbar.title": "Electronic Catalog — Viewer",
   "toolbar.open": "Open catalog…",

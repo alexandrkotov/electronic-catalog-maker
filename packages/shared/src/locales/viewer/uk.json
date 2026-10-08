@@ -3,6 +3,9 @@
 
   "action.cancel": "Скасувати",
   "action.close": "Закрити",
+  "agent.confirm.title": "Відкрити сторінку?",
+  "agent.confirm.body": "ШІ-асистент просить відкрити «{name}» на {host}.",
+  "agent.confirm.open": "Відкрити",
 
   "toolbar.title": "Електронний каталог — Перегляд",
   "toolbar.open": "Відкрити каталог…",

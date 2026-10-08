@@ -25,6 +25,8 @@
   "index.demo.embed": "<strong>Put it on your own site:</strong> the demo above is the embeddable widget itself — one <code>&lt;script&gt;</code> tag and one <code>&lt;ecm-viewer&gt;</code> line put it on your page.",
   "index.demo.embed.sample": "See it on a sample store site →",
   "index.demo.embed.howto": "How to embed →",
+  "index.demo.agent": "<strong>Ready for AI assistants:</strong> in a browser with WebMCP (still experimental), an assistant can search the catalog and show you an item. It opens a store page only after you confirm.",
+  "index.demo.agent.howto": "How it works →",
   "index.demo.noscript": "The live demo needs JavaScript — use “Open full demo” above.",
   "index.who.title": "Who it's for",
   "index.who.parts.title": "Parts and equipment",

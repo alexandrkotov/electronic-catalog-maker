@@ -527,6 +527,43 @@ Sizing and appearance are ordinary CSS on the element itself — it defaults
 to `height: 600px` with a light border, but any style/CSS rule your page
 applies to `ecm-viewer` (or a matching id/class) overrides that.
 
+## Agent-ready (WebMCP)
+
+The viewer — the standalone app and every `<ecm-viewer>` embed — offers the
+open catalog to an AI agent running in the visitor's browser through
+[WebMCP](https://webmachinelearning.github.io/webmcp/): the agent calls
+declared tools instead of guessing from the page's markup or screenshots.
+There is nothing to set up, no server, and nothing is sent anywhere — the
+tools run in the page, on the catalog that is already open.
+
+WebMCP is still an experimental browser proposal (a flag in Chrome, not on
+by default anywhere). In a browser without it nothing changes at all.
+
+| Tool | What it does |
+|---|---|
+| `get_catalog_info` | Catalog name and kind, its screens (images), the one on screen now |
+| `list_items` | Items on a screen, and the screens its navigation markers lead to |
+| `find_item` | Search all screens by name, SKU, description, any field, or the label printed on the image |
+| `get_item_details` | Everything about one item, including its link |
+| `open_item`, `open_screen`, `go_home` | Show an item or a screen to the visitor |
+| `add_to_list`, `get_list` | The cart / collection — only where the viewer shows one (full mode, "add to cart" catalogs) |
+| `perform_action` | Open an item's Buy / Book / Learn more link |
+
+What an agent can't do:
+
+- **Open a link on its own.** `perform_action` shows the visitor a dialog
+  naming the item and the site; the page opens only on their own click.
+  Clicking Buy by hand works exactly as before, with no dialog.
+- **Read a password-protected catalog** before the visitor has unlocked it —
+  a locked catalog has no tools.
+- **Read a quiz's answers** — a quiz offers `get_catalog_info` only.
+
+With several `<ecm-viewer>` elements on one page, one of them owns the tools
+at a time: the first with an open catalog, then the next one when that
+widget is removed or closes its catalog. Item text comes from the catalog
+file and is returned as data, flagged as untrusted content; tool
+descriptions never contain it. See `packages/shared/src/webmcp.ts`.
+
 ## Catalog file format
 
 One `.ecatm` file (a SQLite database under the hood) = one catalog. Tables:

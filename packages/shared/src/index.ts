@@ -27,6 +27,7 @@ export * from "./pdfExportOptions.js";
 // main.ts's actionExportPdf, both of which do exactly that.
 export * from "./collabClient.js";
 export * from "./viewerEngine.js";
+export * from "./webmcp.js";
 export * from "./pwa.js";
 // Re-exported so consumers (editor/viewer) don't need their own @types/sql.js.
 export type { Database, SqlJsStatic } from "sql.js";

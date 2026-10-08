@@ -3,6 +3,9 @@
 
   "action.cancel": "Отмена",
   "action.close": "Закрыть",
+  "agent.confirm.title": "Открыть страницу?",
+  "agent.confirm.body": "ИИ-ассистент просит открыть «{name}» на {host}.",
+  "agent.confirm.open": "Открыть",
 
   "toolbar.title": "Электронный каталог — Просмотрщик",
   "toolbar.open": "Открыть каталог…",
