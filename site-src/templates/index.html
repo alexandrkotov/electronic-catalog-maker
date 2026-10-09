@@ -127,6 +127,18 @@
   .demo-note { margin: 0.4rem 0 0; font-size: 0.9rem; color: var(--muted); }
   .steps-line { margin: 1rem 0 0; color: var(--text-2); }
   .steps-line code { white-space: nowrap; }
+  /* "Ready for AI assistants" label next to the WebMCP line under the demo. */
+  .ai-chip {
+    display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.45rem;
+    max-width: 100%; padding: 0.1rem 0.7rem; margin-right: 0.35rem;
+    border: 1px solid var(--border); border-radius: 14px;
+    background: var(--frame-bg);
+  }
+  .ai-chip small { color: var(--muted); font-size: 0.8em; }
+  @media (max-width: 600px) { .ai-chip { display: flex; width: fit-content; margin: 0 0 0.4rem; } }
+  .agent-video { margin: 0.6rem 0 0; }
+  .agent-video summary { cursor: pointer; color: var(--link); }
+  .agent-video video { display: block; width: 100%; max-width: 100%; margin-top: 0.6rem; border: 1px solid var(--border); border-radius: 8px; background: #000; }
 
 
   
@@ -319,7 +331,14 @@
       <p class="demo-note" id="demo-note-booking" hidden>{{index.demo.noteBooking}}</p>
       <p class="steps-line">{{index.demo.steps}}</p>
       <p class="steps-line">{{index.demo.embed}} <a href="{{@base}}demo/embed-demo.html">{{index.demo.embed.sample}}</a> · <a href="https://github.com/alexandrkotov/electronic-catalog-maker#embedding-the-viewer">{{index.demo.embed.howto}}</a></p>
-      <p class="steps-line">{{index.demo.agent}} <a href="https://github.com/alexandrkotov/electronic-catalog-maker#agent-ready-webmcp">{{index.demo.agent.howto}}</a></p>
+      <p class="steps-line"><span class="ai-chip"><strong>{{index.demo.agent.chip}}</strong> <small>{{index.demo.agent.tag}}</small></span> {{index.demo.agent}} <a href="https://github.com/alexandrkotov/electronic-catalog-maker#agent-ready-webmcp">{{index.demo.agent.howto}}</a></p>
+      <details class="agent-video">
+        <summary>{{index.demo.agent.watch}}</summary>
+        <video controls preload="none" playsinline poster="{{@base}}webmcp-demo-poster.jpg" aria-label="{{index.demo.agent.videoLabel}}">
+          <source src="{{@base}}webmcp-demo.mp4" type="video/mp4">
+        </video>
+        <p class="demo-note">{{index.demo.agent.note}}</p>
+      </details>
       <noscript><p>{{index.demo.noscript}}</p></noscript>
     </section>
 

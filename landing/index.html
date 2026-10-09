@@ -143,6 +143,18 @@
   .demo-note { margin: 0.4rem 0 0; font-size: 0.9rem; color: var(--muted); }
   .steps-line { margin: 1rem 0 0; color: var(--text-2); }
   .steps-line code { white-space: nowrap; }
+  /* "Ready for AI assistants" label next to the WebMCP line under the demo. */
+  .ai-chip {
+    display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.45rem;
+    max-width: 100%; padding: 0.1rem 0.7rem; margin-right: 0.35rem;
+    border: 1px solid var(--border); border-radius: 14px;
+    background: var(--frame-bg);
+  }
+  .ai-chip small { color: var(--muted); font-size: 0.8em; }
+  @media (max-width: 600px) { .ai-chip { display: flex; width: fit-content; margin: 0 0 0.4rem; } }
+  .agent-video { margin: 0.6rem 0 0; }
+  .agent-video summary { cursor: pointer; color: var(--link); }
+  .agent-video video { display: block; width: 100%; max-width: 100%; margin-top: 0.6rem; border: 1px solid var(--border); border-radius: 8px; background: #000; }
 
 
   
@@ -335,7 +347,14 @@
       <p class="demo-note" id="demo-note-booking" hidden>“Book” opens a demo booking calendar — appointments made there are not real.</p>
       <p class="steps-line"><strong>Build your own:</strong> add an image → mark the details with hotspots → save the catalog file and open it in Viewer.</p>
       <p class="steps-line"><strong>Put it on your own site:</strong> the demo above is the embeddable widget itself — one <code>&lt;script&gt;</code> tag and one <code>&lt;ecm-viewer&gt;</code> line put it on your page. <a href="demo/embed-demo.html">See it on a sample store site →</a> · <a href="https://github.com/alexandrkotov/electronic-catalog-maker#embedding-the-viewer">How to embed →</a></p>
-      <p class="steps-line"><strong>Ready for AI assistants:</strong> in a browser with WebMCP (still experimental), an assistant can search the catalog, show you an item and fill the cart for you. <a href="https://github.com/alexandrkotov/electronic-catalog-maker#agent-ready-webmcp">How it works →</a></p>
+      <p class="steps-line"><span class="ai-chip"><strong>Ready for AI assistants</strong> <small>experimental</small></span> In a browser that supports WebMCP, an assistant can search the catalog, show you an item and fill the cart for you. <a href="https://github.com/alexandrkotov/electronic-catalog-maker#agent-ready-webmcp">How it works →</a></p>
+      <details class="agent-video">
+        <summary>Watch it work: ChatGPT builds a reading corner (76 s, no sound)</summary>
+        <video controls preload="none" playsinline poster="webmcp-demo-poster.jpg" aria-label="Screen recording: ChatGPT opens the Tapalog living-room catalog in its built-in browser, shows the media console, then opens a lounge chair, a floor lamp and a rug and adds them to the cart">
+          <source src="webmcp-demo.mp4" type="video/mp4">
+        </video>
+        <p class="demo-note">Screen recording; waiting time is sped up. WebMCP is experimental and works only in some browsers and assistants.</p>
+      </details>
       <noscript><p>The live demo needs JavaScript — use “Open full demo” above.</p></noscript>
     </section>
 

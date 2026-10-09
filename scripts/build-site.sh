@@ -40,6 +40,8 @@ cp landing/favicon-32.png site/favicon-32.png
 cp landing/icon-192.png site/icon-192.png
 cp landing/og-default.png site/og-default.png
 cp landing/og-schools.png site/og-schools.png
+cp landing/webmcp-demo.mp4 site/webmcp-demo.mp4
+cp landing/webmcp-demo-poster.jpg site/webmcp-demo-poster.jpg
 cp -r packages/editor/dist site/editor
 cp -r packages/viewer/dist site/viewer
 cp -r packages/composer/dist site/composer

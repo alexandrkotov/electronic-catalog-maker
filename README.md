@@ -7,6 +7,7 @@
 ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
 ![pnpm](https://img.shields.io/badge/pnpm-F69220?logo=pnpm&logoColor=white)
 ![No backend](https://img.shields.io/badge/backend-none-brightgreen)
+[![WebMCP](https://img.shields.io/badge/WebMCP-agent%20tools%2C%20experimental-6f42c1)](#agent-ready-webmcp)
 
 **Turn any picture into a clickable catalog.** Put hotspots on a photo or a
 diagram, link each one to a row of data (name, SKU, description, a Buy

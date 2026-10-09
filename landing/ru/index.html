@@ -143,6 +143,18 @@
   .demo-note { margin: 0.4rem 0 0; font-size: 0.9rem; color: var(--muted); }
   .steps-line { margin: 1rem 0 0; color: var(--text-2); }
   .steps-line code { white-space: nowrap; }
+  /* "Ready for AI assistants" label next to the WebMCP line under the demo. */
+  .ai-chip {
+    display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.45rem;
+    max-width: 100%; padding: 0.1rem 0.7rem; margin-right: 0.35rem;
+    border: 1px solid var(--border); border-radius: 14px;
+    background: var(--frame-bg);
+  }
+  .ai-chip small { color: var(--muted); font-size: 0.8em; }
+  @media (max-width: 600px) { .ai-chip { display: flex; width: fit-content; margin: 0 0 0.4rem; } }
+  .agent-video { margin: 0.6rem 0 0; }
+  .agent-video summary { cursor: pointer; color: var(--link); }
+  .agent-video video { display: block; width: 100%; max-width: 100%; margin-top: 0.6rem; border: 1px solid var(--border); border-radius: 8px; background: #000; }
 
 
   
@@ -335,7 +347,14 @@
       <p class="demo-note" id="demo-note-booking" hidden>Кнопка «Записаться» открывает демо-календарь — записи в нём ненастоящие.</p>
       <p class="steps-line"><strong>Сделайте свой каталог:</strong> добавьте изображение → отметьте детали точками → сохраните файл каталога и откройте его в Просмотрщике.</p>
       <p class="steps-line"><strong>Разместите на своём сайте:</strong> демо выше — это и есть встраиваемый виджет. Чтобы поставить его к себе на страницу, нужны один тег <code>&lt;script&gt;</code> и одна строка <code>&lt;ecm-viewer&gt;</code>. <a href="../demo/embed-demo.html">Пример на сайте магазина →</a> · <a href="https://github.com/alexandrkotov/electronic-catalog-maker#embedding-the-viewer">Как встроить →</a></p>
-      <p class="steps-line"><strong>Готов для ИИ-ассистентов:</strong> в браузере с WebMCP (пока экспериментально) ассистент сам ищет по каталогу, показывает нужный товар и складывает покупки в корзину. <a href="https://github.com/alexandrkotov/electronic-catalog-maker#agent-ready-webmcp">Как это работает →</a></p>
+      <p class="steps-line"><span class="ai-chip"><strong>Готов для ИИ-ассистентов</strong> <small>экспериментально</small></span> В браузере с поддержкой WebMCP ассистент сам ищет по каталогу, показывает нужный товар и складывает покупки в корзину. <a href="https://github.com/alexandrkotov/electronic-catalog-maker#agent-ready-webmcp">Как это работает →</a></p>
+      <details class="agent-video">
+        <summary>Смотрите, как это работает: ChatGPT собирает уголок для чтения (76 с, без звука)</summary>
+        <video controls preload="none" playsinline poster="../webmcp-demo-poster.jpg" aria-label="Запись экрана: ChatGPT открывает каталог гостиной Tapalog во встроенном браузере, показывает тумбу, затем открывает кресло, торшер и ковёр и кладёт их в корзину">
+          <source src="../webmcp-demo.mp4" type="video/mp4">
+        </video>
+        <p class="demo-note">Запись экрана, время ожидания ускорено, интерфейс ChatGPT на английском. WebMCP пока экспериментальный и работает только в некоторых браузерах и ассистентах.</p>
+      </details>
       <noscript><p>Для живого демо нужен JavaScript — воспользуйтесь ссылкой «Открыть полное демо» выше.</p></noscript>
     </section>
 
