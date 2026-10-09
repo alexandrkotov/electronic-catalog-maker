@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Assembles the published site (landing page + editor + viewer + composer + demo
+# Assembles the published site (landing page + editor + viewer + composers + demo
 # catalogs) into ./site, ready to be served by any static host.
 #
 # This is the single source of truth for "how the site is put together" —
@@ -18,6 +18,7 @@ cd "$(dirname "$0")/.."
 pnpm --filter @ecm/editor build
 pnpm --filter @ecm/viewer build
 pnpm --filter @ecm/composer build
+pnpm --filter @ecm/map-composer build
 
 rm -rf site
 mkdir -p site
@@ -45,6 +46,7 @@ cp landing/webmcp-demo-poster.jpg site/webmcp-demo-poster.jpg
 cp -r packages/editor/dist site/editor
 cp -r packages/viewer/dist site/viewer
 cp -r packages/composer/dist site/composer
+cp -r packages/map-composer/dist site/map-composer
 cp -r demo site/demo
 
 echo "Site assembled in ./site"

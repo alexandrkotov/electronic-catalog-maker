@@ -70,7 +70,7 @@ does. The same levels are a section of the
 [Ukrainian](https://tapalog.com/uk/#types-h).
 
 <p align="center">
-  <a href="https://tapalog.com/#types-h"><img src="landing/catalog-types.svg" width="100%" alt="Catalog types in four levels. Navigation: one picture, a picture list or a home picture. Picture: one item, a photo with hotspots, an exploded view or a tile grid. Details: a table or a card. Action: buy, learn more, exercise, book, answer or no action."></a>
+  <a href="https://tapalog.com/#types-h"><img src="landing/catalog-types.svg" width="100%" alt="Catalog types in four levels. Navigation: one picture, a picture list or a home picture. Picture: one item, a photo with hotspots, an exploded view, a tile grid or a map with points. Details: a table or a card. Action: buy, learn more, exercise, book, answer or no action."></a>
 </p>
 
 ## How the apps fit together
@@ -88,7 +88,7 @@ The same map is on the [landing page](https://tapalog.com), also in
 [Ukrainian](https://tapalog.com/uk/toolset.svg):
 
 <p align="center">
-  <a href="landing/toolset.svg"><img src="landing/toolset.svg" width="100%" alt="Toolset map: an online store, photos + a table, or any picture go through the Store Importer, Grid Composer or Editor into one .ecatm catalog file (optionally password-locked, co-edited live via the Collab Server), which is shared as a file or link, on your website, through the Catalog Server or as a printed PDF + QR, and opened in the Viewer by shoppers, mechanics, DIY makers, students, gyms and diners — shoppers checking out in your own store."></a>
+  <a href="landing/toolset.svg"><img src="landing/toolset.svg" width="100%" alt="Toolset map: an online store, photos + a table, a map with places, or any picture go through the Store Importer, Grid Composer, Map Composer or Editor into one .ecatm catalog file (optionally password-locked, co-edited live via the Collab Server), which is shared as a file or link, on your website, through the Catalog Server or as a printed PDF + QR, and opened in the Viewer by shoppers, mechanics, DIY makers, students, gyms and diners — shoppers checking out in your own store."></a>
 </p>
 
 ## Getting started
@@ -102,6 +102,9 @@ or jump straight in:
 - **[Grid Composer](https://tapalog.com/composer/)** — a folder of photos
   plus a spreadsheet → a ready tile catalog (see "Building a tile catalog
   from photos and a table" below)
+- **[Map Composer](https://tapalog.com/map-composer/)** — a map plus your
+  places → a catalog where every point opens its own page (see "Building a
+  catalog from a map" below)
 
 All of them run entirely in your browser — nothing you build gets uploaded
 anywhere unless you explicitly open a catalog from a URL (see "Sharing a
@@ -259,6 +262,40 @@ itself only changes if you rebuild it in the composer.
 
 Like the Editor and Viewer, it runs entirely in your browser — the photos
 and the table never leave your computer.
+
+## Building a catalog from a map
+
+Several places to show — masters in a neighborhood, branches, shops, pickup
+points? The **[Map Composer](https://tapalog.com/map-composer/)** makes a
+catalog whose first picture is a map of the area, with a marker on every
+place; tapping a marker opens that place's own page, and a "⌂" on the page
+leads back to the map.
+
+1. **Map**: search for an address or just move and zoom the map until it
+   shows your area — the catalog gets exactly the picture you see. Pick its
+   look (colorful, bright or light gray) and shape (wide, 4:3, square or
+   tall).
+2. **Points**: click the map to add a point, or use **+ Point** on a search
+   result; drag a point to move it. Give each a name — markers show the
+   names or just numbers, in three sizes.
+3. **Photos** (optional): attach a picture to a point and it becomes that
+   point's page. A point without one gets a placeholder page with its name,
+   to be replaced in the Editor.
+4. **Build catalog**, then **Download .ecatm** — or **Open in Editor** /
+   **Open in Viewer**, exactly as in the Grid Composer.
+
+What comes out is an ordinary catalog: the map is a picture, the markers are
+hotspots, so every Viewer opens it and the Editor takes it from there —
+services with prices, a Book or Buy button, more pages per place. It prints
+as well: **Export PDF…** puts the markers on the map (see "Exporting to
+PDF" below). A point left outside the visible map isn't included.
+
+The map is drawn from [OpenStreetMap](https://www.openstreetmap.org/copyright)
+data served by [OpenFreeMap](https://openfreemap.org/), and the credit
+"© OpenStreetMap contributors" is printed into the picture's corner — keep
+it there. The address search is OpenStreetMap's Nominatim, asked only when
+you press Enter or Search. Your photos and point names stay in your browser;
+only the map tiles and the search text travel over the network.
 
 Already selling online? The Store Importer (next section) makes the photos
 folder and the table from your store for you.
@@ -823,6 +860,9 @@ done in the browser with no server to offload to.
   "Building a tile catalog from photos and a table" above): a static web
   app like the editor and viewer, making a finished `.ecatm` from a folder
   of photos and a table.
+- [`packages/map-composer`](packages/map-composer) — the Map Composer (see
+  "Building a catalog from a map" above): another static web app, making a
+  finished `.ecatm` from a live map and the points placed on it.
 - [`packages/catalog-server`](packages/catalog-server) — the self-hosted
   Catalog Server (see "Sharing a folder of catalogs from your computer"
   above): same kind of standalone app, run by whoever wants to share a
@@ -843,6 +883,7 @@ pnpm dev:editor         # http://localhost:5173
 pnpm dev:viewer         # http://localhost:5174 (or next free port)
 pnpm dev:embed          # http://localhost:5175 (or next free port) — <ecm-viewer> dev preview
 pnpm dev:composer       # http://localhost:5173 (or next free port) — Grid Composer
+pnpm dev:map-composer   # http://localhost:5173 (or next free port) — Map Composer
 pnpm dev:collab-server  # http://localhost:8787 — see packages/collab-server for the rest
 pnpm dev:catalog-server # http://localhost:8899 — see packages/catalog-server for the rest
 pnpm dev:store-importer # http://localhost:8931 — see packages/store-importer for the rest
@@ -908,9 +949,9 @@ store (40 products in 8 folders) and a real Payhip store's
 on the Snap Store and as direct downloads (the Windows build confirmed on a
 real machine). [CI](.github/workflows/ci.yml)
 typechecks and builds every package on each push/PR (plus runs the
-`shared`, `composer`, `collab-server` and `store-importer` test suites), rebuilds+recommits
+`shared`, `composer`, `map-composer`, `collab-server` and `store-importer` test suites), rebuilds+recommits
 `ecm-viewer.js` if it's gone stale so the CDN URL can't silently drift
-from source, and redeploys the editor, viewer and composer to Pages — all on every push
+from source, and redeploys the editor, viewer and both composers to Pages — all on every push
 to `main`, no manual step.
 
 ## Contributing

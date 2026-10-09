@@ -26,6 +26,7 @@ jobs:
       - run: pnpm --filter @ecm/collab-server test
       - run: pnpm --filter @ecm/shared test
       - run: pnpm --filter @ecm/composer test
+      - run: pnpm --filter @ecm/map-composer test
       - run: pnpm --filter @ecm/store-importer test
       - name: Generated landing pages match their templates and dictionaries
         run: bun scripts/generate-site.ts --check
