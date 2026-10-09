@@ -56,6 +56,10 @@ Each one opens a live demo, nothing to install:
 - **Services and booking** — a photo list of services: pick one, read how
   it goes, and Book opens a booking calendar (a demo one here).
   [Demo](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fcosmetologist-en.ecatm)
+- **Local pros on a map** — a map of the area with a marker for every pro;
+  each marker opens that pro's page with services, prices and Book. Built
+  with Map Composer.
+  [Demo](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fnail-techs-en.ecatm)
 - **Tests and self-check** — answer options sit on the picture, with a
   running score.
   [Demo](https://tapalog.com/viewer/?src=https%3A%2F%2Ftapalog.com%2Fdemo%2Fquiz-citizenship-en.ecatm)

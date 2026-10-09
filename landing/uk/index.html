@@ -6,7 +6,7 @@
 <script>
   // Page language + the few strings the page scripts need (from the dictionary's js.* keys).
   var LANG = "uk";
-  var T = {"themeLight":"☀️ Світла","themeDark":"🌙 Темна","demoLoadFailed":"Не вдалося завантажити живе демо. Скористайтеся посиланням «Відкрити повне демо» нижче.","demoBookingBack":"До списку послуг","visits.one":"\u003cstrong>{n}\u003c/strong> візит на цей сайт на цей момент.","visits.few":"\u003cstrong>{n}\u003c/strong> візити на цей сайт на цей момент.","visits.many":"\u003cstrong>{n}\u003c/strong> візитів на цей сайт на цей момент.","visits.other":"\u003cstrong>{n}\u003c/strong> візиту на цей сайт на цей момент."};
+  var T = {"themeLight":"☀️ Світла","themeDark":"🌙 Темна","demoLoadFailed":"Не вдалося завантажити живе демо. Скористайтеся посиланням «Відкрити повне демо» нижче.","demoBookingBack":"До списку послуг","demoMapBack":"До карти","visits.one":"\u003cstrong>{n}\u003c/strong> візит на цей сайт на цей момент.","visits.few":"\u003cstrong>{n}\u003c/strong> візити на цей сайт на цей момент.","visits.many":"\u003cstrong>{n}\u003c/strong> візитів на цей сайт на цей момент.","visits.other":"\u003cstrong>{n}\u003c/strong> візиту на цей сайт на цей момент."};
 </script>
 <script>
   // Apply the saved (or OS-preferred) theme before first paint — no light flash.
@@ -344,6 +344,7 @@
       <p class="intro" data-hint="product-grid" hidden>Натисніть на номер на плитці, щоб побачити опис товару і кнопку «Купити». Список угорі перемикає групи. <a href="../composer/?lang=uk">Маєте фото й таблицю? Конструктор сітки збере таку ж за вас →</a></p>
       <p class="intro" data-hint="diy-stool-uk" hidden>Демо-пароль: <strong>stool-2026</strong>. Введіть його на екрані блокування нижче; обкладинка й назва видимі й без пароля.</p>
       <p class="intro" data-hint="cosmetologist-uk" hidden>Оберіть послугу, щоб побачити, що це і як вона проходить, — кнопка «Записатися» відкриє календар запису. ⌂ поверне до списку.</p>
+      <p class="intro" data-hint="nail-techs-uk" hidden>Натисніть на мітку на карті, щоб відкрити сторінку майстра — там послуги, ціни й кнопка «Записатися». ⌂ поверне до карти. <a href="../map-composer/?lang=uk">Конструктор карт збере таку саму з ваших точок →</a></p>
       <p class="intro" data-hint="*" hidden>Оберіть точку або прокрутіть за допомогою стрілок, щоб переглянути інформацію про позицію. Натисніть кнопку «Вмістити», щоб переглянути зображення у повному розмірі.</p>
       <div class="tabs" role="group" aria-label="Приклад каталогу">
         <button type="button" data-cat="living-room" aria-pressed="true">Товари в інтер’єрі</button>
@@ -351,6 +352,7 @@
         <button type="button" data-cat="furniture" aria-pressed="false">Фото виробу</button>
         <button type="button" data-cat="product-grid" aria-pressed="false">Сітка товарів</button>
         <button type="button" data-cat="cosmetologist-uk" aria-pressed="false">Послуги із записом</button>
+        <button type="button" data-cat="nail-techs-uk" aria-pressed="false">Карта з точками</button>
         <button type="button" data-cat="diy-stool-uk" aria-pressed="false">Під паролем</button>
       </div>
       <div class="frame" id="frame"></div>
@@ -381,6 +383,7 @@
       <div class="card"><h3>Навчання</h3><p>Схеми, які можна досліджувати, для уроків і шкільних проєктів — без облікових записів учнів і без хмари. <a href="schools.html">Сторінка для шкіл →</a></p></div>
       <div class="card"><h3>Зали та фітнес</h3><p>Оберіть групу м’язів, знайдіть тренажер, дізнайтеся, як його налаштувати, і роздрукуйте тренування — без застосунку й облікового запису. <a href="../viewer/?src=..%2Fdemo%2Ffitness-uk.ecatm&lang=uk">Відкрити демо →</a></p></div>
       <div class="card"><h3>Послуги та запис</h3><p>Список послуг із фото: клієнт обирає послугу, читає, як вона проходить, і натискає «Записатися» — відкривається ваш календар запису. <a href="#demo" data-demo-cat="cosmetologist-uk">Відкрити демо →</a></p></div>
+      <div class="card"><h3>Майстри поруч</h3><p>Карта району з міткою на кожного майстра: клієнт обирає, хто ближче, дивиться послуги й ціни та натискає «Записатися». <a href="#demo" data-demo-cat="nail-techs-uk">Відкрити демо →</a> · <a href="../map-composer/?lang=uk">Зібрати свою карту →</a></p></div>
       <div class="card"><h3>Тести та самоперевірка</h3><p>Варіанти відповідей прямо на зображенні: натисніть — стане зеленим або червоним, підрахунок відбувається автоматично. Демо англійською мовою. <a href="../viewer/?src=..%2Fdemo%2Fquiz-citizenship-en.ecatm&lang=uk">Відкрити демо →</a></p></div>
     </div>
 
@@ -465,6 +468,7 @@
         <li><a href="../viewer/?src=..%2Fdemo%2Fcell-biology.ecatm&lang=uk">Біологія клітини</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-single" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-exploded" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-learn" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg></span></li>
         <li><a href="../viewer/?src=..%2Fdemo%2Ffitness-uk.ecatm&lang=uk">Фітнес</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-list" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-photo" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-exercise" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg></span></li>
         <li><a href="../viewer/?src=..%2Fdemo%2Fcosmetologist-uk.ecatm&lang=uk">Косметолог</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-home" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-one" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-book" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+        <li><a href="../viewer/?src=..%2Fdemo%2Fnail-techs-uk.ecatm&lang=uk">Майстри на карті</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-home" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-map" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-book" x="-30" y="-22" width="60" height="44"/></svg></span></li>
         <li><a href="../viewer/?src=..%2Fdemo%2Fquiz-citizenship-en.ecatm&lang=uk">Тест</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-list" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-photo" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-answer" x="-30" y="-22" width="60" height="44"/></svg></span></li>
       </ul>
       <p class="ct-legend"><svg viewBox="12 -21 16 16" aria-hidden="true"><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg> із плюсом вибране накопичується у списку (кошик, колекція, тренування, мої записи), без плюса дія спрацьовує одразу. Це перемикається в налаштуваннях каталогу.</p>
@@ -671,7 +675,7 @@
       var buttons = document.querySelectorAll(".tabs button");
       var scriptLoaded = false;
       // [image id, hotspot id] to show selected on load, per example catalog.
-      var START = { "living-room": [1, 1], "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-uk": [1, 1], "product-grid": [1, 1], "cosmetologist-uk": [1, 1] };
+      var START = { "living-room": [1, 1], "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-uk": [1, 1], "product-grid": [1, 1], "cosmetologist-uk": [1, 1], "nail-techs-uk": [1, 1] };
       // Password-protected demo: it opens on a lock screen (the password is printed
       // under the frame), and a protected file cannot be opened in the editor.
       var LOCKED = "diy-stool-uk";
@@ -679,6 +683,9 @@
       // markers are the service names, so it opens without the details card and
       // "Book" goes to a booking calendar instead of the demo store.
       var BOOKING = "cosmetologist-uk";
+      // Map demo: its first image is a map whose markers lead to each master's
+      // page; "Book" there goes to the same demo calendar.
+      var MAP = "nail-techs-uk";
       var BUNDLE = "https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js";
       function loadScript(cb) {
         if (scriptLoaded) return cb();
@@ -710,8 +717,8 @@
         document.getElementById("open-full").href = "../viewer/?src=..%2Fdemo%2F" + cat + ".ecatm&lang=uk";
         document.getElementById("edit-this").href = "../editor/?src=..%2Fdemo%2F" + cat + ".ecatm&lang=uk";
         document.getElementById("edit-this").style.display = cat === LOCKED ? "none" : "";
-        document.getElementById("demo-note").hidden = cat === LOCKED || cat === BOOKING;
-        document.getElementById("demo-note-booking").hidden = cat !== BOOKING;
+        document.getElementById("demo-note").hidden = cat === LOCKED || cat === BOOKING || cat === MAP;
+        document.getElementById("demo-note-booking").hidden = cat !== BOOKING && cat !== MAP;
         loadScript(function () {
           frame.textContent = "";
           var el = document.createElement("ecm-viewer");
@@ -723,8 +730,9 @@
           el.setAttribute("initial-link", start[1]);
           // Phones: a dense diagram fitted whole is an unreadable pile of
           // markers, so open close-up on the selected item (Fit shows it all).
-          // The living-room photo reads fine whole, so it stays fitted.
-          if (cat !== "living-room") el.setAttribute("compact-zoom", "0.75");
+          // The living-room photo and the map read fine whole, so they stay fitted.
+          if (cat !== "living-room" && cat !== MAP) el.setAttribute("compact-zoom", "0.75");
+          if (cat === MAP) el.setAttribute("nav-title", T.demoMapBack);
           if (cat === BOOKING) {
             el.setAttribute("overview-list", "off");
             el.setAttribute("nav-title", T.demoBookingBack);
