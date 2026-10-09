@@ -534,8 +534,12 @@ async function renderDiagramPage(
   rows: CatalogRow[],
   meta: CatalogMeta,
   options: PdfExportOptions,
-  /** Forward navigation markers and the names of the images they lead to — see this file's own doc. */
-  nav: { links: CatalogLink[]; targetNames: Map<number, string> },
+  /**
+   * Forward navigation markers and the names of the images they lead to —
+   * see this file's own doc. `caption` is this image's own name as a marker
+   * target, for real-size mode's sheet footers.
+   */
+  nav: { links: CatalogLink[]; targetNames: Map<number, string>; caption?: string },
 ) {
   // Uses cursor.page/cursor.y exactly as the caller left them — the caller
   // (exportCatalogPdf's own loop) decides when a fresh page is actually
@@ -566,7 +570,7 @@ async function renderDiagramPage(
   if (grid) {
     await renderGridByRows(cursor, font, image, pdfImage, links, grid, qrByUrl, showOnImage);
   } else if (options.diagramPageMode === "real-size") {
-    await renderDiagramRealSize(cursor, doc, font, image, pdfImage, [...links, ...nav.links], qrByUrl, showOnImage);
+    await renderDiagramRealSize(cursor, doc, font, image, pdfImage, [...links, ...nav.links], qrByUrl, showOnImage, nav.caption);
   } else {
     renderDiagramFitToPage(cursor, font, image, pdfImage, [...links, ...nav.links], fullTop, qrByUrl, showOnImage);
   }
@@ -703,7 +707,9 @@ function renderDiagramFitToPage(
  * its own slice falls inside the page's own bounds (a PDF page clips
  * anything drawn outside its own box for free, the same trick a poster
  * print relies on). A small footer on each sheet says where it sits in
- * that grid, to help reassemble the printout.
+ * that grid, to help reassemble the printout — led by `caption`, the
+ * image's name, when it has one: there's no room for a heading above a
+ * sheet that is all picture.
  *
  * Deliberately skips findQrsToMove's collision/leader-line machinery —
  * real-size mode's whole reason to exist is more room per hotspot (the
@@ -723,6 +729,7 @@ async function renderDiagramRealSize(
   links: CatalogLink[],
   qrByUrl: Map<string, QrMatrix>,
   showOnImage: boolean,
+  caption?: string,
 ) {
   const drawW = image.width * REAL_SIZE_PT_PER_PX;
   const drawH = image.height * REAL_SIZE_PT_PER_PX;
@@ -775,7 +782,11 @@ async function renderDiagramRealSize(
         }
       }
 
-      cursor.page.drawText(`Sheet ${row * cols + col + 1} of ${sheetRows * cols} — row ${row + 1}/${sheetRows}, column ${col + 1}/${cols}`, {
+      // The picture runs on under the bottom margin on every sheet row but
+      // the last: clear the margin so the footer reads on white.
+      cursor.page.drawRectangle({ x: 0, y: 0, width: PAGE_WIDTH, height: CONTENT_BOTTOM, color: rgb(1, 1, 1) });
+      const sheet = `Sheet ${row * cols + col + 1} of ${sheetRows * cols} — row ${row + 1}/${sheetRows}, column ${col + 1}/${cols}`;
+      cursor.page.drawText(footerText(font, caption, sheet), {
         x: MARGIN,
         y: CONTENT_BOTTOM - 16,
         size: 7,
@@ -787,9 +798,24 @@ async function renderDiagramRealSize(
 
   // The table always starts fresh after a real-size diagram — the last
   // sheet's page is full of image (plus its footer), with nowhere for it
-  // to follow directly the way a fit-to-page diagram's table does.
-  cursor.page = newPage(cursor.doc);
-  cursor.y = CONTENT_TOP;
+  // to follow directly the way a fit-to-page diagram's table does. Marked
+  // full rather than followed by a new page here: an image with no table
+  // would leave that page blank.
+  cursor.y = CONTENT_BOTTOM;
+}
+
+/**
+ * A real-size sheet's footer: "caption · sheet", the caption cut short with
+ * "…" so the line ends before the page number in the middle of the page.
+ */
+function footerText(font: PDFFont, caption: string | undefined, sheet: string): string {
+  if (!caption) return sheet;
+  const size = 7;
+  const room = PAGE_WIDTH / 2 - 24 - MARGIN - font.widthOfTextAtSize(` · ${sheet}`, size);
+  let text = caption;
+  while (text && font.widthOfTextAtSize(text === caption ? text : `${text}…`, size) > room) text = text.slice(0, -1).trimEnd();
+  if (!text) return sheet;
+  return `${text === caption ? text : `${text}…`} · ${sheet}`;
 }
 
 /** One row of cards on a composited grid, in the image's own pixels. */
@@ -1083,13 +1109,19 @@ export async function exportCatalogPdf(
         cursor.y = CONTENT_TOP;
       }
       freshPage = false;
-      // Not in real-size mode: its first sheet starts a page of its own, which would strand the heading.
-      const heading = options.diagramPageMode !== "real-size" ? navHeadings.get(image.id) : undefined;
-      if (heading) {
+      // Not in real-size mode: its first sheet starts a page of its own, which
+      // would strand the heading — there it goes into each sheet's footer.
+      const realSize = options.diagramPageMode === "real-size";
+      const heading = navHeadings.get(image.id);
+      if (heading && !realSize) {
         cursor.page.drawText(heading, { x: MARGIN, y: cursor.y - 14, size: 13, font });
         cursor.y -= 26;
       }
-      await renderDiagramPage(cursor, doc, font, image, links, rows, meta, options, { links: navLinks, targetNames: imageNames });
+      await renderDiagramPage(cursor, doc, font, image, links, rows, meta, options, {
+        links: navLinks,
+        targetNames: imageNames,
+        caption: realSize ? heading : undefined,
+      });
     }
     await flush();
   }
