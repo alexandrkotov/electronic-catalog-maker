@@ -29,6 +29,7 @@ import {
 } from "./collabClient.js";
 import { renderQrCodeSvg } from "./qrcode.js";
 import { isNavLink, navTargetImageId } from "./navLink.js";
+import { catalogFileStem } from "./fileName.js";
 import { createTranslator, matchLocale, type MessageParams, type Translate } from "./i18n.js";
 import { VIEWER_LOCALES, VIEWER_LOCALE_NAMES, viewerMessages } from "./locales/viewer/index.js";
 import { buildCartCheckoutUrl, cartStorageKey, catalogHasAnyBuyUrl, loadPersistedCart, parseCartItemId, savePersistedCart } from "./cart.js";
@@ -1878,9 +1879,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   }
 
   function suggestedPdfFileName(): string {
-    const name = db ? readMeta(db).catalogName : "";
-    const base = name.replace(/[^\w-]+/g, "_") || "catalog";
-    return `${base}.pdf`;
+    return `${catalogFileStem(db ? readMeta(db).catalogName : "")}.pdf`;
   }
 
   /** Opens the "Export PDF…" options dialog (see pdfOptionsDialogOpen's own doc) — the button's click handler, not the export itself. */

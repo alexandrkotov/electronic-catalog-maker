@@ -12,6 +12,7 @@ export * from "./qrcode.js";
 export * from "./cart.js";
 export * from "./quiz.js";
 export * from "./navLink.js";
+export * from "./fileName.js";
 export * from "./protect.js";
 export * from "./passwordStrength.js";
 export * from "./coverImage.js";

@@ -19,6 +19,7 @@ import {
   navLinkUrl,
   navTargetImageId,
   CATALOG_FILE_EXTENSION,
+  catalogFileStem,
   catalogHasAnyBuyUrl,
   collectExtraKeys,
   collectFolders,
@@ -925,9 +926,7 @@ function actionUseManualCollabUrl() {
 }
 
 function suggestedFileName(): string {
-  const meta = db ? readMeta(db) : null;
-  const base = meta?.catalogName.replace(/[^\w\-]+/g, "_") || "catalog";
-  return `${base}.${CATALOG_FILE_EXTENSION}`;
+  return `${catalogFileStem(db ? readMeta(db).catalogName : "")}.${CATALOG_FILE_EXTENSION}`;
 }
 
 function downloadBytes(bytes: Uint8Array, fileName = suggestedFileName()) {
@@ -947,9 +946,7 @@ function actionExportCatalog() {
 
 /** The protected copy gets its own name so it can never overwrite the editable file saved next to it. */
 function suggestedProtectedFileName(): string {
-  const meta = db ? readMeta(db) : null;
-  const base = meta?.catalogName.replace(/[^\w\-]+/g, "_") || "catalog";
-  return `${base}_protected.${CATALOG_FILE_EXTENSION}`;
+  return `${catalogFileStem(db ? readMeta(db).catalogName : "")}_protected.${CATALOG_FILE_EXTENSION}`;
 }
 
 function setProtectCoverUrl(url: string | null) {
@@ -1053,9 +1050,7 @@ async function actionConfirmProtect() {
 }
 
 function suggestedPdfFileName(): string {
-  const meta = db ? readMeta(db) : null;
-  const base = meta?.catalogName.replace(/[^\w-]+/g, "_") || "catalog";
-  return `${base}.pdf`;
+  return `${catalogFileStem(db ? readMeta(db).catalogName : "")}.pdf`;
 }
 
 /** Opens the "Export PDF…" options dialog — the button's own click handler; the actual export happens in actionConfirmExportPdf once it's submitted. */

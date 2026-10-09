@@ -460,6 +460,14 @@ way: at the page's width, over as many pages as it takes, and cut only in
 the gap between two rows of tiles, so no tile is ever split across two
 sheets, however long the grid.
 
+Hotspots that jump to another image (see "Using the editor" above) print
+too, when they lead forward — a room's or a map's markers: each is drawn as
+its label on its own spot, and a marker that is just a number also gets a
+line in the table under the picture, with the name of the image it leads
+to. That image is then printed under its own name as a heading ("Sofa", or
+"3 — Sofa" for a numbered marker). A "⌂" back to the overview is left out: on paper there is nowhere to go
+back to.
+
 Every row with a `buy_url` (see "Selling from a catalog" above) gets a
 small QR code, always pointing straight at a one-item checkout for that
 row, regardless of the catalog's own cart behavior: a printed code has no

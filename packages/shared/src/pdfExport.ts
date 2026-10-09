@@ -45,6 +45,16 @@
  *   Either way the row table follows directly below the image, continuing
  *   onto further pages if it doesn't fit.
  *
+ * Navigation hotspots (#image=<id>, see navLink.ts) have no row and nothing
+ * to buy, but the ones leading forward — an overview's or a map's markers —
+ * are still printed on a diagram, each as its label on its own point: a
+ * printed map without them wouldn't say which place is where. A marker
+ * whose label isn't its target's name (a bare number) also gets a line in
+ * the table, "No." → that image's name. A "⌂" back to the overview is
+ * never printed. The image such a marker leads to is printed under its own
+ * name as a heading ("Sofa", or "3 — Sofa" when the marker is a number), so
+ * a page of the printout can be matched to its marker on the overview.
+ *
  * Every QR encodes an "instant, single-item" checkout link (see
  * cart.ts buildInstantBuyUrl) regardless of the catalog's own cart_mode —
  * a printed code has no cart to add to, just one item to jump straight to.
@@ -76,7 +86,7 @@ import { clip, endPath, PDFDocument, PDFFont, PDFPage, popGraphicsState, pushGra
 import fontkit from "@pdf-lib/fontkit";
 import type { Database } from "sql.js";
 import { listImages, listLinksForImage, listRowsForImage, readMeta } from "./db.js";
-import { isNavLink } from "./navLink.js";
+import { forwardNavLinks, isNavLink, navTargetImageId } from "./navLink.js";
 import { groupImagesByFolder } from "./images.js";
 import { buildInstantBuyUrl } from "./cart.js";
 import { buildQrMatrix, type QrMatrix } from "./qrcode.js";
@@ -524,6 +534,8 @@ async function renderDiagramPage(
   rows: CatalogRow[],
   meta: CatalogMeta,
   options: PdfExportOptions,
+  /** Forward navigation markers and the names of the images they lead to — see this file's own doc. */
+  nav: { links: CatalogLink[]; targetNames: Map<number, string> },
 ) {
   // Uses cursor.page/cursor.y exactly as the caller left them — the caller
   // (exportCatalogPdf's own loop) decides when a fresh page is actually
@@ -554,16 +566,30 @@ async function renderDiagramPage(
   if (grid) {
     await renderGridByRows(cursor, font, image, pdfImage, links, grid, qrByUrl, showOnImage);
   } else if (options.diagramPageMode === "real-size") {
-    await renderDiagramRealSize(cursor, doc, font, image, pdfImage, links, qrByUrl, showOnImage);
+    await renderDiagramRealSize(cursor, doc, font, image, pdfImage, [...links, ...nav.links], qrByUrl, showOnImage);
   } else {
-    renderDiagramFitToPage(cursor, font, image, pdfImage, links, fullTop, qrByUrl, showOnImage);
+    renderDiagramFitToPage(cursor, font, image, pdfImage, [...links, ...nav.links], fullTop, qrByUrl, showOnImage);
+  }
+
+  // A marker that already reads as its target's name needs no legend line.
+  const legend: TableEntry[] = [];
+  const legendSeen = new Set<string>();
+  for (const link of nav.links) {
+    const name = nav.targetNames.get(navTargetImageId(link.url)!) ?? "";
+    if (!name || name === link.name.trim() || legendSeen.has(`${link.name}\n${link.url}`)) continue;
+    legendSeen.add(`${link.name}\n${link.url}`);
+    legend.push({ row: { id: 0, imageId: image.id, url: link.url, name, sku: "", description: "", extra: {} }, no: link.name });
   }
 
   drawTableRows(
     cursor,
     font,
-    rows.map((row) => ({ row, no: (namesByUrl.get(row.url) ?? []).join(", "), qrMatrix: showInTable ? (qrByUrl.get(row.url) ?? null) : null })),
-    showInTable,
+    [
+      ...legend,
+      ...rows.map((row) => ({ row, no: (namesByUrl.get(row.url) ?? []).join(", "), qrMatrix: showInTable ? (qrByUrl.get(row.url) ?? null) : null })),
+    ],
+    // A legend alone has nothing to buy: no empty QR column next to it.
+    showInTable && rows.length > 0,
   );
 }
 
@@ -979,7 +1005,21 @@ export async function exportCatalogPdf(
   // just as empty either way.
   let freshPage = true;
 
-  const groups = groupImagesByFolder(listImages(db));
+  const allImages = listImages(db);
+  const imageIds = allImages.map((i) => i.id);
+  const imageNames = new Map(allImages.map((i) => [i.id, i.name]));
+  // Heading of every image a forward marker leads to — see this file's own doc.
+  const navHeadings = new Map<number, string>();
+  for (const from of allImages) {
+    for (const link of forwardNavLinks(listLinksForImage(db, from.id), from.id, imageIds)) {
+      const target = navTargetImageId(link.url)!;
+      const name = imageNames.get(target) ?? "";
+      const label = link.name.trim();
+      if (navHeadings.has(target) || !(name || label)) continue;
+      navHeadings.set(target, !label || label === name ? name : name ? `${label} — ${name}` : label);
+    }
+  }
+  const groups = groupImagesByFolder(allImages);
   let isFirstGroup = true;
   for (const group of groups) {
     if (group.folder) {
@@ -1011,8 +1051,11 @@ export async function exportCatalogPdf(
     };
 
     for (const image of group.images) {
-      // Navigation hotspots (#image=<id>) only move between images on screen — nothing to print.
-      const links = listLinksForImage(db, image.id).filter((l) => !isNavLink(l));
+      // Navigation hotspots (#image=<id>) aren't items: they never make an image a
+      // tile, and only the forward ones are printed (see this file's own doc).
+      const imageLinks = listLinksForImage(db, image.id);
+      const links = imageLinks.filter((l) => !isNavLink(l));
+      const navLinks = forwardNavLinks(imageLinks, image.id, imageIds);
       const rows = listRowsForImage(db, image.id);
 
       if (links.length === 1) {
@@ -1026,9 +1069,10 @@ export async function exportCatalogPdf(
         }
         continue;
       }
-      // An image without hotspots (a cover, a portfolio page, an overview with
-      // only navigation markers) falls through to the diagram path: printed as
-      // a plain picture at page width, its rows (if any) in a table below.
+      // An image without item hotspots (a cover, a portfolio page, an overview
+      // with only navigation markers) falls through to the diagram path:
+      // printed as a picture at page width, its forward markers on it and its
+      // rows (if any) in a table below.
 
       await flush();
       // Real-size mode always starts its first sheet on a fresh page of its
@@ -1039,7 +1083,13 @@ export async function exportCatalogPdf(
         cursor.y = CONTENT_TOP;
       }
       freshPage = false;
-      await renderDiagramPage(cursor, doc, font, image, links, rows, meta, options);
+      // Not in real-size mode: its first sheet starts a page of its own, which would strand the heading.
+      const heading = options.diagramPageMode !== "real-size" ? navHeadings.get(image.id) : undefined;
+      if (heading) {
+        cursor.page.drawText(heading, { x: MARGIN, y: cursor.y - 14, size: 13, font });
+        cursor.y -= 26;
+      }
+      await renderDiagramPage(cursor, doc, font, image, links, rows, meta, options, { links: navLinks, targetNames: imageNames });
     }
     await flush();
   }

@@ -22,3 +22,17 @@ export function isNavLink(link: { url: string }): boolean {
 export function navLinkUrl(imageId: number): string {
   return `#image=${imageId}`;
 }
+
+/**
+ * The navigation links that lead further into the catalog: to an image
+ * listed after the one they are on (`imageIds` in catalog order). A "⌂" back
+ * to the overview leads to an earlier image, so it isn't one — on paper there
+ * is nowhere to go back to, while a forward marker still says what is where.
+ */
+export function forwardNavLinks<T extends { url: string }>(links: T[], imageId: number, imageIds: number[]): T[] {
+  const from = imageIds.indexOf(imageId);
+  return links.filter((link) => {
+    const target = navTargetImageId(link.url);
+    return target !== null && imageIds.indexOf(target) > from;
+  });
+}
