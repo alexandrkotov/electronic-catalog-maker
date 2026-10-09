@@ -159,7 +159,22 @@
   .card-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 0 0 2rem; }
   .use-cases { grid-template-columns: repeat(2, 1fr); }
   .apps-row { grid-template-columns: repeat(3, 1fr); }
-  .apps-row.web { margin-bottom: 1rem; }
+  .apps-row.web { grid-template-columns: repeat(2, 1fr); margin-bottom: 1rem; }
+  /* The app cards stay folded behind one button: the short map above already says what the apps do. */
+  .apps-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1.25rem; margin: 0 0 2rem; }
+  .apps-more[open] { flex-basis: 100%; }
+  /* Straight into the browser apps without unfolding; the open cards carry the same links, so the row steps aside. */
+  .apps-quick { margin: 0; min-width: 0; font-size: 0.95rem; line-height: 1.9; color: var(--text-2); }
+  .apps-quick a { margin: 0 0.35rem; white-space: nowrap; }
+  @media (max-width: 700px) { .apps-quick a { margin: 0 0.7rem 0 0; } }
+  .apps-bar:has(.apps-more[open]) .apps-quick { display: none; }
+  .apps-more > summary { list-style: none; cursor: pointer; user-select: none; }
+  .apps-more > summary::-webkit-details-marker { display: none; }
+  .apps-more > summary::after { content: "▾"; display: inline-block; margin-left: 0.5rem; }
+  .apps-more[open] > summary { margin-bottom: 1.25rem; }
+  .apps-more[open] > summary::after { transform: rotate(180deg); }
+  .apps-more .apps-row:last-child { margin-bottom: 0; }
+  @media (max-width: 700px) { .apps-more { flex-basis: 100%; } .apps-more > summary { display: block; text-align: center; } }
   h3.apps-h { margin: 0 0 0.6rem; font-size: 1rem; color: var(--text-2); }
   .card { padding: 1.25rem; border: 1px solid var(--border); border-radius: 8px; }
   .card h2, .card h3 { margin: 0 0 0.4rem; font-size: 1.1rem; }
@@ -373,6 +388,7 @@
           <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-photo" x="-30" y="-22" width="60" height="44"/></svg><span>{{types.l2.photo}}</span></li>
           <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-exploded" x="-30" y="-22" width="60" height="44"/></svg><span>{{types.l2.exploded}}</span></li>
           <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-tiles" x="-30" y="-22" width="60" height="44"/></svg><span>{{types.l2.tiles}}</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-map" x="-30" y="-22" width="60" height="44"/></svg><span>{{types.l2.map}}</span></li>
         </ul>
       </div>
       <div class="ct-level">
@@ -451,6 +467,9 @@
       </span>
       <span class="tm-open">{{index.toolset.open}}</span>
     </a>
+    <div class="apps-bar">
+    <details class="apps-more" id="apps">
+    <summary class="btn primary">{{index.apps.more}}</summary>
     <h3 class="apps-h">{{index.apps.web}}</h3>
     <div class="card-row apps-row web">
       <div class="card">
@@ -467,6 +486,10 @@
         <h2><a href="{{@base}}composer/{{@q}}">{{index.apps.composer.title}}</a></h2>
         <p>{{index.apps.composer.text}}</p>
         <p><a href="{url_msComposer}">{{index.apps.composer.store}}</a></p>
+      </div>
+      <div class="card">
+        <h2><a href="{{@base}}map-composer/{{@q}}">{{index.apps.mapComposer.title}}</a></h2>
+        <p>{{index.apps.mapComposer.text}}</p>
       </div>
     </div>
     <h3 class="apps-h">{{index.apps.servers}}</h3>
@@ -498,6 +521,9 @@
           <li><a href="{url_storeImporterReleasePage}" id="store-importer-other">{{index.apps.storeImporter.more}}</a></li>
         </ul>
       </div>
+    </div>
+    </details>
+    <p class="apps-quick">{{index.apps.quick}} <a href="{{@base}}editor/{{@q}}">{{index.apps.quick.editor}}</a> <a href="{{@base}}viewer/{{@q}}">{{index.apps.quick.viewer}}</a> <a href="{{@base}}composer/{{@q}}">{{index.apps.quick.composer}}</a> <a href="{{@base}}map-composer/{{@q}}">{{index.apps.quick.mapComposer}}</a></p>
     </div>
 
   <section class="benefits" aria-labelledby="benefits-h">

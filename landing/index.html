@@ -175,7 +175,22 @@
   .card-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 0 0 2rem; }
   .use-cases { grid-template-columns: repeat(2, 1fr); }
   .apps-row { grid-template-columns: repeat(3, 1fr); }
-  .apps-row.web { margin-bottom: 1rem; }
+  .apps-row.web { grid-template-columns: repeat(2, 1fr); margin-bottom: 1rem; }
+  /* The app cards stay folded behind one button: the short map above already says what the apps do. */
+  .apps-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1.25rem; margin: 0 0 2rem; }
+  .apps-more[open] { flex-basis: 100%; }
+  /* Straight into the browser apps without unfolding; the open cards carry the same links, so the row steps aside. */
+  .apps-quick { margin: 0; min-width: 0; font-size: 0.95rem; line-height: 1.9; color: var(--text-2); }
+  .apps-quick a { margin: 0 0.35rem; white-space: nowrap; }
+  @media (max-width: 700px) { .apps-quick a { margin: 0 0.7rem 0 0; } }
+  .apps-bar:has(.apps-more[open]) .apps-quick { display: none; }
+  .apps-more > summary { list-style: none; cursor: pointer; user-select: none; }
+  .apps-more > summary::-webkit-details-marker { display: none; }
+  .apps-more > summary::after { content: "▾"; display: inline-block; margin-left: 0.5rem; }
+  .apps-more[open] > summary { margin-bottom: 1.25rem; }
+  .apps-more[open] > summary::after { transform: rotate(180deg); }
+  .apps-more .apps-row:last-child { margin-bottom: 0; }
+  @media (max-width: 700px) { .apps-more { flex-basis: 100%; } .apps-more > summary { display: block; text-align: center; } }
   h3.apps-h { margin: 0 0 0.6rem; font-size: 1rem; color: var(--text-2); }
   .card { padding: 1.25rem; border: 1px solid var(--border); border-radius: 8px; }
   .card h2, .card h3 { margin: 0 0 0.4rem; font-size: 1.1rem; }
@@ -392,6 +407,7 @@
   <symbol id="ct-i-photo" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-24" y="-16" width="48" height="32" rx="3"/><path class="ct-faint" d="M-24 10L-10 -2L0 8L8 2L24 12"/><circle class="ct-dot" cx="-11" cy="-6" r="3.5"/><circle class="ct-dot" cx="3" cy="-8" r="3.5"/><circle class="ct-dot" cx="14" cy="-2" r="3.5"/></g></symbol>
   <symbol id="ct-i-exploded" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-24" y="-16" width="48" height="32" rx="3"/><circle class="ct-dot" cx="-14" cy="-6" r="3"/><circle class="ct-dot" cx="-2" cy="4" r="3"/><circle class="ct-dot" cx="8" cy="-8" r="3"/><circle class="ct-dot" cx="16" cy="6" r="3"/><circle class="ct-dot" cx="-12" cy="9" r="3"/><circle class="ct-dot" cx="0" cy="-9" r="3"/></g></symbol>
   <symbol id="ct-i-tiles" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-22" y="-14" width="12" height="12" rx="2"/><rect x="-6" y="-14" width="12" height="12" rx="2"/><rect x="10" y="-14" width="12" height="12" rx="2"/><rect x="-22" y="2" width="12" height="12" rx="2"/><rect x="-6" y="2" width="12" height="12" rx="2"/><rect x="10" y="2" width="12" height="12" rx="2"/></g></symbol>
+  <symbol id="ct-i-map" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-24" y="-16" width="48" height="32" rx="3"/><path class="ct-faint" d="M-24 4H24M-5 -16V16M7 -16L24 -3"/><circle class="ct-dot" cx="-15" cy="-6" r="3.5"/><circle class="ct-dot" cx="6" cy="10" r="3.5"/><circle class="ct-dot" cx="15" cy="-9" r="3.5"/></g></symbol>
   <symbol id="ct-i-table" viewBox="-30 -22 60 44"><g class="ct-ic"><rect class="ct-soft" x="-22" y="-15" width="44" height="9"/><rect x="-22" y="-15" width="44" height="30" rx="3"/><path d="M-22 -6H22M-22 4H22M-8 -15V15M7 -15V15"/></g></symbol>
   <symbol id="ct-i-card" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-22" y="-15" width="44" height="30" rx="3"/><rect class="ct-soft" x="-17" y="-10" width="14" height="13"/><path d="M2 -7H17M2 -1H13M-17 9H17"/></g></symbol>
   <symbol id="ct-i-buy" viewBox="-30 -22 60 44"><g class="ct-ic"><path d="M-22 -12H-15L-9 5H9L13 -6H-13"/><circle cx="-6" cy="11" r="2.5"/><circle cx="7" cy="11" r="2.5"/></g></symbol>
@@ -418,6 +434,7 @@
           <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-photo" x="-30" y="-22" width="60" height="44"/></svg><span>Photo with hotspots</span></li>
           <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-exploded" x="-30" y="-22" width="60" height="44"/></svg><span>Exploded view</span></li>
           <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-tiles" x="-30" y="-22" width="60" height="44"/></svg><span>Tile grid</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-map" x="-30" y="-22" width="60" height="44"/></svg><span>Map with points</span></li>
         </ul>
       </div>
       <div class="ct-level">
@@ -496,6 +513,9 @@
       </span>
       <span class="tm-open">Open the full map ↗</span>
     </a>
+    <div class="apps-bar">
+    <details class="apps-more" id="apps">
+    <summary class="btn primary">Get the apps</summary>
     <h3 class="apps-h">Work in your browser</h3>
     <div class="card-row apps-row web">
       <div class="card">
@@ -512,6 +532,10 @@
         <h2><a href="composer/">Grid Composer →</a></h2>
         <p>Build a tile catalog in one go from a folder of numbered photos and a spreadsheet.</p>
         <p><a href="https://apps.microsoft.com/detail/9n9s9k9fhlk2?hl=en-US&amp;gl=US">Get it on Microsoft Store</a></p>
+      </div>
+      <div class="card">
+        <h2><a href="map-composer/">Map Composer →</a></h2>
+        <p>Build a catalog from a map: mark your places, and each one opens its own page.</p>
       </div>
     </div>
     <h3 class="apps-h">Apps you run on your computer</h3>
@@ -543,6 +567,9 @@
           <li><a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/store-importer-latest" id="store-importer-other">Other downloads (macOS, Linux, Chromebook)</a></li>
         </ul>
       </div>
+    </div>
+    </details>
+    <p class="apps-quick">or open in your browser: <a href="editor/">Editor</a> <a href="viewer/">Viewer</a> <a href="composer/">Grid Composer</a> <a href="map-composer/">Map Composer</a></p>
     </div>
 
   <section class="benefits" aria-labelledby="benefits-h">

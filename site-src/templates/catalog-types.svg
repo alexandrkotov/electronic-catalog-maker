@@ -69,6 +69,7 @@
 <g transform="translate(470 258)"><rect class="card" x="-38" y="-28" width="76" height="56" rx="10"/><use href="#ct-i-photo" x="-30" y="-22" width="60" height="44"/><text class="t" y="48" text-anchor="middle">{{types.l2.photo}}</text></g>
 <g transform="translate(610 258)"><rect class="card" x="-38" y="-28" width="76" height="56" rx="10"/><use href="#ct-i-exploded" x="-30" y="-22" width="60" height="44"/><text class="t" y="48" text-anchor="middle">{{types.l2.exploded}}</text></g>
 <g transform="translate(750 258)"><rect class="card" x="-38" y="-28" width="76" height="56" rx="10"/><use href="#ct-i-tiles" x="-30" y="-22" width="60" height="44"/><text class="t" y="48" text-anchor="middle">{{types.l2.tiles}}</text></g>
+<g transform="translate(890 258)"><rect class="card" x="-38" y="-28" width="76" height="56" rx="10"/><use href="#ct-i-map" x="-30" y="-22" width="60" height="44"/><text class="t" y="48" text-anchor="middle">{{types.l2.map}}</text></g>
 
 <!-- level 3 -->
 <rect class="band" x="16" y="342" width="1078" height="118" rx="14"/>
