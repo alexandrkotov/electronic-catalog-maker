@@ -167,8 +167,10 @@ Both apps are also on the Microsoft Store for Windows, if you'd rather
 install from there:
 **[Editor](https://apps.microsoft.com/detail/9p4zk48txrln?hl=en-US&gl=US)**,
 **[Viewer](https://apps.microsoft.com/detail/9nb4shzt8fd1?hl=en-US&gl=US)**.
-So is [Grid Composer](https://apps.microsoft.com/detail/9n9s9k9fhlk2?hl=en-US&gl=US)
-(see "Building a tile catalog from photos and a table").
+So are [Grid Composer](https://apps.microsoft.com/detail/9n9s9k9fhlk2?hl=en-US&gl=US)
+(see "Building a tile catalog from photos and a table") and
+[Map Composer](https://apps.microsoft.com/detail/9njgrm70frvj?hl=en-US&gl=US)
+(see "Building a catalog from a map").
 So are the three optional apps you run yourself — the
 [Collaboration Server](https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=en-US&gl=US)
 (see "Real-time collaboration"), the
