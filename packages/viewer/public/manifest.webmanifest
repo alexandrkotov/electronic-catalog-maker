@@ -1,5 +1,5 @@
 {
-  "id": ".",
+  "id": "/viewer/",
   "name": "Electronic Catalog Viewer",
   "short_name": "ECM Viewer",
   "description": "View interactive image-hotspot catalogs packaged as a single portable SQLite file.",

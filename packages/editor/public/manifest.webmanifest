@@ -1,5 +1,5 @@
 {
-  "id": ".",
+  "id": "/editor/",
   "name": "Electronic Catalog Editor",
   "short_name": "ECM Editor",
   "description": "Build interactive image-hotspot catalogs, packaged as a single portable SQLite file.",
