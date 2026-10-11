@@ -71,6 +71,8 @@
   "zoom.in": "Zoom in",
   "zoom.reset": "Reset",
   "zoom.reset.tip": "Reset zoom",
+  "zoom.fit": "Fit",
+  "zoom.fit.tip": "Fit the whole image",
   "nav.position": "{index} of {total}",
   "instance.prev": "Previous occurrence of this part",
   "instance.next": "Next occurrence of this part",

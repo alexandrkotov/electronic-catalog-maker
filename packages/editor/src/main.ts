@@ -722,9 +722,42 @@ function resetTransientEditState() {
   zoom = 1;
 }
 
+/**
+ * The zoom at which the whole active image fits the stage (never above
+ * 100%), read from the live DOM like the viewer's measureFitZoom. A margin
+ * keeps hotspots that sit on the image edge from being cut off. Null while
+ * there is nothing to measure yet.
+ */
+function fitZoomForActiveImage(): number | null {
+  const scroll = document.getElementById("stage-scroll");
+  const img = document.getElementById("stage-img");
+  if (!scroll || !img) return null;
+  const w = Number(img.getAttribute("width"));
+  const h = Number(img.getAttribute("height"));
+  if (!w || !h || !scroll.clientWidth || !scroll.clientHeight) return null;
+  const pad = 14;
+  const fit = Math.min(1, (scroll.clientWidth - 2 * pad) / w, (scroll.clientHeight - 2 * pad) / h);
+  return fit > 0 ? fit : null;
+}
+
+// Low enough that a tall diagram can be shown whole, not just a 25% slice of it.
+const MIN_ZOOM = 0.05;
+
 function actionSetZoom(next: number) {
-  zoom = Math.min(4, Math.max(0.25, next));
+  zoom = Math.min(4, Math.max(MIN_ZOOM, next));
   render();
+}
+
+function actionFitZoom() {
+  const fit = fitZoomForActiveImage();
+  if (fit === null) return;
+  zoom = Math.max(MIN_ZOOM, fit);
+  render();
+  const scroll = document.getElementById("stage-scroll");
+  if (scroll) {
+    scroll.scrollLeft = 0;
+    scroll.scrollTop = 0;
+  }
 }
 
 // ---------- actions: catalog lifecycle ----------
@@ -2877,6 +2910,7 @@ function renderZoomControls(): string {
       <button id="btn-zoom-out" title="${te("zoom.out")}">−</button>
       <span class="zoom-pct">${Math.round(zoom * 100)}%</span>
       <button id="btn-zoom-in" title="${te("zoom.in")}">+</button>
+      <button id="btn-zoom-fit" title="${te("zoom.fit.tip")}">${te("zoom.fit")}</button>
       <button id="btn-zoom-reset" title="${te("zoom.reset.tip")}">${te("zoom.reset")}</button>
     </div>
   `;
@@ -3968,6 +4002,7 @@ function wireEvents(links: CatalogLink[]) {
 
   document.getElementById("btn-zoom-in")?.addEventListener("click", () => actionSetZoom(zoom * 1.25));
   document.getElementById("btn-zoom-out")?.addEventListener("click", () => actionSetZoom(zoom / 1.25));
+  document.getElementById("btn-zoom-fit")?.addEventListener("click", actionFitZoom);
   document.getElementById("btn-zoom-reset")?.addEventListener("click", () => actionSetZoom(1));
 
   document.getElementById("btn-instance-prev")?.addEventListener("click", () => actionCycleInstance(-1));

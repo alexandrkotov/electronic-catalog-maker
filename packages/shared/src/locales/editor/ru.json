@@ -71,6 +71,8 @@
   "zoom.in": "Увеличить",
   "zoom.reset": "Сброс",
   "zoom.reset.tip": "Сбросить масштаб",
+  "zoom.fit": "Вписать",
+  "zoom.fit.tip": "Вписать изображение целиком",
   "nav.position": "{index} из {total}",
   "instance.prev": "Предыдущее вхождение этой детали",
   "instance.next": "Следующее вхождение этой детали",

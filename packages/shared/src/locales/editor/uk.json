@@ -71,6 +71,8 @@
   "zoom.in": "Збільшити",
   "zoom.reset": "Скинути",
   "zoom.reset.tip": "Скинути масштаб",
+  "zoom.fit": "Вмістити",
+  "zoom.fit.tip": "Вмістити зображення повністю",
   "nav.position": "{index} з {total}",
   "instance.prev": "Попереднє входження цієї деталі",
   "instance.next": "Наступне входження цієї деталі",
