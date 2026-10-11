@@ -90,7 +90,7 @@ import { forwardNavLinks, isNavLink, navTargetImageId } from "./navLink.js";
 import { groupImagesByFolder } from "./images.js";
 import { buildInstantBuyUrl } from "./cart.js";
 import { buildQrMatrix, type QrMatrix } from "./qrcode.js";
-import { DEFAULT_PDF_EXPORT_OPTIONS, detectGrid, type PdfExportOptions, type PdfPageSize, type QrSize } from "./pdfExportOptions.js";
+import { DEFAULT_PDF_EXPORT_OPTIONS, detectGrid, type PdfContent, type PdfExportOptions, type PdfPageSize, type QrSize } from "./pdfExportOptions.js";
 import type { CatalogImage, CatalogLink, CatalogMeta, CatalogRow } from "./types.js";
 
 // Page sizes in PDF points (1pt = 1/72in): A4 is 210mm x 297mm, US Letter 8.5in x 11in.
@@ -546,10 +546,10 @@ async function renderDiagramPage(
   // needed. Forcing one unconditionally here used to strand a just-drawn
   // catalog-title/folder heading alone on an otherwise-blank page, since
   // this function would immediately abandon that page for a new one.
-  const pdfImage = await embedCatalogImage(doc, image);
   const fullTop = cursor.y;
-  const showOnImage = options.qrPlacement === "image" || options.qrPlacement === "both";
-  const showInTable = options.qrPlacement === "table" || options.qrPlacement === "both";
+  const content = options.content ?? "both";
+  const showOnImage = content === "images" || (content === "both" && options.qrPlacement !== "table");
+  const showInTable = content === "table" || (content === "both" && options.qrPlacement !== "image");
   const qrByUrl = buildQrsByUrl(rows, meta);
   // Several links can share one row's url (the same part drawn at more than
   // one position on this diagram) — collect every link name pointing at
@@ -567,13 +567,17 @@ async function renderDiagramPage(
   // by construction, so it's never subject to the crowding check below.
   const grid = detectGrid(links);
 
-  if (grid) {
-    await renderGridByRows(cursor, font, image, pdfImage, links, grid, qrByUrl, showOnImage);
-  } else if (options.diagramPageMode === "real-size") {
-    await renderDiagramRealSize(cursor, doc, font, image, pdfImage, [...links, ...nav.links], qrByUrl, showOnImage, nav.caption);
-  } else {
-    renderDiagramFitToPage(cursor, font, image, pdfImage, [...links, ...nav.links], fullTop, qrByUrl, showOnImage);
+  if (content !== "table") {
+    const pdfImage = await embedCatalogImage(doc, image);
+    if (grid) {
+      await renderGridByRows(cursor, font, image, pdfImage, links, grid, qrByUrl, showOnImage);
+    } else if (options.diagramPageMode === "real-size") {
+      await renderDiagramRealSize(cursor, doc, font, image, pdfImage, [...links, ...nav.links], qrByUrl, showOnImage, nav.caption);
+    } else {
+      renderDiagramFitToPage(cursor, font, image, pdfImage, [...links, ...nav.links], fullTop, qrByUrl, showOnImage);
+    }
   }
+  if (content === "images") return;
 
   // A marker that already reads as its target's name needs no legend line.
   const legend: TableEntry[] = [];
@@ -1008,8 +1012,14 @@ interface TileItem {
 }
 
 /** Packs buffered tile images into a grid (wrapping to new pages as needed), then the shared table for all of them right after the last one. */
-async function flushTileBuffer(cursor: Cursor, doc: PDFDocument, font: PDFFont, tiles: TileItem[], entries: TableEntry[], meta: CatalogMeta) {
+async function flushTileBuffer(cursor: Cursor, doc: PDFDocument, font: PDFFont, tiles: TileItem[], entries: TableEntry[], meta: CatalogMeta, content: PdfContent) {
   if (tiles.length === 0) return;
+  if (content === "table") {
+    // No tile to carry the code: it goes into the table's own QR column instead.
+    const withQr = entries.map((e) => ({ ...e, qrMatrix: buyUrlOf(e.row) ? buildQrMatrix(buildInstantBuyUrl(buyUrlOf(e.row), meta), "L") : null }));
+    drawTableRows(cursor, font, withQr, withQr.some((e) => e.qrMatrix));
+    return;
+  }
 
   const cellW = (CONTENT_WIDTH - TILE_GAP * (TILE_COLUMNS - 1)) / TILE_COLUMNS;
   const cellH = cellW;
@@ -1047,6 +1057,7 @@ async function flushTileBuffer(cursor: Cursor, doc: PDFDocument, font: PDFFont, 
   }
   if (col !== 0) cursor.y -= cellH + TILE_GAP; // a partial last row still consumes a full row's height
 
+  if (content === "images") return;
   cursor.y += TILE_GAP - 4; // undo the trailing gap, leave a little breathing room before the table
   // A tile's own QR always stays on the tile itself (see pdfExportOptions.ts's
   // own doc) — its shared table never gets the extra QR column.
@@ -1066,6 +1077,7 @@ export async function exportCatalogPdf(
   options: PdfExportOptions = DEFAULT_PDF_EXPORT_OPTIONS,
 ): Promise<Uint8Array> {
   setPageSize(options.pageSize ?? "a4");
+  const content = options.content ?? "both";
   const meta = readMeta(db);
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
@@ -1123,7 +1135,7 @@ export async function exportCatalogPdf(
 
     const flush = async () => {
       if (tileBuffer.length > 0) freshPage = false;
-      await flushTileBuffer(cursor, doc, font, tileBuffer, tileEntries, meta);
+      await flushTileBuffer(cursor, doc, font, tileBuffer, tileEntries, meta, content);
       tileBuffer = [];
       tileEntries = [];
       tileSeenUrls = new Set();
@@ -1157,14 +1169,18 @@ export async function exportCatalogPdf(
       // Real-size mode always starts its first sheet on a fresh page of its
       // own regardless (see renderDiagramRealSize) — forcing one here too
       // would just insert a genuinely blank page in between.
-      if (options.diagramPageMode !== "real-size" && !freshPage) {
+      // Tables alone just follow one another down the page.
+      if (content === "table") {
+        if (!freshPage) cursor.y -= 14;
+        ensureRoom(cursor, 26 + TABLE_LINE_HEIGHT * 3 + TABLE_CELL_PADDING * 2);
+      } else if (options.diagramPageMode !== "real-size" && !freshPage) {
         cursor.page = newPage(doc);
         cursor.y = CONTENT_TOP;
       }
       freshPage = false;
       // Not in real-size mode: its first sheet starts a page of its own, which
       // would strand the heading — there it goes into each sheet's footer.
-      const realSize = options.diagramPageMode === "real-size";
+      const realSize = options.diagramPageMode === "real-size" && content !== "table";
       const heading = navHeadings.get(image.id);
       if (heading && !realSize) {
         cursor.page.drawText(heading, { x: MARGIN, y: cursor.y - 14, size: 13, font });

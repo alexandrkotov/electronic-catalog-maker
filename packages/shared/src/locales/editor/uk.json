@@ -186,6 +186,10 @@
   "store.updated": "Налаштування магазину оновлено.",
 
   "pdf.title": "Експорт у PDF",
+  "pdf.content.legend": "Що друкувати",
+  "pdf.content.both": "Зображення й таблиці",
+  "pdf.content.images": "Лише зображення",
+  "pdf.content.table": "Лише таблиці",
   "pdf.qr.legend": "Де розміщувати QR-коди на схемах",
   "pdf.qr.table": "Лише в таблиці",
   "pdf.qr.image": "Лише на схемі",

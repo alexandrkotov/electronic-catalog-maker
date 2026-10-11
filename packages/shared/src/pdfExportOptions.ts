@@ -33,6 +33,14 @@ export type DiagramPageMode = "fit" | "real-size";
  */
 export type QrSize = "small" | "large";
 
+/**
+ * What gets printed: the pictures with their tables (default), the pictures
+ * alone (a flyer, a wall sheet) or the tables alone (a price list). With one
+ * of the two left out the QR codes go where the remaining one is, whatever
+ * `qrPlacement` says — a tile's code into its table's own QR column.
+ */
+export type PdfContent = "both" | "images" | "table";
+
 /** The sheet the PDF is laid out for. */
 export type PdfPageSize = "a4" | "letter";
 
@@ -57,6 +65,8 @@ export interface PdfExportOptions {
    * it. Each folder still starts on its own page. Not asked in the dialog.
    */
   showFolderHeadings?: boolean;
+  /** Default (also when omitted) "both". */
+  content?: PdfContent;
   /** Default (also when omitted) "a4". "letter" for a printout meant for US Letter paper — an A4 page comes out shrunk or cropped there. Not asked in the dialog. */
   pageSize?: PdfPageSize;
 }

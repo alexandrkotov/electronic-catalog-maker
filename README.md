@@ -528,6 +528,10 @@ A tile's QR always sits in its own top-right corner — the button opens an
 options dialog before exporting (if no row has a `buy_url`, it says so at
 the top and the QR questions are greyed out):
 
+- **What to print** — pictures and tables (default), pictures only (a
+  flyer, a sheet for the wall) or tables only (a price list). With one of
+  the two left out, the QR codes go where the other one is, and the
+  placement question below is greyed out.
 - **QR code placement** — in the table only (default: a new "QR" column,
   next to the existing "No." column), right next to the diagram's own
   hotspot label, or both. On a tile grid, "on the diagram" means each

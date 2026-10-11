@@ -81,6 +81,7 @@ import {
   type DiagramPageMode,
   type QrSize,
   type LinkConflict,
+  type PdfContent,
   type PdfExportOptions,
   type QrPlacement,
   type SearchField,
@@ -202,6 +203,7 @@ let pdfQrPlacement: QrPlacement = DEFAULT_PDF_EXPORT_OPTIONS.qrPlacement;
 let pdfDiagramPageMode: DiagramPageMode = DEFAULT_PDF_EXPORT_OPTIONS.diagramPageMode;
 let pdfQrSize: QrSize = DEFAULT_PDF_EXPORT_OPTIONS.qrSize;
 let pdfShowTitle: boolean = DEFAULT_PDF_EXPORT_OPTIONS.showTitle;
+let pdfContent: PdfContent = "both";
 // "Export protected…" dialog (see renderProtectDialog): the password, and the
 // public cover shown on the lock screen before it is entered. `protectCoverChoice`
 // is "none", "file" (the seller's own picture) or "image:<id>" (one of this
@@ -1090,7 +1092,7 @@ async function actionConfirmExportPdf() {
     // isn't pulled into this app's main bundle for everyone who never
     // clicks this button. See index.ts's own comment on that export.
     const [{ exportCatalogPdf }, fontBytes] = await Promise.all([import("../../shared/src/pdfExport.js"), pdfFontBytesPromise]);
-    const options: PdfExportOptions = { qrPlacement: pdfQrPlacement, diagramPageMode: pdfDiagramPageMode, qrSize: pdfQrSize, showTitle: pdfShowTitle };
+    const options: PdfExportOptions = { qrPlacement: pdfQrPlacement, diagramPageMode: pdfDiagramPageMode, qrSize: pdfQrSize, showTitle: pdfShowTitle, content: pdfContent };
     const bytes = await exportCatalogPdf(db, fontBytes, options);
     const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
     const a = document.createElement("a");
@@ -3150,23 +3152,40 @@ function renderStoreSettingsDialog(): string {
 function renderPdfOptionsDialog(): string {
   if (!pdfOptionsDialogOpen || !db) return "";
   const hasBuyUrl = catalogHasAnyBuyUrl(listAllRows(db));
+  // With pictures or tables left out the codes go where the other one is (see PdfContent).
+  const qrPlacementShown: QrPlacement = pdfContent === "images" ? "image" : pdfContent === "table" ? "table" : pdfQrPlacement;
   return `
     <div class="confirm-overlay">
       <div class="confirm-box">
         <h2>${te("pdf.title")}</h2>
         ${hasBuyUrl ? "" : `<p class="notice">${te("pdf.qr.hintNoStore")}</p>`}
         <div class="field">
+          <label>${te("pdf.content.legend")}</label>
+          <label class="radio-option">
+            <input type="radio" name="pdf-content" value="both" ${pdfContent === "both" ? "checked" : ""} />
+            ${te("pdf.content.both")}
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="pdf-content" value="images" ${pdfContent === "images" ? "checked" : ""} />
+            ${te("pdf.content.images")}
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="pdf-content" value="table" ${pdfContent === "table" ? "checked" : ""} />
+            ${te("pdf.content.table")}
+          </label>
+        </div>
+        <div class="field">
           <label>${te("pdf.qr.legend")}</label>
           <label class="radio-option">
-            <input type="radio" name="pdf-qr-placement" value="table" ${pdfQrPlacement === "table" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
+            <input type="radio" name="pdf-qr-placement" value="table" ${qrPlacementShown === "table" ? "checked" : ""} ${hasBuyUrl && pdfContent === "both" ? "" : "disabled"} />
             ${te("pdf.qr.table")}
           </label>
           <label class="radio-option">
-            <input type="radio" name="pdf-qr-placement" value="image" ${pdfQrPlacement === "image" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
+            <input type="radio" name="pdf-qr-placement" value="image" ${qrPlacementShown === "image" ? "checked" : ""} ${hasBuyUrl && pdfContent === "both" ? "" : "disabled"} />
             ${te("pdf.qr.image")}
           </label>
           <label class="radio-option">
-            <input type="radio" name="pdf-qr-placement" value="both" ${pdfQrPlacement === "both" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
+            <input type="radio" name="pdf-qr-placement" value="both" ${qrPlacementShown === "both" ? "checked" : ""} ${hasBuyUrl && pdfContent === "both" ? "" : "disabled"} />
             ${te("pdf.qr.both")}
           </label>
           ${hasBuyUrl ? `<p class="hint">${te("pdf.qr.hint")}</p>` : ""}
@@ -3185,11 +3204,11 @@ function renderPdfOptionsDialog(): string {
         <div class="field">
           <label>${te("pdf.size.legend")}</label>
           <label class="radio-option">
-            <input type="radio" name="pdf-diagram-page-mode" value="fit" ${pdfDiagramPageMode === "fit" ? "checked" : ""} />
+            <input type="radio" name="pdf-diagram-page-mode" value="fit" ${pdfDiagramPageMode === "fit" ? "checked" : ""} ${pdfContent === "table" ? "disabled" : ""} />
             ${te("pdf.size.fit")}
           </label>
           <label class="radio-option">
-            <input type="radio" name="pdf-diagram-page-mode" value="real-size" ${pdfDiagramPageMode === "real-size" ? "checked" : ""} />
+            <input type="radio" name="pdf-diagram-page-mode" value="real-size" ${pdfDiagramPageMode === "real-size" ? "checked" : ""} ${pdfContent === "table" ? "disabled" : ""} />
             ${te("pdf.size.real")}
           </label>
           <p class="hint">${te("pdf.size.hintGrid")}</p>
@@ -3726,6 +3745,13 @@ function wireEvents(links: CatalogLink[]) {
   document.querySelectorAll<HTMLInputElement>('input[name="pdf-qr-placement"]').forEach((input) => {
     input.addEventListener("change", () => {
       if (input.checked) pdfQrPlacement = input.value as QrPlacement;
+    });
+  });
+  document.querySelectorAll<HTMLInputElement>('input[name="pdf-content"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      if (!input.checked) return;
+      pdfContent = input.value as PdfContent;
+      render();
     });
   });
   document.querySelectorAll<HTMLInputElement>('input[name="pdf-diagram-page-mode"]').forEach((input) => {

@@ -33,7 +33,7 @@ import { catalogFileStem } from "./fileName.js";
 import { createTranslator, matchLocale, type MessageParams, type Translate } from "./i18n.js";
 import { VIEWER_LOCALES, VIEWER_LOCALE_NAMES, viewerMessages } from "./locales/viewer/index.js";
 import { buildCartCheckoutUrl, cartStorageKey, catalogHasAnyBuyUrl, loadPersistedCart, parseCartItemId, savePersistedCart } from "./cart.js";
-import { DEFAULT_PDF_EXPORT_OPTIONS, suggestedQrSize, type DiagramPageMode, type PdfExportOptions, type QrPlacement, type QrSize } from "./pdfExportOptions.js";
+import { DEFAULT_PDF_EXPORT_OPTIONS, suggestedQrSize, type DiagramPageMode, type PdfContent, type PdfExportOptions, type QrPlacement, type QrSize } from "./pdfExportOptions.js";
 import {
   QUIZ_HIDDEN_EXTRA_KEYS,
   evaluateQuestion,
@@ -504,6 +504,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   let pdfDiagramPageMode: DiagramPageMode = DEFAULT_PDF_EXPORT_OPTIONS.diagramPageMode;
   let pdfQrSize: QrSize = DEFAULT_PDF_EXPORT_OPTIONS.qrSize;
   let pdfShowTitle: boolean = DEFAULT_PDF_EXPORT_OPTIONS.showTitle;
+  let pdfContent: PdfContent = "both";
   // Which single panel is shown below the mobile breakpoint (see .mobile-tabs
   // / .ecm-viewer-app[data-mobile-tab] in style.css) — irrelevant above it,
   // where all three panels sit side by side per the desktop grid regardless
@@ -1902,7 +1903,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     exportPdfBusy = true;
     render();
     try {
-      const bytes = await exportPdf(db, { qrPlacement: pdfQrPlacement, diagramPageMode: pdfDiagramPageMode, qrSize: pdfQrSize, showTitle: pdfShowTitle });
+      const bytes = await exportPdf(db, { qrPlacement: pdfQrPlacement, diagramPageMode: pdfDiagramPageMode, qrSize: pdfQrSize, showTitle: pdfShowTitle, content: pdfContent });
       const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -2683,23 +2684,40 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function renderPdfOptionsDialog(): string {
     if (!pdfOptionsDialogOpen || !db) return "";
     const hasBuyUrl = catalogHasAnyBuyUrl(listAllRows(db));
+    // With pictures or tables left out the codes go where the other one is (see PdfContent).
+    const qrPlacementShown: QrPlacement = pdfContent === "images" ? "image" : pdfContent === "table" ? "table" : pdfQrPlacement;
     return `
       <div class="open-overlay">
         <div class="open-box pdf-options-box">
           <h2>${te("pdf.title")}</h2>
           ${hasBuyUrl ? "" : `<p class="notice">${te("pdf.qr.hintNoStore")}</p>`}
           <div class="field">
+            <label>${te("pdf.content.legend")}</label>
+            <label class="radio-option">
+              <input type="radio" name="pdf-content" value="both" ${pdfContent === "both" ? "checked" : ""} />
+              ${te("pdf.content.both")}
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="pdf-content" value="images" ${pdfContent === "images" ? "checked" : ""} />
+              ${te("pdf.content.images")}
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="pdf-content" value="table" ${pdfContent === "table" ? "checked" : ""} />
+              ${te("pdf.content.table")}
+            </label>
+          </div>
+          <div class="field">
             <label>${te("pdf.qr.legend")}</label>
             <label class="radio-option">
-              <input type="radio" name="pdf-qr-placement" value="table" ${pdfQrPlacement === "table" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
+              <input type="radio" name="pdf-qr-placement" value="table" ${qrPlacementShown === "table" ? "checked" : ""} ${hasBuyUrl && pdfContent === "both" ? "" : "disabled"} />
               ${te("pdf.qr.table")}
             </label>
             <label class="radio-option">
-              <input type="radio" name="pdf-qr-placement" value="image" ${pdfQrPlacement === "image" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
+              <input type="radio" name="pdf-qr-placement" value="image" ${qrPlacementShown === "image" ? "checked" : ""} ${hasBuyUrl && pdfContent === "both" ? "" : "disabled"} />
               ${te("pdf.qr.image")}
             </label>
             <label class="radio-option">
-              <input type="radio" name="pdf-qr-placement" value="both" ${pdfQrPlacement === "both" ? "checked" : ""} ${hasBuyUrl ? "" : "disabled"} />
+              <input type="radio" name="pdf-qr-placement" value="both" ${qrPlacementShown === "both" ? "checked" : ""} ${hasBuyUrl && pdfContent === "both" ? "" : "disabled"} />
               ${te("pdf.qr.both")}
             </label>
             ${hasBuyUrl ? `<p class="hint">${te("pdf.qr.hint")}</p>` : ""}
@@ -2718,11 +2736,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           <div class="field">
             <label>${te("pdf.size.legend")}</label>
             <label class="radio-option">
-              <input type="radio" name="pdf-diagram-page-mode" value="fit" ${pdfDiagramPageMode === "fit" ? "checked" : ""} />
+              <input type="radio" name="pdf-diagram-page-mode" value="fit" ${pdfDiagramPageMode === "fit" ? "checked" : ""} ${pdfContent === "table" ? "disabled" : ""} />
               ${te("pdf.size.fit")}
             </label>
             <label class="radio-option">
-              <input type="radio" name="pdf-diagram-page-mode" value="real-size" ${pdfDiagramPageMode === "real-size" ? "checked" : ""} />
+              <input type="radio" name="pdf-diagram-page-mode" value="real-size" ${pdfDiagramPageMode === "real-size" ? "checked" : ""} ${pdfContent === "table" ? "disabled" : ""} />
               ${te("pdf.size.real")}
             </label>
             <p class="hint">${te("pdf.size.hintGrid")}</p>
@@ -3033,6 +3051,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     root.querySelectorAll<HTMLInputElement>('input[name="pdf-qr-placement"]').forEach((input) => {
       input.addEventListener("change", () => {
         if (input.checked) pdfQrPlacement = input.value as QrPlacement;
+      });
+    });
+    root.querySelectorAll<HTMLInputElement>('input[name="pdf-content"]').forEach((input) => {
+      input.addEventListener("change", () => {
+        if (!input.checked) return;
+        pdfContent = input.value as PdfContent;
+        render();
       });
     });
     root.querySelectorAll<HTMLInputElement>('input[name="pdf-diagram-page-mode"]').forEach((input) => {

@@ -173,6 +173,10 @@
   "share.stop": "Stop sharing",
 
   "pdf.title": "Export PDF",
+  "pdf.content.legend": "What to print",
+  "pdf.content.both": "Pictures and tables",
+  "pdf.content.images": "Pictures only",
+  "pdf.content.table": "Tables only",
   "pdf.qr.legend": "QR code placement on diagrams",
   "pdf.qr.table": "In the table only",
   "pdf.qr.image": "On the diagram only",
