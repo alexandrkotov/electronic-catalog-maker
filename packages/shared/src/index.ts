@@ -16,6 +16,7 @@ export * from "./fileName.js";
 export * from "./protect.js";
 export * from "./passwordStrength.js";
 export * from "./coverImage.js";
+export * from "./gridCaption.js";
 export * from "./pdfExportOptions.js";
 // pdfExport.ts (and its pdf-lib/@pdf-lib/fontkit dependencies, well over a
 // MB combined) is deliberately NOT re-exported here — every consumer of

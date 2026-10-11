@@ -5,6 +5,7 @@
  * stage at 100% on a 1920x1080 screen, badges sit fully inside their tile's
  * top-left corner, and one title-pill font size is shared by every grid.
  */
+import { captionText, drawTileCaption, ellipsize, GRID_FONT, type GridLayout } from "@ecm/shared";
 import type { GridPlan } from "./plan.js";
 
 /** Canvas width: the viewer's stage is ~948px wide on a maximized 1920x1080 window. */
@@ -14,7 +15,7 @@ const GAP = 16;
 const TOP = 100;
 const PILL_H = 56;
 const RADIUS = 14;
-const FONT = '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+const FONT = GRID_FONT;
 
 /**
  * Tallest grid image the composer makes; a bigger folder is split into
@@ -52,6 +53,8 @@ export interface RenderedGrid {
   height: number;
   anchors: GridAnchor[];
   badgeFont: number;
+  /** Where the captions sit, so the editor can repaint one after a table edit (shared/gridCaption.ts). */
+  layout: GridLayout;
 }
 
 export function tileSize(columns: number): number {
@@ -111,35 +114,6 @@ export function titleFontSize(ctx: CanvasRenderingContext2D, titles: string[]): 
   return 16;
 }
 
-function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
-  if (ctx.measureText(text).width <= maxW) return text;
-  let s = text;
-  while (s.length > 1 && ctx.measureText(s + "…").width > maxW) s = s.slice(0, -1);
-  return s.trimEnd() + "…";
-}
-
-/** Word-wraps into at most `maxLines`, ellipsizing the last one. */
-function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number, maxLines: number): string[] {
-  const lines: string[] = [];
-  let current = "";
-  const words = text.split(/\s+/).filter(Boolean);
-  for (let i = 0; i < words.length; i++) {
-    const candidate = current ? `${current} ${words[i]}` : words[i]!;
-    if (ctx.measureText(candidate).width <= maxW || !current) {
-      current = candidate;
-      continue;
-    }
-    lines.push(current);
-    current = words[i]!;
-    if (lines.length === maxLines - 1) {
-      current = words.slice(i).join(" ");
-      break;
-    }
-  }
-  if (current) lines.push(current);
-  return lines.slice(0, maxLines).map((l) => ellipsize(ctx, l, maxW));
-}
-
 export function newCanvasContext(width: number, height: number): CanvasRenderingContext2D {
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -178,6 +152,7 @@ export async function renderGrid(
   ctx.textBaseline = "middle";
   ctx.fillText(shown, width / 2, 22 + PILL_H / 2 + 1);
 
+  const layout: GridLayout = { v: 1, width, height, tile, cap, capFont, subFont, pad, lineH, radius: RADIUS, accent: style.accent, subtitleKey: style.subtitleKey, tiles: [] };
   const anchors: GridAnchor[] = [];
   for (let i = 0; i < grid.items.length; i++) {
     const { item, photo: file, url } = grid.items[i]!;
@@ -227,19 +202,10 @@ export async function renderGrid(
     ctx.restore();
 
     // Caption: name (up to 2 lines), then the subtitle
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = "#0f172a";
-    ctx.font = `bold ${capFont}px ${FONT}`;
-    wrap(ctx, item.name || `#${item.no}`, tile - 2 * pad, 2).forEach((line, k) => {
-      ctx.fillText(line, x + pad, y + tile + pad + capFont + k * lineH);
-    });
-    const sub = style.subtitleKey === "sku" ? item.sku : style.subtitleKey ? (item.extra[style.subtitleKey] ?? "") : "";
-    if (sub) {
-      ctx.fillStyle = style.subtitleKey === "sku" ? "#64748b" : style.accent;
-      ctx.font = `${style.subtitleKey === "sku" ? "" : "bold "}${subFont}px ${FONT}`;
-      ctx.fillText(ellipsize(ctx, sub, tile - 2 * pad), x + pad, y + tile + cap - pad);
-    }
+    const text = captionText(layout, item.no, item);
+    const placed = { url, no: item.no, x, y, ...text };
+    drawTileCaption(ctx, layout, placed, text);
+    layout.tiles.push(placed);
 
     anchors.push({ url, no: item.no, left: x + inset.x, top: y + inset.y });
   }
@@ -247,5 +213,5 @@ export async function renderGrid(
   const jpeg = await new Promise<Blob>((resolve, reject) =>
     ctx.canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/jpeg", 0.85),
   );
-  return { jpeg, width, height, anchors, badgeFont };
+  return { jpeg, width, height, anchors, badgeFont, layout };
 }

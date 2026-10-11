@@ -14,6 +14,7 @@ import {
   DEFAULT_CART_ITEM_PARAM,
   exportCatalog,
   updateStoreSettings,
+  writeGridLayout,
   type SqlJsStatic,
 } from "@ecm/shared";
 import type { GridPlan } from "./plan.js";
@@ -61,6 +62,7 @@ export async function buildCatalog(SQL: SqlJsStatic, catalogName: string, grids:
       folder: plan.parts > 1 ? plan.folder || catalogName : "",
       fitOnOpen: rendered.height <= FIT_ON_OPEN_MAX_HEIGHT,
     });
+    writeGridLayout(db, imageId, rendered.layout);
     plan.items.forEach(({ item, url }, i) => {
       const anchor = rendered.anchors[i]!;
       addLink(db, {

@@ -64,6 +64,7 @@ import {
   currentTheme,
   toggleTheme,
   findRowByUrl,
+  syncGridCaptions,
   rowExistsForUrl,
   searchRows,
   setUpPwa,
@@ -939,8 +940,8 @@ function downloadBytes(bytes: Uint8Array, fileName = suggestedFileName()) {
 }
 
 /** Always downloads a fresh copy — never touches whatever file was opened. */
-function actionExportCatalog() {
-  if (!db) return;
+async function actionExportCatalog() {
+  if (!db || !(await settleBeforeFileWrite())) return;
   downloadBytes(exportCatalog(db));
 }
 
@@ -1113,7 +1114,7 @@ async function actionConfirmExportPdf() {
  * browsers that don't support it (Firefox, Safari).
  */
 async function actionSave() {
-  if (!db) return;
+  if (!db || !(await settleBeforeFileWrite())) return;
   const bytes = exportCatalog(db);
 
   if (!openedFileHandle && window.showSaveFilePicker) {
@@ -2540,7 +2541,49 @@ function escapeHtml(s: string): string {
 
 // ---------- render ----------
 
+/**
+ * A grid made by the composer has its names and prices painted into the
+ * picture (see shared/gridCaption.ts). Whatever changed a row — a local
+ * edit, a relayed one, a delete — the picture is brought back in line here,
+ * after the fact, rather than in every place that can touch a row.
+ */
+let captionSync: Promise<void> = Promise.resolve();
+function syncCaptionsAfterRender() {
+  const target = db;
+  if (!target) return;
+  // One at a time, in order: an edit made while a picture is being repainted is picked up by the next link.
+  captionSync = captionSync.then(async () => {
+    try {
+      if ((await syncGridCaptions(target)) && target === db) render();
+    } catch {
+      // An undecodable picture keeps its old captions; the table stays correct.
+    }
+  });
+}
+
+/**
+ * Before the catalog is written to a file: applies a row edit that is still
+ * open in the inspector ("Save" in the toolbar right after typing is the
+ * natural thing to press) and waits for the pictures to catch up with the
+ * table. False when the open edit could not be applied — it needs fixing or
+ * confirming first, and a file without it would silently be the old one.
+ */
+async function settleBeforeFileWrite(): Promise<boolean> {
+  const form = document.getElementById("form-edit-row") as HTMLFormElement | null;
+  if (form && editingRowId !== null) {
+    form.requestSubmit();
+    if (editingRowId !== null) return false;
+  }
+  let seen: Promise<void>;
+  do {
+    seen = captionSync;
+    await seen;
+  } while (seen !== captionSync);
+  return true;
+}
+
 function render() {
+  syncCaptionsAfterRender();
   const images = currentImages();
   const activeImage = images.find((i) => i.id === activeImageId) ?? null;
   const links = db && activeImage ? listLinksForImage(db, activeImage.id) : [];
