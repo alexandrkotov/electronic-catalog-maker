@@ -828,29 +828,49 @@ interface GridRow {
   cutAbove: number;
 }
 
+interface GridCards {
+  rows: GridRow[];
+  /** Where the card of a hotspot at this `left` actually starts. */
+  cardLeft: (left: number) => number;
+}
+
 /**
  * Finds each row of a composited grid (see detectGrid) and the background
  * gap above it, by looking at the pixels: in the strip just above a row's
  * hotspots, the gap is the run of pixel rows that are one flat color right
  * across the image (cards, photos and captions never are). Falls back to
  * the GRID_MARGIN_Y_FRACTION estimate when no flat run shows up — e.g. a
- * grid drawn over a photo background.
+ * grid drawn over a photo background. Each column's left card edge is found
+ * the same way (fallback GRID_MARGIN_X_FRACTION): how far a hotspot sits
+ * from its card's edge differs from grid to grid — Grid Composer insets it
+ * by the width of the catalog's longest number.
  */
-async function detectGridRows(image: CatalogImage, links: CatalogLink[], cellH: number): Promise<GridRow[]> {
-  const tops: number[] = [];
-  for (const t of [...links.map((l) => l.top)].sort((a, b) => a - b)) {
-    if (tops.length === 0 || t - tops[tops.length - 1]! > cellH / 3) tops.push(t);
-  }
+async function detectGridCards(image: CatalogImage, links: CatalogLink[], cellW: number, cellH: number): Promise<GridCards> {
+  const cluster = (values: number[], pitch: number): number[] => {
+    const out: number[] = [];
+    for (const v of [...values].sort((a, b) => a - b)) {
+      if (out.length === 0 || v - out[out.length - 1]! > pitch / 3) out.push(v);
+    }
+    return out;
+  };
+  const tops = cluster(links.map((l) => l.top), cellH);
+  const lefts = cluster(links.map((l) => l.left), cellW);
   const fallback = (t: number): GridRow => {
     const cardTop = t - cellH * GRID_MARGIN_Y_FRACTION;
     return { pointTop: t, cardTop, cutAbove: Math.max(0, cardTop - cellH * 0.03) };
+  };
+  const fallbackLeft = (l: number) => l - cellW * GRID_MARGIN_X_FRACTION;
+  let cardLefts = lefts.map(fallbackLeft);
+  const cardLeft = (left: number) => {
+    const i = lefts.findIndex((l) => Math.abs(l - left) <= cellW / 3);
+    return i < 0 ? fallbackLeft(left) : left - lefts[i]! + cardLefts[i]!;
   };
 
   let bitmap: ImageBitmap;
   try {
     bitmap = await createImageBitmap(new Blob([base64ToBytes(image.imageData) as BlobPart], { type: image.mimeType }));
   } catch {
-    return tops.map(fallback);
+    return { rows: tops.map(fallback), cardLeft };
   }
   const SAMPLES = 64;
   const canvas = document.createElement("canvas");
@@ -873,25 +893,58 @@ async function detectGridRows(image: CatalogImage, links: CatalogLink[], cellH: 
       }
       scores.push(worst);
     }
-    const best = Math.min(...scores);
-    if (best > 40) return fallback(t);
-    // The gap is the near-flat run closest above the hotspots (a card's drop shadow shades its
-    // edges a little) — on the first row the strip also reaches the flat margin above the title.
-    let runStart = -1;
-    let gap: { start: number; end: number } | null = null;
-    for (let y = 0; y <= scores.length; y++) {
-      const flat = y < scores.length && scores[y]! <= best + 8;
-      if (flat && runStart < 0) runStart = y;
-      if (!flat && runStart >= 0) {
-        if (y - runStart >= 3) gap = { start: runStart, end: y };
-        runStart = -1;
-      }
-    }
+    // The gap is the near-flat run closest above the hotspots — on the first row the strip
+    // also reaches the flat margin above the title.
+    const gap = lastFlatRun(scores);
     if (!gap) return fallback(t);
     return { pointTop: t, cardTop: from + gap.end, cutAbove: from + Math.floor((gap.start + gap.end) / 2) };
   });
+
+  // Same idea across: left of a column's hotspots, the gap is the run of pixel columns that
+  // stay one flat color down the grid — sampled in the gap above each row and inside its cards.
+  const ys = rows.flatMap((row) => [row.cutAbove, ...[0.15, 0.3, 0.45].map((f) => row.cardTop + cellH * f)]).map((y) => Math.min(bitmap.height - 1, Math.max(0, Math.round(y))));
+  cardLefts = lefts.map((l) => {
+    const from = Math.max(0, Math.floor(l - cellW * 0.4));
+    const width = Math.max(1, Math.floor(l) - from);
+    canvas.width = width;
+    canvas.height = ys.length;
+    ys.forEach((y, i) => ctx.drawImage(bitmap, from, y, width, 1, 0, i, width, 1));
+    const data = ctx.getImageData(0, 0, width, ys.length).data;
+    // Per pixel column: the largest channel difference between any sample and the column's first one.
+    const scores: number[] = [];
+    for (let x = 0; x < width; x++) {
+      let worst = 0;
+      for (let i = 1; i < ys.length; i++) {
+        for (let c = 0; c < 3; c++) worst = Math.max(worst, Math.abs(data[(i * width + x) * 4 + c]! - data[x * 4 + c]!));
+      }
+      scores.push(worst);
+    }
+    const gap = lastFlatRun(scores);
+    // A run that reaches the hotspots themselves found no card edge at all.
+    return gap && gap.end < width ? from + gap.end : fallbackLeft(l);
+  });
   bitmap.close();
-  return rows;
+  return { rows, cardLeft };
+}
+
+/**
+ * The last run of near-flat entries (3 or more) in a strip of per-line color spreads, or null
+ * when even the flattest line isn't flat. "Near": a card's drop shadow shades its edges a little.
+ */
+function lastFlatRun(scores: number[]): { start: number; end: number } | null {
+  const best = Math.min(...scores);
+  if (best > 40) return null;
+  let runStart = -1;
+  let run: { start: number; end: number } | null = null;
+  for (let i = 0; i <= scores.length; i++) {
+    const flat = i < scores.length && scores[i]! <= best + 8;
+    if (flat && runStart < 0) runStart = i;
+    if (!flat && runStart >= 0) {
+      if (i - runStart >= 3) run = { start: runStart, end: i };
+      runStart = -1;
+    }
+  }
+  return run;
 }
 
 /**
@@ -915,7 +968,7 @@ async function renderGridByRows(
   const scale = Math.min(CONTENT_WIDTH / Math.max(1, image.width), REAL_SIZE_PT_PER_PX);
   const drawW = image.width * scale;
   const drawX = MARGIN + (CONTENT_WIDTH - drawW) / 2;
-  const rows = await detectGridRows(image, links, grid.cellH);
+  const { rows, cardLeft } = await detectGridCards(image, links, grid.cellW, grid.cellH);
   const cellWPdf = grid.cellW * scale;
 
   for (let r = 0; r < rows.length; r++) {
@@ -936,7 +989,7 @@ async function renderGridByRows(
     const cardTop = top - (rows[r]!.cardTop - start) * scale;
     for (const link of links) {
       if (Math.abs(link.top - rows[r]!.pointTop) > grid.cellH / 3) continue;
-      const cellLeft = drawX + link.left * scale - cellWPdf * GRID_MARGIN_X_FRACTION;
+      const cellLeft = drawX + cardLeft(link.left) * scale;
       const cellRight = cellLeft + cellWPdf * GRID_VISIBLE_FRACTION;
       drawTileBadge(cursor.page, link.name, font, cellLeft + TILE_BADGE_INSET, cardTop - TILE_BADGE_INSET);
       const matrix = showOnImage ? qrByUrl.get(link.url) : undefined;
