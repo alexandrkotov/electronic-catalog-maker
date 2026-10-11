@@ -33,6 +33,8 @@ pnpm --filter @ecm/shared test
 pnpm --filter @ecm/composer test
 pnpm --filter @ecm/collab-server test      # needs Bun
 pnpm --filter @ecm/store-importer test     # needs Bun
+pnpm --filter @ecm/e2e test                # editor smoke test; needs the build above and a one-time
+                                           # `pnpm --filter @ecm/e2e exec playwright install chromium`
 bun scripts/generate-site.ts --check
 ```
 
