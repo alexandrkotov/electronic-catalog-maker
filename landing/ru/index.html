@@ -222,7 +222,7 @@
     background: none; border: 0; cursor: pointer; color: var(--text-2);
     min-width: 44px; min-height: 44px;
   }
-  /* "Your catalog = a few simple steps": Grid Composer's wizard page in a dialog. */
+  /* "Create your catalog in 3 simple steps": Grid Composer's wizard page in a dialog. */
   dialog.wizard { width: min(820px, calc(100vw - 1rem)); padding: 1rem 0 0; overflow: hidden; }
   dialog.wizard h2 { margin: 0 3.5rem 0.75rem 1.25rem; }
   dialog.wizard iframe { display: block; width: 100%; height: min(760px, calc(100vh - 6.5rem)); border: 0; border-top: 1px solid var(--border); }
@@ -337,7 +337,7 @@
     <h1>Преврати любое изображение в интерактивный каталог.</h1>
     <p>Этот инструмент поможет тебе легко и быстро создать каталог твоих товаров или услуг. Не нужно разбираться в создании сайтов, баз данных и прочих сложных вещах. Всё, что нужно для собственного каталога, — добавить фото или рисунки товаров и услуг или просто их названия. Готовый каталог можно встроить в твой сайт или напечатать на бумаге — у каждого товара или услуги будет свой QR-код, если добавишь ссылку.</p>
     <div class="cta">
-      <button type="button" class="btn primary" id="wizard-open">Твой каталог = несколько простых шагов</button>
+      <button type="button" class="btn primary" id="wizard-open">Создай свой каталог за 3 простых шага</button>
       <a class="btn secondary" href="#demo">Посмотреть демо</a>
     </div>
     <p class="cta-alt"><a href="../editor/?lang=ru">Хочешь всё настроить вручную? Открой Редактор →</a></p>
@@ -667,10 +667,10 @@
     </dialog>
     <dialog class="collab wizard" id="wizard" aria-labelledby="wizard-h">
       <button type="button" class="close" aria-label="Закрыть">×</button>
-      <h2 id="wizard-h">Твой каталог за несколько простых шагов</h2>
+      <h2 id="wizard-h">Создай свой каталог за 3 простых шага</h2>
       <!-- The wizard itself is a page of Grid Composer (packages/composer/wizard.html); src is set on first open.
            The language is always spelled out: without it the page would follow the visitor's saved app language, not this page. -->
-      <iframe id="wizard-frame" title="Твой каталог за несколько простых шагов" data-src="../composer/wizard.html?lang=ru"></iframe>
+      <iframe id="wizard-frame" title="Создай свой каталог за 3 простых шага" data-src="../composer/wizard.html?lang=ru"></iframe>
     </dialog>
   </main>
 

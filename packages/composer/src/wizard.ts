@@ -1,5 +1,5 @@
 /**
- * The landing page's "Your catalog = a few simple steps" dialog: the same
+ * The landing page's "Create your catalog in 3 simple steps" dialog: the same
  * engine as the composer (plan → renderGrid → buildCatalog), but fed from a
  * list typed right here instead of numbered files and a table. Photos become
  * items as they are dropped in; an item needs no photo at all.

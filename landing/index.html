@@ -222,7 +222,7 @@
     background: none; border: 0; cursor: pointer; color: var(--text-2);
     min-width: 44px; min-height: 44px;
   }
-  /* "Your catalog = a few simple steps": Grid Composer's wizard page in a dialog. */
+  /* "Create your catalog in 3 simple steps": Grid Composer's wizard page in a dialog. */
   dialog.wizard { width: min(820px, calc(100vw - 1rem)); padding: 1rem 0 0; overflow: hidden; }
   dialog.wizard h2 { margin: 0 3.5rem 0.75rem 1.25rem; }
   dialog.wizard iframe { display: block; width: 100%; height: min(760px, calc(100vh - 6.5rem)); border: 0; border-top: 1px solid var(--border); }
@@ -337,7 +337,7 @@
     <h1>Turn any image into an interactive catalog.</h1>
     <p>This tool lets you build a catalog of your products or services quickly and easily. You don’t need to know anything about building websites, databases or other complicated things. All it takes is adding photos or drawings of what you offer — or just the names. Embed the finished catalog in your existing website, or print it on paper with a QR code for every product or service you add a link to.</p>
     <div class="cta">
-      <button type="button" class="btn primary" id="wizard-open">Your catalog = a few simple steps</button>
+      <button type="button" class="btn primary" id="wizard-open">Create your catalog in 3 simple steps</button>
       <a class="btn secondary" href="#demo">Explore a demo</a>
     </div>
     <p class="cta-alt"><a href="editor/">Prefer to set everything up by hand? Open the Editor →</a></p>
@@ -667,10 +667,10 @@
     </dialog>
     <dialog class="collab wizard" id="wizard" aria-labelledby="wizard-h">
       <button type="button" class="close" aria-label="Close">×</button>
-      <h2 id="wizard-h">Your catalog in a few simple steps</h2>
+      <h2 id="wizard-h">Create your catalog in 3 simple steps</h2>
       <!-- The wizard itself is a page of Grid Composer (packages/composer/wizard.html); src is set on first open.
            The language is always spelled out: without it the page would follow the visitor's saved app language, not this page. -->
-      <iframe id="wizard-frame" title="Your catalog in a few simple steps" data-src="composer/wizard.html?lang=en"></iframe>
+      <iframe id="wizard-frame" title="Create your catalog in 3 simple steps" data-src="composer/wizard.html?lang=en"></iframe>
     </dialog>
   </main>
 
