@@ -308,7 +308,7 @@ folder and the table from your store for you.
 
 ## Importing your online store
 
-Have a **Shopify**, **Squarespace** or **Payhip** store and want a printable catalog of it —
+Have a **Shopify**, **Squarespace**, **Square Online**, **Wix** or **Payhip** store and want a printable catalog of it —
 with a QR code per product — or an offline one for a showroom or a trade
 show? The **Store Importer** is a small app you run on your own computer:
 give it your store's address, and it saves every product as a folder of
@@ -339,6 +339,14 @@ products left without one go to "Other".
 - **Squarespace** works the same way: the importer finds your store page
   on the site by itself, and a product in a nested category goes to the
   grid of its main category.
+- **Square Online** is read the same way, from the product list Square
+  keeps for your store. That list has no SKUs, so the SKU column stays
+  empty; a product's options show as a price range.
+- **Wix** has no product list to read, so the importer opens each product's
+  page in turn and takes what the page tells search engines: name,
+  description, price, photo. That's a request per product — a hundred
+  products take a few minutes — and those pages name no categories, so
+  every product lands in one grid.
 - **Payhip** doesn't let apps read its store pages, so it takes one extra
   step: open your store in your browser, save it (Ctrl+S, "Webpage, HTML
   only"), give each page of the product list its own file name, and pick
@@ -950,7 +958,8 @@ with catalogs of 30 and 138 items, from photos and table through to the
 editor, the viewer and the exported PDF. The Store Importer (see
 "Importing your online store") works end-to-end from source — live-tested
 on a real Shopify store (146 products in 12 folders), a real Squarespace
-store (40 products in 8 folders) and a real Payhip store's
+store (40 products in 8 folders), a real Square Online store (48 products
+in 6 folders), a real Wix store (105 products) and a real Payhip store's
 4 saved pages, through to a catalog built in the Grid Composer — and ships
 on the Snap Store and as direct downloads (the Windows build confirmed on a
 real machine). [CI](.github/workflows/ci.yml)

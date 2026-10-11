@@ -136,8 +136,9 @@
   <g transform="translate(60 30)">
     <rect class="card" width="250" height="84" rx="14"/>
     <use href="#i-store" class="ic" x="14" y="22" width="40" height="40"/>
-    <text class="t" x="64" y="38">Інтернет-магазин</text>
-    <text class="s" x="64" y="60" style="font-size: 12.5px">Shopify · Squarespace · Payhip</text>
+    <text class="t" x="64" y="32">Інтернет-магазин</text>
+    <text class="s" x="64" y="52" style="font-size: 12px">Shopify · Squarespace · Wix</text>
+    <text class="s" x="64" y="68" style="font-size: 12px">Square Online · Payhip</text>
   </g>
   <g transform="translate(400 30)">
     <rect class="card" width="250" height="84" rx="14"/>

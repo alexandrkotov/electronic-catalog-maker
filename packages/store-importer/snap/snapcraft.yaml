@@ -1,13 +1,14 @@
 name: ecm-store-importer
 title: ECM Store Importer
 base: core22
-version: '0.2.1'
+version: '0.3.0'
 summary: Turn your online store into photos and a table for a tile catalog
 description: |
-  Saves the products of your own Shopify, Squarespace or Payhip store as a
-  folder of photos plus a table (CSV), in exactly the format Electronic Catalog
-  Maker's Grid Composer (https://tapalog.com/composer/) turns into a
-  printable, offline-capable tile catalog with a QR code per product.
+  Saves the products of your own Shopify, Squarespace, Square Online, Wix or
+  Payhip store as a folder of photos plus a table (CSV), in exactly the format
+  Electronic Catalog Maker's Grid Composer (https://tapalog.com/composer/)
+  turns into a printable, offline-capable tile catalog with a QR code per
+  product.
 
   Launch it and a page opens in your browser: enter your store's address,
   pick where to save, and import. A report shows how many products came
