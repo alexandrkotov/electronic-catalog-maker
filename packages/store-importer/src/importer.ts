@@ -99,17 +99,32 @@ function arrayAt(body: unknown, path: string): unknown[] | null {
 /** On a site whose store pages can only be guessed at, no more sections than this are asked for a feed. */
 const MAX_GUESSED_STORES = 20;
 
-/** The store pages a platform's feed lives under — [""] when it's one fixed address per site. */
-async function discoverStores(origin: string, preset: JsonFeedPreset, pf: PoliteFetch): Promise<string[]> {
+/** What a preset's addresses are filled in with for one store page: `{store}`, plus the preset's own `discover.values`. */
+type StoreVars = Record<string, string>;
+
+/** A preset address for one store: placeholders filled in, and the store's origin in front unless it's a whole address already. */
+function feedUrl(origin: string, path: string, vars: StoreVars): string {
+  const filled = path.replace(/\{(\w+)\}/g, (_, key: string) => vars[key] ?? "");
+  return /^https?:\/\//.test(filled) ? filled : origin + filled;
+}
+
+/** The store pages a platform's feed lives under — one with an empty `{store}` when it's one fixed address per site. */
+async function discoverStores(origin: string, preset: JsonFeedPreset, pf: PoliteFetch): Promise<StoreVars[]> {
   const d = preset.discover;
-  if (!d) return [""];
+  if (!d) return [{ store: "" }];
   const res = await pf(origin + d.path);
   if (!res.ok) return [];
   const text = await res.text();
+  const values: StoreVars = {};
+  for (const [name, pattern] of Object.entries(d.values ?? {})) {
+    const found = new RegExp(pattern).exec(text)?.[1];
+    if (!found) return [];
+    values[name] = found;
+  }
   const captures = (pattern: string) => [...new Set([...text.matchAll(new RegExp(pattern, "g"))].flatMap((m) => (m[1] ? [m[1]] : [])))];
-  const found = captures(d.pattern);
-  if (found.length > 0 || !d.fallbackPattern) return found;
-  return captures(d.fallbackPattern).slice(0, MAX_GUESSED_STORES);
+  let found = captures(d.pattern);
+  if (found.length === 0 && d.fallbackPattern) found = captures(d.fallbackPattern).slice(0, MAX_GUESSED_STORES);
+  return found.map((store) => ({ ...values, store }));
 }
 
 /** The response's product array, or null when it isn't a product list at all. */
@@ -124,7 +139,7 @@ export async function detectPreset(origin: string, pf: PoliteFetch): Promise<Jso
     if (preset.kind !== "json-feed") continue;
     try {
       for (const store of await discoverStores(origin, preset, pf)) {
-        const body = await readJson(await pf(origin + preset.detect.path.replace("{store}", store)));
+        const body = await readJson(await pf(feedUrl(origin, preset.detect.path, store)));
         if (productsIn(body, preset, preset.detect.expectArray)) return preset;
       }
     } catch {
@@ -136,6 +151,16 @@ export async function detectPreset(origin: string, pf: PoliteFetch): Promise<Jso
 
 /** Adds one response's category tree to `names` (id -> name of its top-level category). */
 function collectFolderNames(body: unknown, rule: NonNullable<JsonFeedPreset["folderNames"]>, names: Map<string, string>) {
+  const top = rule.top;
+  if (top) {
+    const nodes = selectAll(body, rule.path);
+    const own = new Map(nodes.map((node) => [selectText(node, rule.id), selectText(node, rule.name)]));
+    for (const node of nodes) {
+      const id = selectText(node, rule.id);
+      if (id) names.set(id, own.get(selectText(node, top)) || own.get(id) || "");
+    }
+    return;
+  }
   const walk = (nodes: unknown[], top: string | null) => {
     for (const node of nodes) {
       const name = top ?? selectText(node, rule.name);
@@ -164,8 +189,10 @@ export async function fetchAllProducts(origin: string, preset: JsonFeedPreset, p
   let pageNo = 0;
   for (const store of await discoverStores(origin, preset, pf)) {
     let cursor = "";
+    const tree = preset.folderNames?.source;
+    if (tree) collectFolderNames(await readJson(await pf(feedUrl(origin, tree, store))), preset.folderNames!, folderNames);
     for (let i = 0; i < s.maxPages; i++) {
-      const url = new URL(origin + s.path.replace("{store}", store));
+      const url = new URL(feedUrl(origin, s.path, store));
       for (const [k, v] of Object.entries(s.query)) url.searchParams.set(k, v);
       if (!("cursor" in s)) url.searchParams.set(s.pageParam, String(s.firstPage + i));
       else if (cursor) url.searchParams.set(s.cursor.param, cursor);
@@ -179,7 +206,7 @@ export async function fetchAllProducts(origin: string, preset: JsonFeedPreset, p
       if (i === 0) stores++;
       all.push(...items);
       titles.push(...items.map(() => (s.storeTitle ? selectText(body, s.storeTitle) : "")));
-      if (preset.folderNames) collectFolderNames(body, preset.folderNames, folderNames);
+      if (preset.folderNames && !tree) collectFolderNames(body, preset.folderNames, folderNames);
       onProgress({ stage: "listing", page: ++pageNo, products: all.length });
       if ("cursor" in s) {
         const next = selectText(body, s.cursor.path);

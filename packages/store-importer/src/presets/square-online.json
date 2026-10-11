@@ -1,0 +1,60 @@
+{
+  "id": "square-online",
+  "name": "Square Online",
+  "kind": "json-feed",
+  "discover": {
+    "path": "/",
+    "pattern": "\"site_id\":(\\d+)[,}]",
+    "values": {
+      "user": "\"user\":\\{\"id\":(\\d+)"
+    }
+  },
+  "detect": {
+    "path": "https://cdn5.editmysite.com/app/store/api/v28/editor/users/{user}/sites/{store}/products?per_page=1",
+    "expectArray": "data"
+  },
+  "source": {
+    "path": "https://cdn5.editmysite.com/app/store/api/v28/editor/users/{user}/sites/{store}/products",
+    "query": {
+      "per_page": "100",
+      "include": "images",
+      "visibilities[]": "visible"
+    },
+    "pageParam": "page",
+    "firstPage": 1,
+    "itemsPath": "data",
+    "pageSize": 100,
+    "maxPages": 100
+  },
+  "fields": {
+    "name": "name",
+    "sku": "",
+    "description": "short_description",
+    "folder": "categoryIds[0]",
+    "image": "images.data[0].absolute_url",
+    "imageFallback": "thumbnail.data.absolute_url"
+  },
+  "folderNames": {
+    "source": "https://cdn5.editmysite.com/app/store/api/v28/editor/users/{user}/sites/{store}/categories?per_page=100",
+    "path": "data[*]",
+    "id": "id",
+    "name": "name",
+    "children": "children[*]",
+    "top": "root_parent_category_id"
+  },
+  "price": {
+    "path": "price.low",
+    "highPath": "price.high",
+    "mode": "range"
+  },
+  "buyUrl": "{origin}/{site_link}",
+  "imageQuery": {
+    "width": "1280"
+  },
+  "clean": {
+    "description": {
+      "stripHtml": true,
+      "maxLength": 600
+    }
+  }
+}

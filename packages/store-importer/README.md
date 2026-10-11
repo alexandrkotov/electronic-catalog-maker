@@ -66,6 +66,16 @@ field). Two kinds:
   product the title of its store page as a folder when the site has
   several store pages; `price.sale` swaps in a variant's sale price while
   it's on sale.
+  [`square-online.json`](src/presets/square-online.json) is the one whose
+  feed isn't on the store's own address: Square serves every store's
+  products from its own host, under the ids of the site and of its owner.
+  `discover` reads both off the store's home page — `pattern` the site id
+  (`{store}`), `values` anything else the addresses need (`{user}`) — and
+  `detect.path`/`source.path` are whole `https://` addresses. The category
+  names are one more request (`folderNames.source`), a flat list in which
+  each category names its top-level one (`folderNames.top`); a product's
+  options show as its lowest and highest price (`price.highPath`). The feed
+  carries no SKUs, so that column stays empty.
 - **`saved-page`** ([`payhip.json`](src/presets/payhip.json)) — for
   platforms that block automated access (Payhip's store pages sit behind a
   Cloudflare challenge; it has no product-list API). The person saves the
@@ -105,7 +115,8 @@ bun test
 Covers the path language, text/price normalization, the CSV format,
 pagination and re-import against a fake Shopify store, store-page
 discovery (newer and older sites), offset paging, category names and sale
-prices against a fake Squarespace site, the Payhip saved-page extraction and page-coverage report, retries,
+prices against a fake Squarespace site, id discovery, the off-site feed
+and its separate category list against a fake Square Online store, the Payhip saved-page extraction and page-coverage report, retries,
 and that the
 page's inline script still parses (it lives inside a TypeScript template
 literal, where a stray `\` breaks it silently).

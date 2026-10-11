@@ -1,5 +1,6 @@
 import payhip from "./presets/payhip.json";
 import shopify from "./presets/shopify.json";
+import squareOnline from "./presets/square-online.json";
 import squarespace from "./presets/squarespace.json";
 
 /**
@@ -7,7 +8,7 @@ import squarespace from "./presets/squarespace.json";
  * data change an outside contributor can make without touching the engine.
  * Two kinds:
  *  - "json-feed": the store serves a public product feed the importer
- *    pages through itself — Shopify, Squarespace (paths are jsonPath.ts paths, relative to one
+ *    pages through itself — Shopify, Squarespace, Square Online (paths are jsonPath.ts paths, relative to one
  *    product; `source.itemsPath`/`detect.expectArray` to a whole page).
  *  - "saved-page": the platform blocks automated access, so the person
  *    saves their store page from their own browser and the importer reads
@@ -28,12 +29,17 @@ export interface JsonFeedPreset {
    * sites have no "/p/" in a product's address, so a store page looks like
    * any other section there): its captures are only guesses, each asked for
    * its feed and kept if `source.only` holds.
+   *
+   * `values` are further things the same text has to give up, each the first
+   * capture of its pattern and usable as `{name}` (Square Online's feed
+   * address needs the site's id and its owner's); a page missing any of them
+   * isn't this platform's.
    */
-  discover?: { path: string; pattern: string; fallbackPattern?: string };
+  discover?: { path: string; pattern: string; fallbackPattern?: string; values?: Record<string, string> };
   /** One cheap request that tells whether a store runs this platform. */
   detect: { path: string; expectArray: string };
   source: {
-    /** Appended to the store's origin. */
+    /** Appended to the store's origin — or, starting with "https://", a whole address (Square Online serves every store's feed from its own host). */
     path: string;
     query: Record<string, string>;
     /** Where the page's product array sits ("" = the response itself). */
@@ -67,8 +73,12 @@ export interface JsonFeedPreset {
    * A nested category resolves to its top-level ancestor — one Composer grid
    * per main category, not one per leaf. `fallback` is where a product
    * carries the category's name directly, for feeds without the tree.
+   *
+   * `source`: the tree is a separate address (same rules as `source.path`)
+   * rather than part of the product responses. `top`: for a tree that comes
+   * as a flat list, where each category names its top-level ancestor's id.
    */
-  folderNames?: { path: string; id: string; name: string; children: string; fallback?: string };
+  folderNames?: { path: string; id: string; name: string; children: string; fallback?: string; source?: string; top?: string };
   /**
    * A product with variants still gets one tile. "range" shows "19.00–35.00"
    * when variant prices differ, "first" only the first variant's price.
@@ -76,6 +86,8 @@ export interface JsonFeedPreset {
   price: {
     path: string;
     mode: "range" | "first";
+    /** For a feed that gives a product's lowest and highest price as two fields instead of one per variant: `path` is the lowest, this the highest. */
+    highPath?: string;
     minorUnitsPath?: string;
     /** Discounted variants: `flag` and `path` run parallel to `path` (one value per variant); where the flag is true, the sale price replaces the regular one. */
     sale?: { flag: string; path: string };
@@ -120,7 +132,7 @@ export interface SavedPagePreset {
 
 export type Preset = JsonFeedPreset | SavedPagePreset;
 
-export const PRESETS: Preset[] = [shopify as JsonFeedPreset, squarespace as JsonFeedPreset, payhip as SavedPagePreset];
+export const PRESETS: Preset[] = [shopify as JsonFeedPreset, squarespace as JsonFeedPreset, squareOnline as JsonFeedPreset, payhip as SavedPagePreset];
 
 export function getPreset(id: string): Preset | undefined {
   return PRESETS.find((p) => p.id === id);

@@ -59,6 +59,7 @@ function formatAmount(n: number): string {
 
 export function extractPrice(product: unknown, rule: JsonFeedPreset["price"]): string {
   let raw = selectAll(product, rule.path);
+  if (rule.highPath) raw = [...raw, ...selectAll(product, rule.highPath)];
   if (rule.sale) {
     const flags = selectAll(product, rule.sale.flag);
     const sale = selectAll(product, rule.sale.path);
