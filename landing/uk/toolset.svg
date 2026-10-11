@@ -130,7 +130,7 @@
 
   <!-- Buy loop: shoppers back to the store's own checkout -->
   <path class="a buy" d="M140 868H26V72H56" marker-end="url(#ah-buy)"/>
-  <text class="lbl-buy" transform="translate(20 470) rotate(-90)" text-anchor="middle">«Купити» → оплата у вашому магазині</text>
+  <text class="lbl-buy" transform="translate(20 470) rotate(-90)" text-anchor="middle">«Купити» → оплата у твоєму магазині</text>
 
   <!-- start with -->
   <g transform="translate(60 30)">
@@ -149,7 +149,7 @@
     <rect class="card" width="250" height="84" rx="14"/>
     <use href="#i-map" class="ic" x="14" y="22" width="40" height="40"/>
     <text class="t" x="64" y="38">Карта + точки</text>
-    <text class="s" x="64" y="60">район і ваші адреси</text>
+    <text class="s" x="64" y="60">район і твої адреси</text>
   </g>
   <g transform="translate(950 30)">
     <rect class="card" width="250" height="84" rx="14"/>
@@ -214,8 +214,8 @@
   <g transform="translate(366 540)">
     <rect class="card" width="232" height="84" rx="14"/>
     <use href="#i-web" class="ic" x="14" y="24" width="36" height="36"/>
-    <text class="t" x="62" y="38">Ваш сайт</text>
-    <text class="s" x="62" y="60">вбудуйте &lt;ecm-viewer&gt;</text>
+    <text class="t" x="62" y="38">Твій сайт</text>
+    <text class="s" x="62" y="60">вбудуй &lt;ecm-viewer&gt;</text>
   </g>
   <g transform="translate(622 540)">
     <rect class="card" width="232" height="84" rx="14"/>
@@ -244,7 +244,7 @@
     <rect class="card" width="310" height="76" rx="14"/>
     <use href="#i-cart" class="buy-ic" x="16" y="20" width="36" height="36"/>
     <text class="t" x="64" y="34">Покупці</text>
-    <text class="s" x="64" y="56">кошик → оплата у вашому магазині</text>
+    <text class="s" x="64" y="56">кошик → оплата у твоєму магазині</text>
   </g>
   <g transform="translate(470 830)">
     <rect class="card" width="310" height="76" rx="14"/>

@@ -98,6 +98,8 @@
   }
   .btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
   .btn.secondary { background: var(--bg); color: var(--link); }
+  .hero .cta-alt { font-size: 0.95rem; margin: 0.9rem 0 0; }
+  button.btn { font: inherit; font-weight: 600; cursor: pointer; }
 
   .demo { margin: 1.5rem 0 2.5rem; }
   .demo h2 { margin: 0 0 0.25rem; }
@@ -204,6 +206,10 @@
     background: none; border: 0; cursor: pointer; color: var(--text-2);
     min-width: 44px; min-height: 44px;
   }
+  /* "Your catalog = a few simple steps": Grid Composer's wizard page in a dialog. */
+  dialog.wizard { width: min(820px, calc(100vw - 1rem)); padding: 1rem 0 0; overflow: hidden; }
+  dialog.wizard h2 { margin: 0 3.5rem 0.75rem 1.25rem; }
+  dialog.wizard iframe { display: block; width: 100%; height: min(760px, calc(100vh - 6.5rem)); border: 0; border-top: 1px solid var(--border); }
   @media (max-width: 700px) { .card-row, .use-cases, .apps-row, .apps-row.web { grid-template-columns: 1fr; } }
   /* "What a catalog can be": four levels of pictograms + live demos written as one pick per level.
      The same picture as one image is catalog-types.svg (README). */
@@ -315,9 +321,10 @@
     <h1>{{index.hero.title}}</h1>
     <p>{{index.hero.text}}</p>
     <div class="cta">
-      <a class="btn primary" href="#demo">{{index.hero.cta.demo}}</a>
-      <a class="btn secondary" href="{{@base}}editor/{{@q}}">{{index.hero.cta.create}}</a>
+      <button type="button" class="btn primary" id="wizard-open">{{index.hero.cta.steps}}</button>
+      <a class="btn secondary" href="#demo">{{index.hero.cta.demo}}</a>
     </div>
+    <p class="cta-alt"><a href="{{@base}}editor/{{@q}}">{{index.hero.cta.create}}</a></p>
   </header>
 
   <main>
@@ -612,6 +619,13 @@
         {{index.storeImporterDialog.chromebook}}
       </p>
     </dialog>
+    <dialog class="collab wizard" id="wizard" aria-labelledby="wizard-h">
+      <button type="button" class="close" aria-label="{{index.dialog.close}}">×</button>
+      <h2 id="wizard-h">{{index.wizard.title}}</h2>
+      <!-- The wizard itself is a page of Grid Composer (packages/composer/wizard.html); src is set on first open.
+           The language is always spelled out: without it the page would follow the visitor's saved app language, not this page. -->
+      <iframe id="wizard-frame" title="{{index.wizard.title}}" data-src="{{@base}}composer/wizard.html?lang={{@lang}}"></iframe>
+    </dialog>
   </main>
 
   <footer>
@@ -758,6 +772,12 @@
       wireDialog("collab", "collab-other");
       wireDialog("catalog-server", "catalog-server-other");
       wireDialog("store-importer", "store-importer-other");
+      wireDialog("wizard", "wizard-open");
+      // The wizard page (and sql.js with it) loads only when somebody asks for it.
+      document.getElementById("wizard-open").addEventListener("click", function () {
+        var frame = document.getElementById("wizard-frame");
+        if (!frame.src) frame.src = frame.dataset.src;
+      });
     })();
   </script>
   <!-- Privacy-friendly, cookie-free page-view counting (goatcounter.com) —

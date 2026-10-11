@@ -76,6 +76,34 @@ const en: Messages = {
   "result.failed": "Build failed: {message}",
 
   "tile.noPhoto": "No photo",
+
+  // The quick-start wizard (wizard.ts), opened from the landing page.
+  "wizard.step.items": "Products",
+  "wizard.step.name": "Name",
+  "wizard.step.done": "Done",
+  "wizard.items.title": "Add your products or services",
+  "wizard.items.drop": "Drop photos here or click to choose",
+  "wizard.items.dropHint": "Each photo becomes one item. No photos? Add items by name below.",
+  "wizard.items.addPlain": "+ Item without a photo",
+  "wizard.item.name": "Name",
+  "wizard.item.price": "Price",
+  "wizard.item.description": "Description",
+  "wizard.item.link": "Link to buy or book (optional)",
+  "wizard.item.more": "+ description and link",
+  "wizard.item.remove": "Remove",
+  "wizard.next": "Next →",
+  "wizard.back": "← Back",
+  "wizard.name.title": "Name your catalog",
+  "wizard.name.hint": "Items in it: {count}. The name goes at the top of the catalog.",
+  "wizard.name.unnamed": "Items without a name: {count}. Their tiles will show only a number — go back to name them.",
+  "wizard.building": "Building your catalog…",
+  "wizard.done.title": "Your catalog is ready",
+  "wizard.done.hint": "Try it: select a number on a tile.",
+  "wizard.done.download": "Download the catalog file",
+  "wizard.done.viewer": "Open in the Viewer",
+  "wizard.done.editor": "Refine in the Editor",
+  "wizard.done.next": "The file is the whole catalog: open it in the Viewer on a phone or computer, embed it in your website, or print it from the Viewer — items with a link get a QR code. In the Editor you can change anything.",
+  "wizard.done.change": "← Change the items",
 };
 
 const ru: Messages = {
@@ -147,6 +175,34 @@ const ru: Messages = {
   "result.failed": "Сборка не удалась: {message}",
 
   "tile.noPhoto": "Нет фото",
+
+  // The quick-start wizard (wizard.ts), opened from the landing page.
+  "wizard.step.items": "Товары",
+  "wizard.step.name": "Название",
+  "wizard.step.done": "Готово",
+  "wizard.items.title": "Добавь свои товары или услуги",
+  "wizard.items.drop": "Перетащи сюда фото или нажми, чтобы выбрать",
+  "wizard.items.dropHint": "Каждое фото — один товар. Фото нет? Добавляй товары по названию ниже.",
+  "wizard.items.addPlain": "+ Товар без фото",
+  "wizard.item.name": "Название",
+  "wizard.item.price": "Цена",
+  "wizard.item.description": "Описание",
+  "wizard.item.link": "Ссылка для покупки или записи (необязательно)",
+  "wizard.item.more": "+ описание и ссылка",
+  "wizard.item.remove": "Убрать",
+  "wizard.next": "Дальше →",
+  "wizard.back": "← Назад",
+  "wizard.name.title": "Назови свой каталог",
+  "wizard.name.hint": "Товаров в нём: {count}. Название будет вверху каталога.",
+  "wizard.name.unnamed": "Товаров без названия: {count}. На их плитках будет только номер — вернись назад, чтобы назвать.",
+  "wizard.building": "Собираю твой каталог…",
+  "wizard.done.title": "Твой каталог готов",
+  "wizard.done.hint": "Попробуй: нажми на номер на плитке.",
+  "wizard.done.download": "Скачать файл каталога",
+  "wizard.done.viewer": "Открыть в Просмотрщике",
+  "wizard.done.editor": "Доработать в Редакторе",
+  "wizard.done.next": "Этот файл — весь каталог: открой его в Просмотрщике на телефоне или компьютере, встрой в свой сайт или напечатай из Просмотрщика — у товаров со ссылкой будет QR-код. В Редакторе можно поменять что угодно.",
+  "wizard.done.change": "← Изменить товары",
 };
 
 const uk: Messages = {
@@ -218,6 +274,34 @@ const uk: Messages = {
   "result.failed": "Збирання не вдалося: {message}",
 
   "tile.noPhoto": "Немає фото",
+
+  // The quick-start wizard (wizard.ts), opened from the landing page.
+  "wizard.step.items": "Товари",
+  "wizard.step.name": "Назва",
+  "wizard.step.done": "Готово",
+  "wizard.items.title": "Додай свої товари чи послуги",
+  "wizard.items.drop": "Перетягни сюди фото або натисни, щоб вибрати",
+  "wizard.items.dropHint": "Кожне фото — один товар. Фото немає? Додавай товари за назвою нижче.",
+  "wizard.items.addPlain": "+ Товар без фото",
+  "wizard.item.name": "Назва",
+  "wizard.item.price": "Ціна",
+  "wizard.item.description": "Опис",
+  "wizard.item.link": "Посилання для купівлі чи запису (необов’язково)",
+  "wizard.item.more": "+ опис і посилання",
+  "wizard.item.remove": "Прибрати",
+  "wizard.next": "Далі →",
+  "wizard.back": "← Назад",
+  "wizard.name.title": "Назви свій каталог",
+  "wizard.name.hint": "Товарів у ньому: {count}. Назва буде вгорі каталогу.",
+  "wizard.name.unnamed": "Товарів без назви: {count}. На їхніх плитках буде лише номер — повернися назад, щоб назвати.",
+  "wizard.building": "Збираю твій каталог…",
+  "wizard.done.title": "Твій каталог готовий",
+  "wizard.done.hint": "Спробуй: натисни на номер на плитці.",
+  "wizard.done.download": "Завантажити файл каталогу",
+  "wizard.done.viewer": "Відкрити в Перегляді",
+  "wizard.done.editor": "Доопрацювати в Редакторі",
+  "wizard.done.next": "Цей файл — увесь каталог: відкрий його в Перегляді на телефоні чи комп’ютері, вбудуй у свій сайт або надрукуй із Перегляду — товари з посиланням матимуть QR-код. У Редакторі можна змінити що завгодно.",
+  "wizard.done.change": "← Змінити товари",
 };
 
 export const composerMessages: Record<string, Messages> = { en, ru, uk };

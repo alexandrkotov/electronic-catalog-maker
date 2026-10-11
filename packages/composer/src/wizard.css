@@ -1,0 +1,31 @@
+/* The quick-start wizard (wizard.html): runs inside the landing page's dialog, so no page chrome. */
+body.wizard { background: var(--bg-card); }
+.wz { max-width: 720px; margin: 0 auto; padding: 12px 16px 20px; }
+.wz h1 { font-size: 1.25rem; margin: 0 0 12px; }
+.wz .row { margin-top: 14px; }
+.wz-progress { display: flex; gap: 8px; list-style: none; margin: 0 0 16px; padding: 0; counter-reset: wz; font-size: 0.85rem; color: var(--muted); }
+.wz-progress li { counter-increment: wz; flex: 1; padding-top: 6px; border-top: 3px solid var(--border); }
+.wz-progress li::before { content: counter(wz) ". "; }
+.wz-progress li.past { border-color: var(--accent); }
+.wz-progress li[aria-current] { border-color: var(--accent); color: var(--text); font-weight: 600; }
+.wz-drop { display: block; padding: 18px 16px; text-align: center; border: 2px dashed var(--border); border-radius: 10px; cursor: pointer; }
+.wz-drop:hover, .wz-drop.over { border-color: var(--accent); background: var(--info-bg); }
+.wz-drop strong, .wz-drop span { display: block; }
+.wz-drop span { margin-top: 2px; font-size: 0.9rem; color: var(--muted); }
+.wz-list { list-style: none; margin: 12px 0 0; padding: 0; }
+.wz-item { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.wz-thumb { flex: 0 0 56px; height: 56px; display: grid; place-items: center; overflow: hidden; border-radius: 8px; background: var(--bg-page); color: var(--muted); font-weight: 600; }
+.wz-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.wz-fields { flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr 7.5rem; gap: 6px; }
+.wz-fields textarea, .wz-fields input[type="url"], .wz-fields .wz-link { grid-column: 1 / -1; }
+.wz-fields input, .wz-fields textarea, .wz-name { font: inherit; width: 100%; padding: 8px 10px; min-height: 40px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text); }
+.wz-name { font-size: 1.1rem; margin-top: 8px; }
+.wz-link { justify-self: start; font: inherit; font-size: 0.85rem; padding: 4px 0; background: none; border: 0; color: var(--accent); cursor: pointer; }
+.wz-remove { flex: 0 0 40px; height: 40px; font: inherit; font-size: 1.3rem; line-height: 1; background: none; border: 0; color: var(--muted); cursor: pointer; }
+.wz-remove:hover { color: var(--text); }
+.wz-preview { height: 420px; margin: 12px 0 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.wz-preview ecm-viewer { display: block; width: 100%; height: 100%; }
+@media (max-width: 520px) {
+  .wz-fields { grid-template-columns: 1fr; }
+  .wz .row .btn { flex: 1 1 100%; text-align: center; }
+}

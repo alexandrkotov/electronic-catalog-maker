@@ -92,7 +92,7 @@ function render(template: string, page: string, lang: string): string {
     "@og": () => {
       const key = page === "index.html" ? "index" : "schools";
       const title = escapeAttr(dict[`${key}.title`]!);
-      const description = escapeAttr(dict[key === "index" ? "index.hero.text" : "schools.tagline"]!);
+      const description = escapeAttr(dict[key === "index" ? "index.description" : "schools.tagline"]!);
       const url = pageUrl(lang, page);
       const image = OG_IMAGES[page]!;
       return [

@@ -114,6 +114,8 @@
   }
   .btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
   .btn.secondary { background: var(--bg); color: var(--link); }
+  .hero .cta-alt { font-size: 0.95rem; margin: 0.9rem 0 0; }
+  button.btn { font: inherit; font-weight: 600; cursor: pointer; }
 
   .demo { margin: 1.5rem 0 2.5rem; }
   .demo h2 { margin: 0 0 0.25rem; }
@@ -220,6 +222,10 @@
     background: none; border: 0; cursor: pointer; color: var(--text-2);
     min-width: 44px; min-height: 44px;
   }
+  /* "Your catalog = a few simple steps": Grid Composer's wizard page in a dialog. */
+  dialog.wizard { width: min(820px, calc(100vw - 1rem)); padding: 1rem 0 0; overflow: hidden; }
+  dialog.wizard h2 { margin: 0 3.5rem 0.75rem 1.25rem; }
+  dialog.wizard iframe { display: block; width: 100%; height: min(760px, calc(100vh - 6.5rem)); border: 0; border-top: 1px solid var(--border); }
   @media (max-width: 700px) { .card-row, .use-cases, .apps-row, .apps-row.web { grid-template-columns: 1fr; } }
   /* "What a catalog can be": four levels of pictograms + live demos written as one pick per level.
      The same picture as one image is catalog-types.svg (README). */
@@ -329,11 +335,12 @@
 
   <header class="hero">
     <h1>Turn any image into an interactive catalog.</h1>
-    <p>Add clickable hotspots to photos and diagrams. Attach product details, part numbers, and links — all in one catalog file.</p>
+    <p>This tool lets you build a catalog of your products or services quickly and easily. You don’t need to know anything about building websites, databases or other complicated things. All it takes is adding photos or drawings of what you offer — or just the names. Embed the finished catalog in your existing website, or print it on paper with a QR code for every product or service.</p>
     <div class="cta">
-      <a class="btn primary" href="#demo">Explore a demo</a>
-      <a class="btn secondary" href="editor/">Create a catalog</a>
+      <button type="button" class="btn primary" id="wizard-open">Your catalog = a few simple steps</button>
+      <a class="btn secondary" href="#demo">Explore a demo</a>
     </div>
+    <p class="cta-alt"><a href="editor/">Prefer to set everything up by hand? Open the Editor →</a></p>
   </header>
 
   <main>
@@ -658,6 +665,13 @@
         <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-amd64.deb">direct download</a>, .deb file — see the <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/store-importer-latest">release page</a> for setup
       </p>
     </dialog>
+    <dialog class="collab wizard" id="wizard" aria-labelledby="wizard-h">
+      <button type="button" class="close" aria-label="Close">×</button>
+      <h2 id="wizard-h">Your catalog in a few simple steps</h2>
+      <!-- The wizard itself is a page of Grid Composer (packages/composer/wizard.html); src is set on first open.
+           The language is always spelled out: without it the page would follow the visitor's saved app language, not this page. -->
+      <iframe id="wizard-frame" title="Your catalog in a few simple steps" data-src="composer/wizard.html?lang=en"></iframe>
+    </dialog>
   </main>
 
   <footer>
@@ -804,6 +818,12 @@
       wireDialog("collab", "collab-other");
       wireDialog("catalog-server", "catalog-server-other");
       wireDialog("store-importer", "store-importer-other");
+      wireDialog("wizard", "wizard-open");
+      // The wizard page (and sql.js with it) loads only when somebody asks for it.
+      document.getElementById("wizard-open").addEventListener("click", function () {
+        var frame = document.getElementById("wizard-frame");
+        if (!frame.src) frame.src = frame.dataset.src;
+      });
     })();
   </script>
   <!-- Privacy-friendly, cookie-free page-view counting (goatcounter.com) —

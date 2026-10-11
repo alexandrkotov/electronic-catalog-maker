@@ -6,7 +6,7 @@
 <script>
   // Page language + the few strings the page scripts need (from the dictionary's js.* keys).
   var LANG = "uk";
-  var T = {"themeLight":"☀️ Світла","themeDark":"🌙 Темна","demoLoadFailed":"Не вдалося завантажити живе демо. Скористайтеся посиланням «Відкрити повне демо» нижче.","demoBookingBack":"До списку послуг","demoMapBack":"До карти","visits.one":"\u003cstrong>{n}\u003c/strong> візит на цей сайт на цей момент.","visits.few":"\u003cstrong>{n}\u003c/strong> візити на цей сайт на цей момент.","visits.many":"\u003cstrong>{n}\u003c/strong> візитів на цей сайт на цей момент.","visits.other":"\u003cstrong>{n}\u003c/strong> візиту на цей сайт на цей момент."};
+  var T = {"themeLight":"☀️ Світла","themeDark":"🌙 Темна","demoLoadFailed":"Не вдалося завантажити живе демо. Скористайся посиланням «Відкрити повне демо» нижче.","demoBookingBack":"До списку послуг","demoMapBack":"До карти","visits.one":"\u003cstrong>{n}\u003c/strong> візит на цей сайт на цей момент.","visits.few":"\u003cstrong>{n}\u003c/strong> візити на цей сайт на цей момент.","visits.many":"\u003cstrong>{n}\u003c/strong> візитів на цей сайт на цей момент.","visits.other":"\u003cstrong>{n}\u003c/strong> візиту на цей сайт на цей момент."};
 </script>
 <script>
   // Apply the saved (or OS-preferred) theme before first paint — no light flash.
@@ -32,13 +32,13 @@
 <meta property="og:locale" content="uk_UA" />
 <meta property="og:url" content="https://tapalog.com/uk/" />
 <meta property="og:title" content="Electronic Catalog Maker — інтерактивні каталоги на зображеннях" />
-<meta property="og:description" content="Додавайте клікабельні точки на фотографії та схеми. Прикріплюйте описи товарів, артикули та посилання. Усе це в одному файлі каталогу." />
+<meta property="og:description" content="Додавай клікабельні точки на фотографії та схеми. Прикріплюй описи товарів, артикули та посилання. Усе це в одному файлі каталогу." />
 <meta property="og:image" content="https://tapalog.com/og-default.png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="Electronic Catalog Maker — інтерактивні каталоги на зображеннях" />
-<meta name="twitter:description" content="Додавайте клікабельні точки на фотографії та схеми. Прикріплюйте описи товарів, артикули та посилання. Усе це в одному файлі каталогу." />
+<meta name="twitter:description" content="Додавай клікабельні точки на фотографії та схеми. Прикріплюй описи товарів, артикули та посилання. Усе це в одному файлі каталогу." />
 <meta name="twitter:image" content="https://tapalog.com/og-default.png" />
 <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png" />
 <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png" />
@@ -114,6 +114,8 @@
   }
   .btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
   .btn.secondary { background: var(--bg); color: var(--link); }
+  .hero .cta-alt { font-size: 0.95rem; margin: 0.9rem 0 0; }
+  button.btn { font: inherit; font-weight: 600; cursor: pointer; }
 
   .demo { margin: 1.5rem 0 2.5rem; }
   .demo h2 { margin: 0 0 0.25rem; }
@@ -220,6 +222,10 @@
     background: none; border: 0; cursor: pointer; color: var(--text-2);
     min-width: 44px; min-height: 44px;
   }
+  /* "Your catalog = a few simple steps": Grid Composer's wizard page in a dialog. */
+  dialog.wizard { width: min(820px, calc(100vw - 1rem)); padding: 1rem 0 0; overflow: hidden; }
+  dialog.wizard h2 { margin: 0 3.5rem 0.75rem 1.25rem; }
+  dialog.wizard iframe { display: block; width: 100%; height: min(760px, calc(100vh - 6.5rem)); border: 0; border-top: 1px solid var(--border); }
   @media (max-width: 700px) { .card-row, .use-cases, .apps-row, .apps-row.web { grid-template-columns: 1fr; } }
   /* "What a catalog can be": four levels of pictograms + live demos written as one pick per level.
      The same picture as one image is catalog-types.svg (README). */
@@ -328,24 +334,25 @@
   </div>
 
   <header class="hero">
-    <h1>Перетворіть будь-яке зображення на інтерактивний каталог.</h1>
-    <p>Додавайте клікабельні точки на фотографії та схеми. Прикріплюйте описи товарів, артикули та посилання. Усе це в одному файлі каталогу.</p>
+    <h1>Перетвори будь-яке зображення на інтерактивний каталог.</h1>
+    <p>Цей інструмент допоможе тобі легко й швидко створити каталог твоїх товарів чи послуг. Не потрібно розбиратися у створенні сайтів, баз даних та інших складних речах. Усе, що потрібно для власного каталогу, — додати фото чи малюнки товарів і послуг або просто їхні назви. Готовий каталог можна вбудувати у твій сайт або надрукувати на папері — кожен товар чи послуга матиме власний QR-код.</p>
     <div class="cta">
-      <a class="btn primary" href="#demo">Переглянути демо</a>
-      <a class="btn secondary" href="../editor/?lang=uk">Створити каталог</a>
+      <button type="button" class="btn primary" id="wizard-open">Твій каталог = кілька простих кроків</button>
+      <a class="btn secondary" href="#demo">Переглянути демо</a>
     </div>
+    <p class="cta-alt"><a href="../editor/?lang=uk">Хочеш усе налаштувати вручну? Відкрий Редактор →</a></p>
   </header>
 
   <main>
     <section class="demo" id="demo" aria-labelledby="demo-h">
       <h2 id="demo-h">Як це працює</h2>
       <!-- One hint per example, shown with its tab (see show() below); data-hint="*" = every other tab. -->
-      <p class="intro" data-hint="living-room">Натисніть на маркер, щоб відкрити великий план предмета — там його опис і кнопка «Купити». ⌂ поверне до кімнати.</p>
-      <p class="intro" data-hint="product-grid" hidden>Натисніть на номер на плитці, щоб побачити опис товару і кнопку «Купити». Список угорі перемикає групи. <a href="../composer/?lang=uk">Маєте фото й таблицю? Конструктор сітки збере таку ж за вас →</a></p>
-      <p class="intro" data-hint="diy-stool-uk" hidden>Демо-пароль: <strong>stool-2026</strong>. Введіть його на екрані блокування нижче; обкладинка й назва видимі й без пароля.</p>
-      <p class="intro" data-hint="cosmetologist-uk" hidden>Оберіть послугу, щоб побачити, що це і як вона проходить, — кнопка «Записатися» відкриє календар запису. ⌂ поверне до списку.</p>
-      <p class="intro" data-hint="nail-techs-uk" hidden>Натисніть на мітку на карті, щоб відкрити сторінку майстра — там послуги, ціни й кнопка «Записатися». ⌂ поверне до карти. <a href="../map-composer/?lang=uk">Конструктор карт збере таку саму з ваших точок →</a></p>
-      <p class="intro" data-hint="*" hidden>Оберіть точку або прокрутіть за допомогою стрілок, щоб переглянути інформацію про позицію. Натисніть кнопку «Вмістити», щоб переглянути зображення у повному розмірі.</p>
+      <p class="intro" data-hint="living-room">Натисни на маркер, щоб відкрити великий план предмета — там його опис і кнопка «Купити». ⌂ поверне до кімнати.</p>
+      <p class="intro" data-hint="product-grid" hidden>Натисни на номер на плитці, щоб побачити опис товару і кнопку «Купити». Список угорі перемикає групи. <a href="../composer/?lang=uk">Маєш фото й таблицю? Конструктор сітки збере таку ж за тебе →</a></p>
+      <p class="intro" data-hint="diy-stool-uk" hidden>Демо-пароль: <strong>stool-2026</strong>. Введи його на екрані блокування нижче; обкладинка й назва видимі й без пароля.</p>
+      <p class="intro" data-hint="cosmetologist-uk" hidden>Обери послугу, щоб побачити, що це і як вона проходить, — кнопка «Записатися» відкриє календар запису. ⌂ поверне до списку.</p>
+      <p class="intro" data-hint="nail-techs-uk" hidden>Натисни на мітку на карті, щоб відкрити сторінку майстра — там послуги, ціни й кнопка «Записатися». ⌂ поверне до карти. <a href="../map-composer/?lang=uk">Конструктор карт збере таку саму з твоїх точок →</a></p>
+      <p class="intro" data-hint="*" hidden>Обери точку або прокрути за допомогою стрілок, щоб переглянути інформацію про позицію. Натисни кнопку «Вмістити», щоб переглянути зображення у повному розмірі.</p>
       <div class="tabs" role="group" aria-label="Приклад каталогу">
         <button type="button" data-cat="living-room" aria-pressed="true">Товари в інтер’єрі</button>
         <button type="button" data-cat="auto-spare-parts" aria-pressed="false">Рознесена схема</button>
@@ -362,29 +369,29 @@
       </p>
       <p class="demo-note" id="demo-note">Кнопка «Купити» веде на оформлення замовлення в нашому демонстраційному магазині, де будь-яка позиція коштує $0.</p>
       <p class="demo-note" id="demo-note-booking" hidden>Кнопка «Записатися» відкриває демо-календар — записи в ньому несправжні.</p>
-      <p class="steps-line"><strong>Створіть свій каталог:</strong> додайте зображення → позначте деталі точками → збережіть файл каталогу та відкрийте його в Перегляді.</p>
-      <p class="steps-line"><strong>Розмістіть на своєму сайті:</strong> демо вище — це і є віджет для вбудовування. Щоб поставити його на свою сторінку, потрібні один тег <code>&lt;script&gt;</code> і один рядок <code>&lt;ecm-viewer&gt;</code>. <a href="../demo/embed-demo.html">Приклад на сайті магазину →</a> · <a href="https://github.com/alexandrkotov/electronic-catalog-maker#embedding-the-viewer">Як вбудувати →</a></p>
+      <p class="steps-line"><strong>Створи свій каталог:</strong> додай зображення → познач деталі точками → збережи файл каталогу та відкрий його в Перегляді.</p>
+      <p class="steps-line"><strong>Розмісти на своєму сайті:</strong> демо вище — це і є віджет для вбудовування. Щоб поставити його на свою сторінку, потрібні один тег <code>&lt;script&gt;</code> і один рядок <code>&lt;ecm-viewer&gt;</code>. <a href="../demo/embed-demo.html">Приклад на сайті магазину →</a> · <a href="https://github.com/alexandrkotov/electronic-catalog-maker#embedding-the-viewer">Як вбудувати →</a></p>
       <p class="steps-line"><span class="ai-chip"><strong>Готовий для ШІ-асистентів</strong> <small>експериментально</small></span> У браузері з підтримкою WebMCP асистент сам шукає в каталозі, показує потрібний товар і складає покупки до кошика. <a href="https://github.com/alexandrkotov/electronic-catalog-maker#agent-ready-webmcp">Як це працює →</a></p>
       <details class="agent-video">
-        <summary>Дивіться, як це працює: ChatGPT збирає куточок для читання (76 с, без звуку)</summary>
+        <summary>Дивись, як це працює: ChatGPT збирає куточок для читання (76 с, без звуку)</summary>
         <video controls preload="none" playsinline poster="../webmcp-demo-poster.jpg" aria-label="Запис екрана: ChatGPT відкриває каталог вітальні Tapalog у вбудованому браузері, показує тумбу, потім відкриває крісло, торшер і килим та кладе їх до кошика">
           <source src="../webmcp-demo.mp4" type="video/mp4">
         </video>
         <p class="demo-note">Запис екрана, час очікування прискорено, інтерфейс ChatGPT англійською. WebMCP поки експериментальний і працює лише в деяких браузерах та асистентах.</p>
       </details>
-      <noscript><p>Для живого демо потрібен JavaScript — скористайтеся посиланням «Відкрити повне демо» вище.</p></noscript>
+      <noscript><p>Для живого демо потрібен JavaScript — скористайся посиланням «Відкрити повне демо» вище.</p></noscript>
     </section>
 
     <h2>Для кого це</h2>
     <div class="card-row use-cases">
-      <div class="card"><h3>Меблі та товари для дому</h3><p>Товари в інтер’єрі: натисніть на предмет на фото кімнати — відкриється його опис і кнопка «Купити». Або покажіть увесь асортимент сіткою товарів. <a href="../viewer/?src=..%2Fdemo%2Fliving-room.ecatm&lang=uk">Відкрити демо →</a> · <a href="../composer/?lang=uk">Зібрати сітку зі своїх фото →</a></p></div>
+      <div class="card"><h3>Меблі та товари для дому</h3><p>Товари в інтер’єрі: натисни на предмет на фото кімнати — відкриється його опис і кнопка «Купити». Або покажи увесь асортимент сіткою товарів. <a href="../viewer/?src=..%2Fdemo%2Fliving-room.ecatm&lang=uk">Відкрити демо →</a> · <a href="../composer/?lang=uk">Зібрати сітку зі своїх фото →</a></p></div>
       <div class="card"><h3>Запчастини та обладнання</h3><p>Рознесені схеми, пов’язані з артикулами, описами й кнопкою «Купити»: номер на схемі збігається з рядком у таблиці. <a href="../viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm&lang=uk">Відкрити демо →</a></p></div>
-      <div class="card"><h3>Платні та закриті каталоги</h3><p>Продавайте посібник або курс, чи діліться одними каталогами з усіма, а іншими — лише з тими, кому дали пароль. Один пароль на файл — без облікових записів і сервера; відкрити може будь-хто, у кого є пароль. Захищену копію ви створюєте в редакторі. <a href="../viewer/?src=..%2Fdemo%2Fdiy-stool-uk.ecatm&lang=uk">Відкрити демо (пароль: stool-2026) →</a></p></div>
+      <div class="card"><h3>Платні та закриті каталоги</h3><p>Продавай посібник або курс, чи ділися одними каталогами з усіма, а іншими — лише з тими, кому дали пароль. Один пароль на файл — без облікових записів і сервера; відкрити може будь-хто, у кого є пароль. Захищену копію ти створюєш в редакторі. <a href="../viewer/?src=..%2Fdemo%2Fdiy-stool-uk.ecatm&lang=uk">Відкрити демо (пароль: stool-2026) →</a></p></div>
       <div class="card"><h3>Навчання</h3><p>Схеми, які можна досліджувати, для уроків і шкільних проєктів — без облікових записів учнів і без хмари. <a href="schools.html">Сторінка для шкіл →</a></p></div>
-      <div class="card"><h3>Зали та фітнес</h3><p>Оберіть групу м’язів, знайдіть тренажер, дізнайтеся, як його налаштувати, і роздрукуйте тренування — без застосунку й облікового запису. <a href="../viewer/?src=..%2Fdemo%2Ffitness-uk.ecatm&lang=uk">Відкрити демо →</a></p></div>
-      <div class="card"><h3>Послуги та запис</h3><p>Список послуг із фото: клієнт обирає послугу, читає, як вона проходить, і натискає «Записатися» — відкривається ваш календар запису. <a href="#demo" data-demo-cat="cosmetologist-uk">Відкрити демо →</a></p></div>
+      <div class="card"><h3>Зали та фітнес</h3><p>Обери групу м’язів, знайди тренажер, дізнайся, як його налаштувати, і роздрукуй тренування — без застосунку й облікового запису. <a href="../viewer/?src=..%2Fdemo%2Ffitness-uk.ecatm&lang=uk">Відкрити демо →</a></p></div>
+      <div class="card"><h3>Послуги та запис</h3><p>Список послуг із фото: клієнт обирає послугу, читає, як вона проходить, і натискає «Записатися» — відкривається твій календар запису. <a href="#demo" data-demo-cat="cosmetologist-uk">Відкрити демо →</a></p></div>
       <div class="card"><h3>Майстри поруч</h3><p>Карта району з міткою на кожного майстра: клієнт обирає, хто ближче, дивиться послуги й ціни та натискає «Записатися». <a href="#demo" data-demo-cat="nail-techs-uk">Відкрити демо →</a> · <a href="../map-composer/?lang=uk">Зібрати свою карту →</a></p></div>
-      <div class="card"><h3>Тести та самоперевірка</h3><p>Варіанти відповідей прямо на зображенні: натисніть — стане зеленим або червоним, підрахунок відбувається автоматично. Демо англійською мовою. <a href="../viewer/?src=..%2Fdemo%2Fquiz-citizenship-en.ecatm&lang=uk">Відкрити демо →</a></p></div>
+      <div class="card"><h3>Тести та самоперевірка</h3><p>Варіанти відповідей прямо на зображенні: натисни — стане зеленим або червоним, підрахунок відбувається автоматично. Демо англійською мовою. <a href="../viewer/?src=..%2Fdemo%2Fquiz-citizenship-en.ecatm&lang=uk">Відкрити демо →</a></p></div>
     </div>
 
     <section class="ct" aria-labelledby="types-h">
@@ -495,21 +502,21 @@
     <!-- Short toolset map (wide on desktop, stacked on phones); opens the full one, landing/<lang>/toolset.svg. -->
     <a class="toolset-map" href="toolset.svg" target="_blank" rel="noopener">
       <span class="tm-frame">
-      <span class="tm-tip" aria-hidden="true">Натисніть, щоб відкрити повну схему</span>
-      <svg class="tm-wide" viewBox="20 30 1120 140" role="img" aria-label="Ваш магазин, фото чи будь-яке зображення стають одним каталогом .ecatm, який відкривається на будь-якому телефоні чи ПК — із сайту, за QR-кодом або через сервер каталогів.">
+      <span class="tm-tip" aria-hidden="true">Натисни, щоб відкрити повну схему</span>
+      <svg class="tm-wide" viewBox="20 30 1120 140" role="img" aria-label="Твій магазин, фото чи будь-яке зображення стають одним каталогом .ecatm, який відкривається на будь-якому телефоні чи ПК — із сайту, за QR-кодом або через сервер каталогів.">
       <path class="tm-a" d="M280 100H316" marker-end="url(#tm-ah)"/>
       <path class="tm-a" d="M570 100H606" marker-end="url(#tm-ah)"/>
       <path class="tm-a" d="M860 100H896" marker-end="url(#tm-ah)"/>
-      <g transform="translate(30 46)"><rect class="tm-card" width="250" height="108" rx="16"/><use href="#tm-i-store" class="tm-ic" x="47" y="12" width="36" height="36"/><use href="#tm-i-photos" class="tm-ic" x="107" y="12" width="36" height="36"/><use href="#tm-i-picture" class="tm-ic" x="167" y="12" width="36" height="36"/><text class="tm-t" x="125" y="76" text-anchor="middle">Ваш магазин, фото</text><text class="tm-t" x="125" y="97" text-anchor="middle">чи будь-яке зображення</text></g>
+      <g transform="translate(30 46)"><rect class="tm-card" width="250" height="108" rx="16"/><use href="#tm-i-store" class="tm-ic" x="47" y="12" width="36" height="36"/><use href="#tm-i-photos" class="tm-ic" x="107" y="12" width="36" height="36"/><use href="#tm-i-picture" class="tm-ic" x="167" y="12" width="36" height="36"/><text class="tm-t" x="125" y="76" text-anchor="middle">Твій магазин, фото</text><text class="tm-t" x="125" y="97" text-anchor="middle">чи будь-яке зображення</text></g>
       <g transform="translate(320 40)"><rect class="tm-hero" width="250" height="120" rx="18"/><use href="#tm-i-file" class="tm-hic" x="101" y="12" width="48" height="48"/><use href="#tm-i-lock" class="tm-hic" x="218" y="10" width="22" height="22"/><text class="tm-ht" x="125" y="90" text-anchor="middle">каталог .ecatm</text><text class="tm-hs" x="125" y="111" text-anchor="middle">один файл · можна під пароль</text></g>
       <g transform="translate(610 46)"><rect class="tm-card" width="250" height="108" rx="16"/><use href="#tm-i-web" class="tm-ic" x="47" y="12" width="36" height="36"/><use href="#tm-i-qr" class="tm-ic" x="107" y="12" width="36" height="36"/><use href="#tm-i-server" class="tm-ic" x="167" y="12" width="36" height="36"/><text class="tm-t" x="125" y="76" text-anchor="middle">Сайт, QR</text><text class="tm-t" x="125" y="97" text-anchor="middle">чи сервер каталогів</text></g>
       <g transform="translate(900 46)"><rect class="tm-card" width="230" height="108" rx="16"/><use href="#tm-i-cart" class="tm-ic" x="33" y="14" width="32" height="32"/><use href="#tm-i-wrench" class="tm-ic" x="77" y="14" width="32" height="32"/><use href="#tm-i-cap" class="tm-ic" x="121" y="14" width="32" height="32"/><use href="#tm-i-gym" class="tm-ic" x="165" y="14" width="32" height="32"/><text class="tm-t" x="115" y="76" text-anchor="middle">Телефон чи ПК</text><text class="tm-s" x="115" y="97" text-anchor="middle">магазини, сервіси, школи…</text></g>
       </svg>
-      <svg class="tm-narrow" viewBox="-2 -2 324 574" role="img" aria-label="Ваш магазин, фото чи будь-яке зображення стають одним каталогом .ecatm, який відкривається на будь-якому телефоні чи ПК — із сайту, за QR-кодом або через сервер каталогів.">
+      <svg class="tm-narrow" viewBox="-2 -2 324 574" role="img" aria-label="Твій магазин, фото чи будь-яке зображення стають одним каталогом .ecatm, який відкривається на будь-якому телефоні чи ПК — із сайту, за QR-кодом або через сервер каталогів.">
       <path class="tm-a" d="M160 110V146" marker-end="url(#tm-ah)"/>
       <path class="tm-a" d="M160 272V308" marker-end="url(#tm-ah)"/>
       <path class="tm-a" d="M160 422V458" marker-end="url(#tm-ah)"/>
-      <g transform="translate(0 0)"><rect class="tm-card" width="320" height="108" rx="16"/><use href="#tm-i-store" class="tm-ic" x="82" y="12" width="36" height="36"/><use href="#tm-i-photos" class="tm-ic" x="142" y="12" width="36" height="36"/><use href="#tm-i-picture" class="tm-ic" x="202" y="12" width="36" height="36"/><text class="tm-t" x="160" y="76" text-anchor="middle">Ваш магазин, фото</text><text class="tm-t" x="160" y="97" text-anchor="middle">чи будь-яке зображення</text></g>
+      <g transform="translate(0 0)"><rect class="tm-card" width="320" height="108" rx="16"/><use href="#tm-i-store" class="tm-ic" x="82" y="12" width="36" height="36"/><use href="#tm-i-photos" class="tm-ic" x="142" y="12" width="36" height="36"/><use href="#tm-i-picture" class="tm-ic" x="202" y="12" width="36" height="36"/><text class="tm-t" x="160" y="76" text-anchor="middle">Твій магазин, фото</text><text class="tm-t" x="160" y="97" text-anchor="middle">чи будь-яке зображення</text></g>
       <g transform="translate(0 150)"><rect class="tm-hero" width="320" height="120" rx="18"/><use href="#tm-i-file" class="tm-hic" x="136" y="12" width="48" height="48"/><use href="#tm-i-lock" class="tm-hic" x="288" y="10" width="22" height="22"/><text class="tm-ht" x="160" y="90" text-anchor="middle">каталог .ecatm</text><text class="tm-hs" x="160" y="111" text-anchor="middle">один файл · можна під пароль</text></g>
       <g transform="translate(0 312)"><rect class="tm-card" width="320" height="108" rx="16"/><use href="#tm-i-web" class="tm-ic" x="82" y="12" width="36" height="36"/><use href="#tm-i-qr" class="tm-ic" x="142" y="12" width="36" height="36"/><use href="#tm-i-server" class="tm-ic" x="202" y="12" width="36" height="36"/><text class="tm-t" x="160" y="76" text-anchor="middle">Сайт, QR</text><text class="tm-t" x="160" y="97" text-anchor="middle">чи сервер каталогів</text></g>
       <g transform="translate(0 462)"><rect class="tm-card" width="320" height="108" rx="16"/><use href="#tm-i-cart" class="tm-ic" x="78" y="14" width="32" height="32"/><use href="#tm-i-wrench" class="tm-ic" x="122" y="14" width="32" height="32"/><use href="#tm-i-cap" class="tm-ic" x="166" y="14" width="32" height="32"/><use href="#tm-i-gym" class="tm-ic" x="210" y="14" width="32" height="32"/><text class="tm-t" x="160" y="76" text-anchor="middle">Телефон чи ПК</text><text class="tm-s" x="160" y="97" text-anchor="middle">магазини, сервіси, школи…</text></g>
@@ -524,30 +531,30 @@
     <div class="card-row apps-row web">
       <div class="card">
         <h2><a href="../editor/?lang=uk">Редактор →</a></h2>
-        <p>Створіть каталог: позначте точки на зображенні та прив’яжіть до кожної з них дані.</p>
+        <p>Створи каталог: познач точки на зображенні та прив’яжи до кожної з них дані.</p>
         <p><a href="https://apps.microsoft.com/detail/9p4zk48txrln?hl=uk-UA&amp;gl=US">Завантажити з Microsoft Store</a></p>
       </div>
       <div class="card">
         <h2><a href="../viewer/?lang=uk">Перегляд →</a></h2>
-        <p>Відкрийте файл каталогу, обирайте деталі та переглядайте відомості про них.</p>
+        <p>Відкрий файл каталогу, обирай деталі та переглядай відомості про них.</p>
         <p><a href="https://apps.microsoft.com/detail/9nb4shzt8fd1?hl=uk-UA&amp;gl=US">Завантажити з Microsoft Store</a></p>
       </div>
       <div class="card">
         <h2><a href="../composer/?lang=uk">Конструктор сітки (Grid&nbsp;Composer) →</a></h2>
-        <p>Зберіть плитковий каталог за один раз із папки пронумерованих фото й таблиці.</p>
+        <p>Збери плитковий каталог за один раз із папки пронумерованих фото й таблиці.</p>
         <p><a href="https://apps.microsoft.com/detail/9n9s9k9fhlk2?hl=uk-UA&amp;gl=US">Завантажити з Microsoft Store</a></p>
       </div>
       <div class="card">
         <h2><a href="../map-composer/?lang=uk">Конструктор карт (Map&nbsp;Composer) →</a></h2>
-        <p>Зберіть каталог із карти: позначте свої точки, і кожна відкриє свою сторінку.</p>
+        <p>Збери каталог із карти: познач свої точки, і кожна відкриє свою сторінку.</p>
         <p><a href="https://apps.microsoft.com/detail/9njgrm70frvj?hl=uk-UA&amp;gl=US">Завантажити з Microsoft Store</a></p>
       </div>
     </div>
-    <h3 class="apps-h">Застосунки для вашого комп’ютера</h3>
+    <h3 class="apps-h">Застосунки для твого комп’ютера</h3>
     <div class="card-row apps-row">
       <div class="card">
         <h2>Сервер спільної роботи</h2>
-        <p>Редагуйте каталог разом із колегами в реальному часі. Сервер запускається на вашому комп’ютері.</p>
+        <p>Редагуй каталог разом із колегами в реальному часі. Сервер запускається на твоєму комп’ютері.</p>
         <ul class="links">
           <li><a href="https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=uk-UA&amp;gl=US">Microsoft Store (Windows)</a></li>
           <li><a href="https://snapcraft.io/ecm-collab-server">Snap Store (Linux)</a></li>
@@ -556,7 +563,7 @@
       </div>
       <div class="card">
         <h2>Сервер каталогів</h2>
-        <p>Діліться папкою каталогів зі свого комп’ютера через локальну мережу або інтернет.</p>
+        <p>Ділися папкою каталогів зі свого комп’ютера через локальну мережу або інтернет.</p>
         <ul class="links">
           <li><a href="https://apps.microsoft.com/detail/9pl38zj5djmk?hl=uk-UA&amp;gl=US">Microsoft Store (Windows)</a></li>
           <li><a href="https://snapcraft.io/ecm-catalog-server">Snap Store (Linux)</a></li>
@@ -565,7 +572,7 @@
       </div>
       <div class="card">
         <h2>Імпорт із магазину (Store&nbsp;Importer)</h2>
-        <p>Перетворює ваш магазин на Shopify, Squarespace чи Payhip на теку фото й таблицю, готові для Конструктора сітки.</p>
+        <p>Перетворює твій магазин на Shopify, Squarespace чи Payhip на теку фото й таблицю, готові для Конструктора сітки.</p>
         <ul class="links">
           <li><a href="https://apps.microsoft.com/detail/9pnmbwb503bp?hl=uk-UA&amp;gl=US">Microsoft Store (Windows)</a></li>
           <li><a href="https://snapcraft.io/ecm-store-importer">Snap Store (Linux)</a></li>
@@ -578,7 +585,7 @@
     </div>
 
   <section class="benefits" aria-labelledby="benefits-h">
-    <h2 id="benefits-h">Усе будується навколо ваших файлів каталогу</h2>
+    <h2 id="benefits-h">Усе будується навколо твоїх файлів каталогу</h2>
     <ul>
       <li>
         <strong>Безкоштовно</strong>
@@ -586,15 +593,15 @@
       </li>
       <li>
         <strong>Каталог — це один файл</strong>
-        Зображення, точки й дані зберігаються разом в одному файлі <code>.ecatm</code> на вашому пристрої. Він нікуди не йде, доки ви самі ним не поділитеся.
+        Зображення, точки й дані зберігаються разом в одному файлі <code>.ecatm</code> на твоєму пристрої. Він нікуди не йде, доки ти ним не поділишся.
       </li>
       <li>
         <strong>Фотографії та схеми</strong>
-        Позначайте точки на будь-якому зображенні — фото кімнати, схемі запчастин, анатомічній таблиці — і пов’язуйте зображення між собою: натисніть на диван у кімнаті, щоб відкрити його великий план.
+        Позначай точки на будь-якому зображенні — фото кімнати, схемі запчастин, анатомічній таблиці — і пов’язуй зображення між собою: натисни на диван у кімнаті, щоб відкрити його великий план.
       </li>
       <li>
-        <strong>Посилання на ваш власний магазин</strong>
-        Спрямовуйте позиції в будь-який інтернет-магазин, яким ви вже користуєтеся. Ніякого нашого маркетплейсу чи оформлення замовлення всередині немає.
+        <strong>Посилання на твій власний магазин</strong>
+        Спрямовуй позиції в будь-який інтернет-магазин, яким ти вже користуєшся. Ніякого нашого маркетплейсу чи оформлення замовлення всередині немає.
       </li>
       <li>
         <strong>Працює без мережі після першого запуску</strong>
@@ -602,7 +609,7 @@
       </li>
       <li>
         <strong>Живе редагування та спільний доступ — лише за бажанням</strong>
-        Дві необов’язкові безкоштовні програми, які працюють на вашому комп’ютері: сервер спільної роботи — для живого редагування разом, і сервер каталогів — щоб відкрити доступ до папки з каталогами в локальній мережі або через інтернет. Для роботи наодинці вони не потрібні.
+        Дві необов’язкові безкоштовні програми, які працюють на твоєму комп’ютері: сервер спільної роботи — для живого редагування разом, і сервер каталогів — щоб відкрити доступ до папки з каталогами в локальній мережі або через інтернет. Для роботи наодинці вони не потрібні.
       </li>
     </ul>
   </section>
@@ -610,41 +617,41 @@
     <dialog class="collab" id="collab" aria-labelledby="collab-h">
       <button type="button" class="close" aria-label="Закрити">×</button>
       <h2 id="collab-h">Завантаження сервера спільної роботи</h2>
-      <p>Запустіть сервер спільної роботи в себе, щоб редагувати каталог разом з іншими людьми в реальному часі. Щоб створювати чи переглядати каталог самостійно, він не потрібен.</p>      <p>
+      <p>Запусти сервер спільної роботи в себе, щоб редагувати каталог разом з іншими людьми в реальному часі. Щоб створювати чи переглядати каталог самостійно, він не потрібен.</p>      <p>
         <strong>Windows:</strong> <a href="https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=uk-UA&amp;gl=US">завантажити з Microsoft Store</a> (або <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-windows-x64.exe">пряме завантаження</a>, файл .exe)
       </p>
       <p>
         <strong>Linux:</strong> <a href="https://snapcraft.io/ecm-collab-server">завантажити зі Snap Store</a> (Ubuntu App Center, або <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-linux-x64">пряме завантаження</a> для інших дистрибутивів)
       </p>
       <p>
-        <strong>macOS:</strong> (потрібна macOS 13 або новіша) <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-macos-arm64.zip">пряме завантаження</a> (Apple Silicon, або <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-macos-x64.zip">Intel</a>) — розпакуйте архів, а потім на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">сторінці релізу</a> знайдіть однорядкову команду для Терміналу, яка потрібна під час першого запуску
+        <strong>macOS:</strong> (потрібна macOS 13 або новіша) <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-macos-arm64.zip">пряме завантаження</a> (Apple Silicon, або <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-macos-x64.zip">Intel</a>) — розпакуй архів, а потім на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">сторінці релізу</a> знайди однорядкову команду для Терміналу, яка потрібна під час першого запуску
       </p>
       <p>
-        <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-amd64.deb">пряме завантаження</a>, файл .deb — інструкцію з налаштування дивіться на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">сторінці релізу</a>
+        <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-amd64.deb">пряме завантаження</a>, файл .deb — інструкцію з налаштування дивись на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">сторінці релізу</a>
       </p>
     </dialog>
 
     <dialog class="collab" id="catalog-server" aria-labelledby="catalog-server-h">
       <button type="button" class="close" aria-label="Закрити">×</button>
       <h2 id="catalog-server-h">Завантаження сервера каталогів</h2>
-      <p>Запустіть сервер каталогів у себе, щоб поділитися папкою каталогів прямо зі свого комп’ютера чи флешки — локальною мережею або через інтернет. Щоб створювати чи переглядати один каталог самостійно, він не потрібен.</p>      <p>
+      <p>Запусти сервер каталогів у себе, щоб поділитися папкою каталогів прямо зі свого комп’ютера чи флешки — локальною мережею або через інтернет. Щоб створювати чи переглядати один каталог самостійно, він не потрібен.</p>      <p>
         <strong>Windows:</strong> <a href="https://apps.microsoft.com/detail/9pl38zj5djmk?hl=uk-UA&amp;gl=US">завантажити з Microsoft Store</a> (або <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-windows-x64.exe">пряме завантаження</a>, файл .exe)
       </p>
       <p>
         <strong>Linux:</strong> <a href="https://snapcraft.io/ecm-catalog-server">завантажити зі Snap Store</a> (Ubuntu App Center, або <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-linux-x64">пряме завантаження</a> для інших дистрибутивів)
       </p>
       <p>
-        <strong>macOS:</strong> (потрібна macOS 13 або новіша) <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-macos-arm64.zip">пряме завантаження</a> (Apple Silicon, або <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-macos-x64.zip">Intel</a>) — розпакуйте архів, а потім на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/catalog-server-latest">сторінці релізу</a> знайдіть однорядкову команду для Терміналу, яка потрібна під час першого запуску
+        <strong>macOS:</strong> (потрібна macOS 13 або новіша) <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-macos-arm64.zip">пряме завантаження</a> (Apple Silicon, або <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-macos-x64.zip">Intel</a>) — розпакуй архів, а потім на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/catalog-server-latest">сторінці релізу</a> знайди однорядкову команду для Терміналу, яка потрібна під час першого запуску
       </p>
       <p>
-        <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-amd64.deb">пряме завантаження</a>, файл .deb — інструкцію з налаштування дивіться на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/catalog-server-latest">сторінці релізу</a>
+        <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-amd64.deb">пряме завантаження</a>, файл .deb — інструкцію з налаштування дивись на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/catalog-server-latest">сторінці релізу</a>
       </p>
     </dialog>
 
     <dialog class="collab" id="store-importer" aria-labelledby="store-importer-h">
       <button type="button" class="close" aria-label="Закрити">×</button>
       <h2 id="store-importer-h">Завантаження: Імпорт із магазину (Store&nbsp;Importer)</h2>
-      <p>Запустіть «Імпорт із магазину» на своєму комп’ютері, щоб перетворити свій магазин на Shopify, Squarespace чи Payhip на теку фото й таблицю, а потім зібрати з них каталог у Конструкторі сітки.</p>
+      <p>Запусти «Імпорт із магазину» на своєму комп’ютері, щоб перетворити свій магазин на Shopify, Squarespace чи Payhip на теку фото й таблицю, а потім зібрати з них каталог у Конструкторі сітки.</p>
       <p>
         <strong>Windows:</strong> <a href="https://apps.microsoft.com/detail/9pnmbwb503bp?hl=uk-UA&amp;gl=US">завантажити з Microsoft Store</a> (або <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-windows-x64.exe">пряме завантаження</a>, файл .exe)
       </p>
@@ -652,17 +659,24 @@
         <strong>Linux:</strong> <a href="https://snapcraft.io/ecm-store-importer">завантажити зі Snap Store</a> (Ubuntu App Center, або <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-linux-x64">пряме завантаження</a> для інших дистрибутивів)
       </p>
       <p>
-        <strong>macOS:</strong> (потрібна macOS 13 або новіша) <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-macos-arm64.zip">пряме завантаження</a> (Apple Silicon, або <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-macos-x64.zip">Intel</a>) — розпакуйте архів, а потім на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/store-importer-latest">сторінці релізу</a> знайдіть однорядкову команду для Терміналу, яка потрібна під час першого запуску
+        <strong>macOS:</strong> (потрібна macOS 13 або новіша) <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-macos-arm64.zip">пряме завантаження</a> (Apple Silicon, або <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-macos-x64.zip">Intel</a>) — розпакуй архів, а потім на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/store-importer-latest">сторінці релізу</a> знайди однорядкову команду для Терміналу, яка потрібна під час першого запуску
       </p>
       <p>
-        <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-amd64.deb">пряме завантаження</a>, файл .deb — інструкцію з налаштування дивіться на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/store-importer-latest">сторінці релізу</a>
+        <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-amd64.deb">пряме завантаження</a>, файл .deb — інструкцію з налаштування дивись на <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/store-importer-latest">сторінці релізу</a>
       </p>
+    </dialog>
+    <dialog class="collab wizard" id="wizard" aria-labelledby="wizard-h">
+      <button type="button" class="close" aria-label="Закрити">×</button>
+      <h2 id="wizard-h">Твій каталог за кілька простих кроків</h2>
+      <!-- The wizard itself is a page of Grid Composer (packages/composer/wizard.html); src is set on first open.
+           The language is always spelled out: without it the page would follow the visitor's saved app language, not this page. -->
+      <iframe id="wizard-frame" title="Твій каталог за кілька простих кроків" data-src="../composer/wizard.html?lang=uk"></iframe>
     </dialog>
   </main>
 
   <footer>
     <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Вихідний код на GitHub</a>
-    — каталоги залишаються на вашому диску, якщо їх не відкривають за URL.
+    — каталоги залишаються на твоєму диску, якщо їх не відкривають за URL.
     <div><a href="../privacy.html">Політика конфіденційності (англійською)</a></div>
     <div id="visits"></div>
     <div class="built-by">
@@ -804,6 +818,12 @@
       wireDialog("collab", "collab-other");
       wireDialog("catalog-server", "catalog-server-other");
       wireDialog("store-importer", "store-importer-other");
+      wireDialog("wizard", "wizard-open");
+      // The wizard page (and sql.js with it) loads only when somebody asks for it.
+      document.getElementById("wizard-open").addEventListener("click", function () {
+        var frame = document.getElementById("wizard-frame");
+        if (!frame.src) frame.src = frame.dataset.src;
+      });
     })();
   </script>
   <!-- Privacy-friendly, cookie-free page-view counting (goatcounter.com) —
