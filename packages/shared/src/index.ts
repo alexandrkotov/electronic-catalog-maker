@@ -1,6 +1,7 @@
 export * from "./types.js";
 export * from "./schema.js";
 export * from "./db.js";
+export * from "./undo.js";
 export * from "./theme.js";
 export * from "./i18n.js";
 export { EDITOR_LOCALES, EDITOR_LOCALE_NAMES, editorMessages } from "./locales/editor/index.js";

@@ -245,6 +245,70 @@ export function listAllRows(db: Database): CatalogRow[] {
   return out;
 }
 
+/** One image by id, or null if it doesn't exist. */
+export function getImage(db: Database, imageId: number): CatalogImage | null {
+  const stmt = db.prepare(
+    "SELECT id, name, mime_type, image_data, width, height, sort_order, folder, fit_on_open FROM images WHERE id = ?",
+  );
+  stmt.bind([imageId]);
+  let out: CatalogImage | null = null;
+  if (stmt.step()) {
+    const r = stmt.getAsObject();
+    out = {
+      id: Number(r.id),
+      name: String(r.name),
+      mimeType: String(r.mime_type),
+      imageData: String(r.image_data),
+      width: Number(r.width),
+      height: Number(r.height),
+      sortOrder: Number(r.sort_order),
+      folder: String(r.folder ?? ""),
+      fitOnOpen: Number(r.fit_on_open ?? 0) === 1,
+    };
+  }
+  stmt.free();
+  return out;
+}
+
+/** One hotspot by id, or null if it doesn't exist. */
+export function getLink(db: Database, linkId: number): CatalogLink | null {
+  const stmt = db.prepare("SELECT id, image_id, name, url, top, left, font_size FROM links WHERE id = ?");
+  stmt.bind([linkId]);
+  let out: CatalogLink | null = null;
+  if (stmt.step()) {
+    const r = stmt.getAsObject();
+    out = {
+      id: Number(r.id),
+      imageId: Number(r.image_id),
+      name: String(r.name),
+      url: String(r.url),
+      top: Number(r.top),
+      left: Number(r.left),
+      fontSize: Number(r.font_size),
+    };
+  }
+  stmt.free();
+  return out;
+}
+
+/** One data row by id, or null if it doesn't exist. */
+export function getRow(db: Database, rowId: number): CatalogRow | null {
+  const stmt = db.prepare("SELECT id, image_id, url, name, sku, description, extra FROM rows WHERE id = ?");
+  stmt.bind([rowId]);
+  const row = stmt.step() ? rowFromRecord(stmt.getAsObject()) : null;
+  stmt.free();
+  return row;
+}
+
+/** True if some hotspot other than `exceptLinkId` uses this url — i.e. the data row isn't tied to that one hotspot alone. */
+export function hasOtherLinkForUrl(db: Database, url: string, exceptLinkId: number): boolean {
+  const stmt = db.prepare("SELECT id FROM links WHERE url = ? AND id <> ?");
+  stmt.bind([url, exceptLinkId]);
+  const exists = stmt.step();
+  stmt.free();
+  return exists;
+}
+
 export function findRowByUrl(db: Database, url: string): CatalogRow | null {
   const stmt = db.prepare("SELECT id, image_id, url, name, sku, description, extra FROM rows WHERE url = ?");
   stmt.bind([url]);

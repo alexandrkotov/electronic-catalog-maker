@@ -30,6 +30,8 @@ import {
   DEFAULT_CART_ID_PATTERN,
   DEFAULT_CART_ITEM_PARAM,
   DEFAULT_PDF_EXPORT_OPTIONS,
+  captureUndoAfterAdd,
+  captureUndoBefore,
   deleteImage,
   deleteLink,
   deleteRoom,
@@ -48,6 +50,7 @@ import {
   listLinksForImage,
   listRowsForImage,
   openCatalog,
+  isAddOp,
   isListMode,
   isProtectedCatalog,
   makeCoverThumbnail,
@@ -86,6 +89,7 @@ import {
   type QrPlacement,
   type SearchField,
   type SqlJsStatic,
+  type UndoOp,
 } from "@ecm/shared";
 import { slugify } from "./slugify";
 import {
@@ -238,6 +242,29 @@ let openedFileStamp: { size: number; lastModified: number } | null = null;
 // confirmation before New/Open throws the catalog in memory away. See
 // unsavedWorkAtRisk() for when it actually warns.
 let hasUnsavedChanges = false;
+
+// ---------- undo / redo ----------
+// Local editing only. Each entry holds the edits that put things back as they
+// were (captured by captureUndoBefore/captureUndoAfterAdd in @ecm/shared
+// just before or after the edit ran), so replaying an entry is ordinary
+// editing — and what that replay records is the matching redo entry. History
+// belongs to one database object: opening, creating or joining something
+// else starts it empty (see recordUndo), and it is dropped for good when a
+// shared session begins, since other people's edits can land between yours
+// and an undo of them (see canUndo).
+interface UndoEntry {
+  /** The edit's function name — picks the "undo.op.<name>" wording in the tooltip and status. */
+  label: string;
+  /** The image to show after replaying it, so the change is visible. */
+  imageId: number | null;
+  ops: UndoOp[];
+}
+const UNDO_LIMIT = 100;
+let undoStack: UndoEntry[] = [];
+let redoStack: UndoEntry[] = [];
+let undoHistoryDb: Database | null = null;
+// The entry being built while an undo/redo replays — see recordUndo.
+let replayingEntry: UndoEntry | null = null;
 // ---------- live collaboration (Phase 2) ----------
 // Non-null exactly while this tab is connected to a shared session. While
 // it's set, this tab's own edits are sent to the room (see
@@ -1298,8 +1325,10 @@ const OP_HANDLERS: Record<string, (db: Database, ...args: never[]) => unknown> =
  * (including the one that receives this later) supplies its own local one.
  */
 function applyAndBroadcast<Args extends unknown[], R>(fnName: string, fn: (db: Database, ...args: Args) => R, ...args: Args): R {
+  const inverse = collabRoomId ? null : captureUndoBefore(db as Database, fnName, args);
   const result = fn(db as Database, ...args);
   shareOp(fnName, args);
+  recordUndo(fnName, inverse, undoTargetImage(fnName, args[0]));
   return result;
 }
 
@@ -1330,7 +1359,113 @@ function applyAddAndBroadcast<Input extends { id?: number }>(
   }
   const id = fn(db as Database, input);
   shareOp(fnName, [{ ...input, id }]);
+  recordUndo(
+    fnName,
+    collabRoomId ? null : captureUndoAfterAdd(db as Database, fnName, { id }),
+    undoTargetImage(fnName, { ...input, id }),
+  );
   return id;
+}
+
+/** The image an edit happened on — what undoing it should bring back into view. */
+function undoTargetImage(fnName: string, firstArg: unknown): number | null {
+  if (fnName === "addImage") return (firstArg as { id: number }).id;
+  if (fnName === "updateImage" || fnName === "deleteImage") return firstArg as number;
+  if (fnName === "addLink" || fnName === "addRow") return (firstArg as { imageId: number }).imageId;
+  return activeImageId;
+}
+
+/**
+ * Files one edit's inverse as an undo entry — or, while an undo/redo is
+ * replaying, adds it to the opposite entry being built. `inverse` null
+ * means "can't be reversed": the history is dropped rather than left
+ * pointing at a database that no longer matches it.
+ */
+function recordUndo(fnName: string, inverse: UndoOp[] | null, imageId: number | null) {
+  if (collabRoomId || inverse === null) {
+    clearUndoHistory();
+    return;
+  }
+  if (inverse.length === 0) return;
+  if (undoHistoryDb !== db) {
+    clearUndoHistory();
+    undoHistoryDb = db;
+  }
+  if (replayingEntry) {
+    // Edits replay in order, so what undoes them runs in the reverse order.
+    replayingEntry.ops.unshift(...inverse);
+    return;
+  }
+  undoStack.push({ label: fnName, imageId, ops: inverse });
+  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+  redoStack = [];
+}
+
+function clearUndoHistory() {
+  undoStack = [];
+  redoStack = [];
+  undoHistoryDb = null;
+}
+
+/** Not offered in a shared session: a remote edit may have touched what an undo would put back. */
+function undoAllowed(): boolean {
+  return !!db && !collabRoomId && undoHistoryDb === db;
+}
+function canUndo(): boolean {
+  return undoAllowed() && undoStack.length > 0;
+}
+function canRedo(): boolean {
+  return undoAllowed() && redoStack.length > 0;
+}
+
+function actionUndo() {
+  replayHistory("undo");
+}
+
+function actionRedo() {
+  replayHistory("redo");
+}
+
+function replayHistory(direction: "undo" | "redo") {
+  if (!db || collabRoomId) return;
+  const entry = (direction === "undo" ? undoStack : redoStack).pop();
+  if (!entry) return;
+  const mirrored: UndoEntry = { label: entry.label, imageId: entry.imageId, ops: [] };
+  replayingEntry = mirrored;
+  try {
+    for (const op of entry.ops) {
+      const handler = OP_HANDLERS[op.fn];
+      if (!handler) throw new Error(`unknown edit "${op.fn}"`);
+      if (isAddOp(op.fn)) {
+        applyAddAndBroadcast(op.fn, handler as (db: Database, input: { id?: number }) => number, op.args[0] as { id?: number });
+      } else {
+        applyAndBroadcast(op.fn, handler as (db: Database, ...args: unknown[]) => unknown, ...op.args);
+      }
+    }
+  } catch (err) {
+    // Halfway through: neither stack describes the database any more.
+    clearUndoHistory();
+    setStatus(t("undo.failed", { message: (err as Error).message }));
+    return;
+  } finally {
+    replayingEntry = null;
+  }
+  const target = direction === "undo" ? redoStack : undoStack;
+  target.push(mirrored);
+  if (target.length > UNDO_LIMIT) target.shift();
+
+  pendingHotspot = null;
+  editingLinkId = null;
+  editingRowId = null;
+  const images = currentImages();
+  if (entry.imageId !== null && entry.imageId !== activeImageId && images.some((i) => i.id === entry.imageId)) {
+    activeImageId = entry.imageId;
+    resetTransientEditState();
+  } else if (activeImageId !== null && !images.some((i) => i.id === activeImageId)) {
+    activeImageId = images[0]?.id ?? null;
+    resetTransientEditState();
+  }
+  setStatus(t(direction === "undo" ? "undo.done" : "redo.done", { what: t(`undo.op.${entry.label}`) }));
 }
 
 /**
@@ -1624,6 +1759,7 @@ async function connectAndSync(roomId: string) {
     },
   );
   collabRoomId = roomId;
+  clearUndoHistory(); // see the undo section: remote edits make older entries unsafe to replay
 
   // The socket's own handshake and this REST call have no ordering
   // guarantee otherwise — waiting here is what makes drainOutbox() below
@@ -1804,6 +1940,7 @@ function collabErrorMessage(action: "start" | "join" | "end", err: unknown): str
  */
 function exitCollaboration() {
   const roomId = collabRoomId;
+  clearUndoHistory(); // edits made in the session were never recorded, so what's left would no longer match
   collabRoomId = null; // first, so a reconnect already in flight (or a status callback about to fire from collab.close() below) becomes a no-op
   if (reconnectTimer !== null) {
     clearTimeout(reconnectTimer);
@@ -2749,6 +2886,7 @@ function render() {
       <button id="btn-add-image" ${db ? "" : "disabled"}>${te("toolbar.addImage")}</button>
       <input type="file" id="file-image" accept="image/*" style="display:none" />
       <button id="btn-save" ${db ? "" : "disabled"} title="${te("toolbar.save.tip")}">${unsavedWorkAtRisk() ? `<span class="unsaved-dot" aria-hidden="true">●</span> ` : ""}${te("toolbar.save")}</button>
+      ${db && !collabRoomId ? renderUndoButtons() : ""}
       <button id="btn-export" ${db ? "" : "disabled"} title="${te("toolbar.export.tip")}">${te("toolbar.export", { ext: CATALOG_FILE_EXTENSION })}</button>
       <button id="btn-export-protected" ${db ? "" : "disabled"} title="${te("toolbar.exportProtected.tip")}">${te("toolbar.exportProtected")}</button>
       <button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="${te("toolbar.exportPdf.tip")}">${exportPdfBusy ? te("toolbar.exportPdf.busy") : te("toolbar.exportPdf")}</button>
@@ -2899,7 +3037,7 @@ function renderImageForm(image: CatalogImage, allImages: CatalogImage[]): string
         <label style="display:flex; gap:0.4rem; align-items:center"><input type="checkbox" id="image-fit-input" ${image.fitOnOpen ? "checked" : ""} /> ${te("image.fitOnOpen")}</label>
         <p class="hint">${te("image.fitOnOpen.hint")}</p>
       </div>
-      <button id="btn-save-image">${te("image.apply")}</button>
+      <button id="btn-save-image">${te("action.apply")}</button>
     </section>
   `;
 }
@@ -2940,6 +3078,14 @@ function collabStatusText(): { icon: string; label: string; title: string } {
     title = t("collab.tipPending", { count: outbox.length, tip: title });
   }
   return { icon, label, title };
+}
+
+/** Undo/Redo toolbar pair; the tooltips name what each would do. */
+function renderUndoButtons(): string {
+  const undoLabel = canUndo() ? te("undo.tip", { what: t(`undo.op.${undoStack[undoStack.length - 1]!.label}`) }) : te("undo.tip.empty");
+  const redoLabel = canRedo() ? te("redo.tip", { what: t(`undo.op.${redoStack[redoStack.length - 1]!.label}`) }) : te("redo.tip.empty");
+  return `<button id="btn-undo" ${canUndo() ? "" : "disabled"} title="${undoLabel}">${te("toolbar.undo")}</button>
+      <button id="btn-redo" ${canRedo() ? "" : "disabled"} title="${redoLabel}">${te("toolbar.redo")}</button>`;
 }
 
 function renderCollabStatus(): string {
@@ -3636,7 +3782,7 @@ function renderEditLinkForm(link: CatalogLink | null, images: CatalogImage[]): s
         <div class="field"><label>${te("link.name")}</label><input name="name" value="${escapeHtml(link.name)}" required /></div>
         <div class="field"><label>${te("link.edit.address")}</label><input name="url" value="${escapeHtml(link.url)}" required /></div>
         <div style="display:flex; gap:0.5rem; align-items:center">
-          <button type="submit">${te("action.saveChanges")}</button>
+          <button type="submit">${te("action.apply")}</button>
           <button type="button" id="btn-cancel-edit">${te("action.cancel")}</button>
           <button type="button" id="btn-delete-link" style="margin-left:auto; color:#b91c1c; border-color:#b91c1c">${te("action.delete")}</button>
         </div>
@@ -3712,7 +3858,7 @@ function renderEditRowForm(row: CatalogRow | null): string {
         <div class="field"><label>${te("column.description")}</label><input name="description" value="${escapeHtml(row.description)}" /></div>
         ${renderExtraField(row.extra)}
         <div style="display:flex; gap:0.5rem; align-items:center">
-          <button type="submit">${te("action.saveChanges")}</button>
+          <button type="submit">${te("action.apply")}</button>
           <button type="button" id="btn-cancel-edit-row">${te("action.cancel")}</button>
           <button type="button" id="btn-delete-row" style="margin-left:auto; color:#b91c1c; border-color:#b91c1c">${te("action.delete")}</button>
         </div>
@@ -3824,6 +3970,8 @@ function wireEvents(links: CatalogLink[]) {
   });
 
   document.getElementById("btn-save")?.addEventListener("click", () => void actionSave());
+  document.getElementById("btn-undo")?.addEventListener("click", actionUndo);
+  document.getElementById("btn-redo")?.addEventListener("click", actionRedo);
   document.getElementById("btn-export")?.addEventListener("click", actionExportCatalog);
   document.getElementById("btn-export-pdf")?.addEventListener("click", actionOpenPdfOptions);
   document.getElementById("btn-export-protected")?.addEventListener("click", actionOpenProtectDialog);
@@ -4154,6 +4302,23 @@ document.addEventListener("keydown", (evt) => {
   if (!(evt.ctrlKey || evt.metaKey) || evt.altKey || evt.shiftKey || evt.key.toLowerCase() !== "s") return;
   evt.preventDefault();
   if (!evt.repeat && db) void actionSave();
+});
+
+// Ctrl/Cmd+Z undoes, Ctrl/Cmd+Shift+Z or Ctrl+Y redoes — except inside a text
+// field (that is the field's own undo) or behind an open dialog.
+document.addEventListener("keydown", (evt) => {
+  if (!(evt.ctrlKey || evt.metaKey) || evt.altKey) return;
+  const key = evt.key.toLowerCase();
+  const wantsUndo = key === "z" && !evt.shiftKey;
+  const wantsRedo = (key === "z" && evt.shiftKey) || (key === "y" && !evt.shiftKey);
+  if (!wantsUndo && !wantsRedo) return;
+  const target = evt.target as HTMLElement | null;
+  if (target?.closest("input, textarea, select") || target?.isContentEditable) return;
+  if (pendingConfirmation || pendingNotice || storeSettingsOpen || pdfOptionsDialogOpen || protectDialogOpen || remoteDialogOpen) return;
+  evt.preventDefault();
+  if (evt.repeat) return;
+  if (wantsUndo) actionUndo();
+  else actionRedo();
 });
 
 // The browser shows its own generic "leave site?" prompt — the text can't be
