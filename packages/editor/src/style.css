@@ -15,6 +15,7 @@
   --accent: #2563eb;
   --accent-soft: #dbeafe;
   --danger: #b91c1c;
+  --unsaved: #d97706;
   --stage-a: #eeeeee;
   --stage-b: #fafafa;
   --hotspot-bg: #fde047;
@@ -38,6 +39,7 @@
   --accent: #60a5fa;
   --accent-soft: #1e3a5f;
   --danger: #f87171;
+  --unsaved: #fbbf24;
   --stage-a: #1a1c22;
   --stage-b: #202329;
   --hotspot-bg: #eab308;
@@ -50,6 +52,12 @@
      default badges) is nearly unreadable against this dark red — needs
      its own light text, found via the user's own screenshot. */
   --hotspot-pending-text: #fecaca;
+}
+
+/* The "●" on Save while edits are not in a file yet — amber, not red: it is
+   a normal working state, not an error. */
+.unsaved-dot {
+  color: var(--unsaved);
 }
 
 * {

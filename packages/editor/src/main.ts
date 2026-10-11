@@ -2715,7 +2715,7 @@ function render() {
       <button id="btn-copy-remote" title="${te("toolbar.copyRemote.tip")}">${te("toolbar.copyRemote")}</button>
       <button id="btn-add-image" ${db ? "" : "disabled"}>${te("toolbar.addImage")}</button>
       <input type="file" id="file-image" accept="image/*" style="display:none" />
-      <button id="btn-save" ${db ? "" : "disabled"} title="${te("toolbar.save.tip")}">${unsavedWorkAtRisk() ? "● " : ""}${te("toolbar.save")}</button>
+      <button id="btn-save" ${db ? "" : "disabled"} title="${te("toolbar.save.tip")}">${unsavedWorkAtRisk() ? `<span class="unsaved-dot" aria-hidden="true">●</span> ` : ""}${te("toolbar.save")}</button>
       <button id="btn-export" ${db ? "" : "disabled"} title="${te("toolbar.export.tip")}">${te("toolbar.export", { ext: CATALOG_FILE_EXTENSION })}</button>
       <button id="btn-export-protected" ${db ? "" : "disabled"} title="${te("toolbar.exportProtected.tip")}">${te("toolbar.exportProtected")}</button>
       <button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="${te("toolbar.exportPdf.tip")}">${exportPdfBusy ? te("toolbar.exportPdf.busy") : te("toolbar.exportPdf")}</button>
@@ -2866,7 +2866,7 @@ function renderImageForm(image: CatalogImage, allImages: CatalogImage[]): string
         <label style="display:flex; gap:0.4rem; align-items:center"><input type="checkbox" id="image-fit-input" ${image.fitOnOpen ? "checked" : ""} /> ${te("image.fitOnOpen")}</label>
         <p class="hint">${te("image.fitOnOpen.hint")}</p>
       </div>
-      <button id="btn-save-image">${te("action.save")}</button>
+      <button id="btn-save-image">${te("image.apply")}</button>
     </section>
   `;
 }
