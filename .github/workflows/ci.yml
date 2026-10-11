@@ -28,13 +28,14 @@ jobs:
       - run: pnpm --filter @ecm/composer test
       - run: pnpm --filter @ecm/map-composer test
       - run: pnpm --filter @ecm/store-importer test
-      # The built editor and viewer in a real browser: create → save → open →
-      # edit (with undo/redo) → save → open again, then the viewer opens the
-      # result (packages/e2e/smoke.mjs). Catches a bundle that doesn't boot,
-      # a save/open path that has drifted, or a viewer that no longer reads
-      # what the editor writes — none of which typecheck and the unit tests
-      # can see.
-      - run: pnpm --filter @ecm/e2e exec playwright install --with-deps chromium
+      # The built editor and viewer in real browsers — desktop Chromium,
+      # desktop WebKit and WebKit with an iPhone screen (about half of the
+      # real visitors are on Safari/iOS): create → save → open → edit (with
+      # undo/redo) → save → open again, then the viewer opens the result
+      # (packages/e2e/smoke.mjs). Catches a bundle that doesn't boot, a
+      # save/open path that has drifted, or a viewer that no longer reads what
+      # the editor writes — none of which typecheck and the unit tests can see.
+      - run: pnpm --filter @ecm/e2e exec playwright install --with-deps chromium webkit
       - run: pnpm --filter @ecm/e2e test
       - name: Generated landing pages match their templates and dictionaries
         run: bun scripts/generate-site.ts --check
