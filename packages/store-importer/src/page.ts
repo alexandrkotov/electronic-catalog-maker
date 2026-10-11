@@ -201,6 +201,7 @@ ${THEME_TOGGLE_SCRIPT}
     var bar = $("progress-bar"), text = $("progress-text");
     if (!p || p.stage === "detecting") { bar.removeAttribute("value"); text.textContent = "Recognizing the store's platform…"; return; }
     if (p.stage === "listing") { bar.removeAttribute("value"); text.textContent = "Reading the product list: page " + p.page + ", " + p.products + " products so far…"; return; }
+    if (p.stage === "pages") { bar.max = Math.max(p.total, 1); bar.value = p.done; text.textContent = "Reading the product pages: " + p.done + " of " + p.total + "…"; return; }
     if (p.stage === "photos") { bar.max = Math.max(p.total, 1); bar.value = p.done; text.textContent = "Downloading photos: " + p.done + " of " + p.total + "…"; return; }
     bar.removeAttribute("value"); text.textContent = "Writing the table…";
   }
@@ -220,6 +221,7 @@ ${THEME_TOGGLE_SCRIPT}
       addRow("Products", String(r.products));
       addRow("Folders", r.folders.map(function (f) { return f || "(root)"; }).join(", "));
       if (r.pages) addPagesRow(r.pages);
+      if (r.unreadPages && r.unreadPages.length) addRow("Product pages without product data (skipped)", r.unreadPages.join(", "));
       addRow("No photo in the store", listNos(r.noPhoto));
       addRow("Photo failed to download", listNos(r.photoFailed));
       addRow("No category in the store (moved to Other)", listNos(r.noFolder));

@@ -37,7 +37,7 @@ composer. No account, no cloud: everything is saved on your own computer.
 
 Each supported platform is one JSON file in [`src/presets/`](src/presets),
 listed in [`src/presets.ts`](src/presets.ts) (which also documents every
-field). Two kinds:
+field). Three kinds:
 
 - **`json-feed`** ([`shopify.json`](src/presets/shopify.json)) — the store
   serves a public product feed and the importer pages through it itself.
@@ -76,6 +76,17 @@ field). Two kinds:
   each category names its top-level one (`folderNames.top`); a product's
   options show as its lowest and highest price (`price.highPath`). The feed
   carries no SKUs, so that column stays empty.
+- **`product-pages`** ([`wix.json`](src/presets/wix.json)) — for a
+  platform with no product feed at all. The store still lists its product
+  pages in a sitemap (`sitemap.path`; `sitemap.product` is the regex an
+  address has to match), and every product page carries the schema.org
+  `Product` markup shops put there for search engines — name, description,
+  price, photo (see [`src/productPage.ts`](src/productPage.ts)). That
+  markup is the same on every platform, so the preset has nothing to map;
+  `imageSize` rewrites a photo address that names its own size. It costs a
+  request per product (a Wix page is ~1.6 MB, so a hundred products take a
+  few minutes), the markup has no categories — everything lands in one
+  grid — and a listed page without a product on it is named in the report.
 - **`saved-page`** ([`payhip.json`](src/presets/payhip.json)) — for
   platforms that block automated access (Payhip's store pages sit behind a
   Cloudflare challenge; it has no product-list API). The person saves the
@@ -116,7 +127,9 @@ Covers the path language, text/price normalization, the CSV format,
 pagination and re-import against a fake Shopify store, store-page
 discovery (newer and older sites), offset paging, category names and sale
 prices against a fake Squarespace site, id discovery, the off-site feed
-and its separate category list against a fake Square Online store, the Payhip saved-page extraction and page-coverage report, retries,
+and its separate category list against a fake Square Online store, the
+schema.org product markup in its several shapes and a sitemap-driven
+import against a fake Wix store, the Payhip saved-page extraction and page-coverage report, retries,
 and that the
 page's inline script still parses (it lives inside a TypeScript template
 literal, where a stray `\` breaks it silently).

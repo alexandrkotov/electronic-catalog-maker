@@ -1,0 +1,20 @@
+{
+  "id": "wix",
+  "name": "Wix",
+  "kind": "product-pages",
+  "sitemap": {
+    "path": "/store-products-sitemap.xml",
+    "product": "/product-page/[^/]+$"
+  },
+  "maxProducts": 2000,
+  "imageSize": {
+    "pattern": "/v1/fit/w_\\d+,h_\\d+",
+    "replace": "/v1/fit/w_1000,h_1000"
+  },
+  "clean": {
+    "description": {
+      "stripHtml": true,
+      "maxLength": 600
+    }
+  }
+}

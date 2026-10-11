@@ -2,14 +2,16 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { toCsv } from "./csv";
 import { selectAll, selectText } from "./jsonPath";
-import { mapProduct, type ImportedItem } from "./normalize";
+import { decodeEntities, mapProduct, type ImportedItem } from "./normalize";
 import { mapLimit, type PoliteFetch } from "./politeFetch";
-import { PRESETS, getPreset, savedPagePresetForHost, type JsonFeedPreset, type SavedPagePreset } from "./presets";
+import { PRESETS, getPreset, savedPagePresetForHost, type JsonFeedPreset, type OnlinePreset, type ProductPagesPreset, type SavedPagePreset } from "./presets";
+import { mapPageProduct, productMarkup } from "./productPage";
 import { extractCards, savedPageUrl, type PageLink } from "./savedPage";
 
 export type Progress =
   | { stage: "detecting" }
   | { stage: "listing"; page: number; products: number }
+  | { stage: "pages"; done: number; total: number }
   | { stage: "photos"; done: number; total: number }
   | { stage: "writing" };
 
@@ -28,6 +30,8 @@ export interface ImportReport {
   noFolder: number[];
   /** Saved-page imports only: which pages of the store's product list made it in. */
   pages: PageCoverage | null;
+  /** Product-pages imports only: addresses the store lists as products that gave no product (page gone, or no product data on it). */
+  unreadPages: string[];
   outDir: string;
   csvPath: string;
   photosDir: string;
@@ -134,10 +138,23 @@ function productsIn(body: unknown, preset: JsonFeedPreset, path: string): unknow
   return arrayAt(body, path);
 }
 
-export async function detectPreset(origin: string, pf: PoliteFetch): Promise<JsonFeedPreset | null> {
+/** The product pages a store lists in the preset's sitemap, in its order. */
+export async function listProductPages(origin: string, preset: ProductPagesPreset, pf: PoliteFetch): Promise<string[]> {
+  const res = await pf(origin + preset.sitemap.path);
+  if (!res.ok) return [];
+  const product = new RegExp(preset.sitemap.product);
+  const locs = [...(await res.text()).matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)].map((m) => decodeEntities(m[1]!));
+  return [...new Set(locs.filter((loc) => product.test(loc)))].slice(0, preset.maxProducts);
+}
+
+export async function detectPreset(origin: string, pf: PoliteFetch): Promise<OnlinePreset | null> {
   for (const preset of PRESETS) {
-    if (preset.kind !== "json-feed") continue;
+    if (preset.kind === "saved-page") continue;
     try {
+      if (preset.kind === "product-pages") {
+        if ((await listProductPages(origin, preset, pf)).length > 0) return preset;
+        continue;
+      }
       for (const store of await discoverStores(origin, preset, pf)) {
         const body = await readJson(await pf(feedUrl(origin, preset.detect.path, store)));
         if (productsIn(body, preset, preset.detect.expectArray)) return preset;
@@ -276,6 +293,30 @@ interface Collected {
   storeUrl: string;
   items: ImportedItem[];
   pages: PageCoverage | null;
+  unreadPages?: string[];
+}
+
+/** One request per product: its page, read for the product markup on it. `listPf` is the remembering fetch detection already asked for the list; the pages go through the plain one, so they aren't all kept in memory. */
+async function collectFromProductPages(origin: string, preset: ProductPagesPreset, listPf: PoliteFetch, pf: PoliteFetch, onProgress: (p: Progress) => void): Promise<Collected> {
+  const urls = await listProductPages(origin, preset, listPf);
+  if (urls.length === 0) throw new Error(`Couldn't find a product list on this site — is it a ${preset.name} store?`);
+  const items: ImportedItem[] = [];
+  const unreadPages: string[] = [];
+  onProgress({ stage: "pages", done: 0, total: urls.length });
+  for (const [i, url] of urls.entries()) {
+    let markup: unknown = null;
+    try {
+      const res = await pf(url);
+      if (res.ok) markup = productMarkup(await res.text());
+    } catch {
+      // unreachable or timed out — reported with the pages that had no product
+    }
+    if (markup) items.push(mapPageProduct(markup, preset, url));
+    else unreadPages.push(url);
+    onProgress({ stage: "pages", done: i + 1, total: urls.length });
+  }
+  if (items.length === 0) throw new Error("None of the store's product pages had product data on them.");
+  return { platform: preset.name, storeUrl: origin, items, pages: null, unreadPages };
 }
 
 async function collectFromFeed(input: string, presetId: string, politeFetch: PoliteFetch, onProgress: (p: Progress) => void): Promise<Collected> {
@@ -283,16 +324,17 @@ async function collectFromFeed(input: string, presetId: string, politeFetch: Pol
   const origin = normalizeStoreUrl(input);
   const hostPreset = savedPagePresetForHost(new URL(origin).hostname);
   if (hostPreset) throw new Error(`${hostPreset.name} store — choose ${hostPreset.name} as the platform and pick the saved page instead.`);
-  let preset: JsonFeedPreset | null;
+  let preset: OnlinePreset | null;
   if (presetId === "auto") {
     onProgress({ stage: "detecting" });
     preset = await detectPreset(origin, pf);
     if (!preset) throw new Error("Couldn't recognize the store's platform — none of the supported product feeds answered. Try picking the platform by hand.");
   } else {
     const p = getPreset(presetId);
-    if (!p || p.kind !== "json-feed") throw new Error(`Unknown platform "${presetId}".`);
+    if (!p || p.kind === "saved-page") throw new Error(`Unknown platform "${presetId}".`);
     preset = p;
   }
+  if (preset.kind === "product-pages") return collectFromProductPages(origin, preset, pf, politeFetch, onProgress);
   const { products: raw, folderNames, storeTitles } = await fetchAllProducts(origin, preset, pf, onProgress);
   if (raw.length === 0) throw new Error("The store's product feed is empty.");
   const feed = preset;
@@ -360,7 +402,7 @@ async function collectFromSavedPage(pages: string[], preset: SavedPagePreset, in
 
 export async function runImport(opts: ImportOptions): Promise<ImportReport> {
   const chosen = opts.presetId === "auto" ? undefined : getPreset(opts.presetId);
-  const { platform, storeUrl, items, pages } =
+  const { platform, storeUrl, items, pages, unreadPages } =
     chosen?.kind === "saved-page"
       ? await collectFromSavedPage(opts.savedHtml ?? [], chosen, opts.input)
       : await collectFromFeed(opts.input, opts.presetId, opts.pf, opts.onProgress);
@@ -415,6 +457,7 @@ export async function runImport(opts: ImportOptions): Promise<ImportReport> {
     noPrice: nos((it) => !it.price),
     noFolder,
     pages,
+    unreadPages: unreadPages ?? [],
     outDir,
     csvPath,
     photosDir,

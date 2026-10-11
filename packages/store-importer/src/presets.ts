@@ -2,17 +2,21 @@ import payhip from "./presets/payhip.json";
 import shopify from "./presets/shopify.json";
 import squareOnline from "./presets/square-online.json";
 import squarespace from "./presets/squarespace.json";
+import wix from "./presets/wix.json";
 
 /**
  * A preset is plain JSON (src/presets/*.json), so adding a platform is a
  * data change an outside contributor can make without touching the engine.
- * Two kinds:
+ * Three kinds:
  *  - "json-feed": the store serves a public product feed the importer
  *    pages through itself — Shopify, Squarespace, Square Online (paths are jsonPath.ts paths, relative to one
  *    product; `source.itemsPath`/`detect.expectArray` to a whole page).
  *  - "saved-page": the platform blocks automated access, so the person
  *    saves their store page from their own browser and the importer reads
  *    the product cards out of that HTML with CSS selectors.
+ *  - "product-pages": the store has no feed, but lists its product pages in
+ *    a sitemap, and each page carries the schema.org markup shops put there
+ *    for search engines — one request per product (see productPage.ts).
  */
 export interface JsonFeedPreset {
   id: string;
@@ -130,9 +134,25 @@ export interface SavedPagePreset {
   fields: Partial<Record<"name" | "sku" | "description" | "folder" | "price" | "image" | "buyUrl", CardField>>;
 }
 
-export type Preset = JsonFeedPreset | SavedPagePreset;
+export interface ProductPagesPreset {
+  id: string;
+  name: string;
+  kind: "product-pages";
+  /** `path`: the sitemap listing the product pages, appended to the store's origin. `product`: a regex an address in it has to match to count as one. */
+  sitemap: { path: string; product: string };
+  /** Hard stop: every product is a page to download. */
+  maxProducts: number;
+  /** For a platform whose photo address names its size (Wix: ".../v1/fit/w_500,h_500/..."): the first match of `pattern` becomes `replace`. */
+  imageSize?: { pattern: string; replace: string };
+  clean: { description: { stripHtml: boolean; maxLength: number } };
+}
 
-export const PRESETS: Preset[] = [shopify as JsonFeedPreset, squarespace as JsonFeedPreset, squareOnline as JsonFeedPreset, payhip as SavedPagePreset];
+/** The presets the importer reads from the store itself, given only its address. */
+export type OnlinePreset = JsonFeedPreset | ProductPagesPreset;
+
+export type Preset = OnlinePreset | SavedPagePreset;
+
+export const PRESETS: Preset[] = [shopify as JsonFeedPreset, squarespace as JsonFeedPreset, squareOnline as JsonFeedPreset, wix as ProductPagesPreset, payhip as SavedPagePreset];
 
 export function getPreset(id: string): Preset | undefined {
   return PRESETS.find((p) => p.id === id);
