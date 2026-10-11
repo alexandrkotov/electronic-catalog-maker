@@ -289,6 +289,9 @@
   "status.downloadedCopy": "Downloaded a copy (this browser can't save in place — \"Open catalog…\" it again next time).",
   "status.saved": "Saved \"{name}\".",
   "status.saveFailed": "Could not save: {message}",
+  "unsaved.confirmNew": "This catalog has unsaved changes. Start a new one anyway? The changes will be lost.",
+  "unsaved.confirmOpenAny": "This catalog has unsaved changes. Open another one anyway? The changes will be lost.",
+  "unsaved.confirmOpen":"This catalog has unsaved changes. Open \"{name}\" anyway? The changes will be lost.",
 
   "image.imageReadFailed": "Could not read the image.",
   "image.added": "Added image \"{name}\".",

@@ -233,6 +233,11 @@ let openedFileHandle: FileSystemFileHandle | null = null;
 // anyone else touching the same file) gets caught instead of silently lost.
 // Null whenever there's nothing on disk yet to compare against.
 let openedFileStamp: { size: number; lastModified: number } | null = null;
+// True from the first edit after a catalog was opened or created until it is
+// written to a file. Drives the "●" on Save, the tab-close warning and the
+// confirmation before New/Open throws the catalog in memory away. See
+// unsavedWorkAtRisk() for when it actually warns.
+let hasUnsavedChanges = false;
 // ---------- live collaboration (Phase 2) ----------
 // Non-null exactly while this tab is connected to a shared session. While
 // it's set, this tab's own edits are sent to the room (see
@@ -724,10 +729,28 @@ function actionSetZoom(next: number) {
 
 // ---------- actions: catalog lifecycle ----------
 
+/**
+ * True when closing the tab or replacing the catalog in memory would lose
+ * edits that no file has. Never inside a shared session: there the room (or,
+ * while offline, the persisted outbox) already holds them.
+ */
+function unsavedWorkAtRisk(): boolean {
+  return !!db && hasUnsavedChanges && !collabRoomId;
+}
+
 function actionNewCatalog() {
+  if (unsavedWorkAtRisk()) {
+    askConfirm(t("unsaved.confirmNew"), createNewCatalog);
+    return;
+  }
+  createNewCatalog();
+}
+
+function createNewCatalog() {
   const name = prompt(t("catalog.newPrompt"), t("catalog.untitled"));
   if (name === null) return;
   db = createEmptyCatalog(SQL, name || t("catalog.untitled"));
+  hasUnsavedChanges = false;
   activeImageId = null;
   openedFileHandle = null;
   resetTransientEditState();
@@ -750,7 +773,16 @@ async function openCatalogFromBytes(
   handle: FileSystemFileHandle | null,
   sourceName = t("legacy.sourceName"),
   fileStamp: { size: number; lastModified: number } | null = null,
+  discardUnsaved = false,
 ) {
+  // The catalog in memory is about to be replaced; unless the person already
+  // said so, make sure its unsaved edits aren't thrown away silently.
+  if (!discardUnsaved && unsavedWorkAtRisk()) {
+    askConfirm(t("unsaved.confirmOpen", { name: sourceName }), () => {
+      void openCatalogFromBytes(bytes, handle, sourceName, fileStamp, true);
+    });
+    return;
+  }
   // Opening a different local file while still connected to a shared
   // session for a *different* catalog would silently keep sending that
   // session edits meant for this new one — leave it instead of guessing.
@@ -768,6 +800,7 @@ async function openCatalogFromBytes(
       await new Promise((resolve) => setTimeout(resolve, 0));
       const result = await importSchCatalog(SQL, bytes, sourceName);
       db = result.db;
+      hasUnsavedChanges = false;
       activeImageId = currentImages()[0]?.id ?? null;
       openedFileHandle = null;
       openedFileStamp = null;
@@ -783,6 +816,7 @@ async function openCatalogFromBytes(
       );
     } else {
       db = openCatalog(SQL, bytes);
+      hasUnsavedChanges = false;
       const meta = readMeta(db);
       activeImageId = currentImages()[0]?.id ?? null;
       openedFileHandle = handle;
@@ -803,25 +837,39 @@ function baseName(nameOrPath: string): string {
 
 async function actionOpenCatalogClicked(fallbackInput: HTMLInputElement) {
   if (window.showOpenFilePicker) {
-    try {
-      const [handle] = await window.showOpenFilePicker({ types: [CATALOG_PICKER_TYPE] });
-      if (!handle) return;
-      const file = await handle.getFile();
-      await openCatalogFromBytes(new Uint8Array(await file.arrayBuffer()), handle, baseName(file.name), {
-        size: file.size,
-        lastModified: file.lastModified,
-      });
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") {
-        setStatus(t("status.openFailed", { message: (err as Error).message }));
-      }
+    // Ask before the file picker, not after it: nobody wants to choose a
+    // file first and only then hear their edits are about to go.
+    if (unsavedWorkAtRisk()) {
+      askConfirm(t("unsaved.confirmOpenAny"), () => void pickAndOpenCatalog());
+      return;
     }
+    await pickAndOpenCatalog();
     return;
   }
   // Browsers without the File System Access API (Firefox, Safari): fall
   // back to a plain <input type=file>. We won't get a writable handle, so
   // Save will prompt like Save As the first time.
   fallbackInput.click();
+}
+
+/** The File System Access picker path of "Open catalog…": the person has already agreed to lose any unsaved edits. */
+async function pickAndOpenCatalog() {
+  try {
+    const [handle] = await window.showOpenFilePicker!({ types: [CATALOG_PICKER_TYPE] });
+    if (!handle) return;
+    const file = await handle.getFile();
+    await openCatalogFromBytes(
+      new Uint8Array(await file.arrayBuffer()),
+      handle,
+      baseName(file.name),
+      { size: file.size, lastModified: file.lastModified },
+      true,
+    );
+  } catch (err) {
+    if ((err as Error).name !== "AbortError") {
+      setStatus(t("status.openFailed", { message: (err as Error).message }));
+    }
+  }
 }
 
 function actionOpenRemoteDialog() {
@@ -1147,6 +1195,7 @@ async function actionSave() {
   }
 
   downloadBytes(bytes);
+  hasUnsavedChanges = false;
   setStatus(t("status.downloadedCopy"));
 }
 
@@ -1178,6 +1227,7 @@ async function writeToOpenedHandle(bytes: Uint8Array) {
     await writable.close();
     const saved = await openedFileHandle.getFile();
     openedFileStamp = { size: saved.size, lastModified: saved.lastModified };
+    hasUnsavedChanges = false;
     setStatus(t("status.saved", { name: openedFileHandle.name }));
   } catch (err) {
     setStatus(t("status.saveFailed", { message: (err as Error).message }));
@@ -1258,6 +1308,7 @@ function applyAddAndBroadcast<Input extends { id?: number }>(
  * editing was never touched by any of this.
  */
 function shareOp(fn: string, args: unknown[]) {
+  hasUnsavedChanges = true; // every local edit funnels through here, in or out of a session
   if (!collabRoomId) return;
   if (collab?.status === "connected") {
     collab.sendOp(fn, args);
@@ -1356,6 +1407,7 @@ function applyRemoteOp(op: Op) {
     return;
   }
   lastAppliedSeq = op.seq;
+  hasUnsavedChanges = true; // this copy now differs from any file it was opened from — matters once the session is left
   render();
 }
 
@@ -1678,6 +1730,7 @@ async function actionJoinCollaboration(roomId: string) {
   try {
     const bytes = await downloadSnapshot(collabServerUrl, roomId);
     db = openCatalog(SQL, bytes);
+    hasUnsavedChanges = false;
     activeImageId = currentImages()[0]?.id ?? null;
     openedFileHandle = null;
     openedFileStamp = null;
@@ -2652,6 +2705,7 @@ function render() {
   // #app itself (not inside innerHTML below) so it survives the wholesale
   // rebuild, same reasoning as applyPanelWidths()'s CSS custom properties.
   app.setAttribute("data-mobile-tab", mobileTab);
+  document.title = (unsavedWorkAtRisk() ? "● " : "") + t("toolbar.title");
   app.innerHTML = `
     <div class="toolbar">
       <h1>${te("toolbar.title")}</h1>
@@ -2661,7 +2715,7 @@ function render() {
       <button id="btn-copy-remote" title="${te("toolbar.copyRemote.tip")}">${te("toolbar.copyRemote")}</button>
       <button id="btn-add-image" ${db ? "" : "disabled"}>${te("toolbar.addImage")}</button>
       <input type="file" id="file-image" accept="image/*" style="display:none" />
-      <button id="btn-save" ${db ? "" : "disabled"} title="${te("toolbar.save.tip")}">${te("toolbar.save")}</button>
+      <button id="btn-save" ${db ? "" : "disabled"} title="${te("toolbar.save.tip")}">${unsavedWorkAtRisk() ? "● " : ""}${te("toolbar.save")}</button>
       <button id="btn-export" ${db ? "" : "disabled"} title="${te("toolbar.export.tip")}">${te("toolbar.export", { ext: CATALOG_FILE_EXTENSION })}</button>
       <button id="btn-export-protected" ${db ? "" : "disabled"} title="${te("toolbar.exportProtected.tip")}">${te("toolbar.exportProtected")}</button>
       <button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="${te("toolbar.exportPdf.tip")}">${exportPdfBusy ? te("toolbar.exportPdf.busy") : te("toolbar.exportPdf")}</button>
@@ -4058,5 +4112,21 @@ document.addEventListener("visibilitychange", reconcilePresenceActive);
 // zero further input wouldn't otherwise fire any of the listeners above
 // again to notice.
 setInterval(reconcilePresenceActive, 15_000);
+
+// Ctrl/Cmd+S is the first thing a person presses next to a "●" on Save; left
+// alone the browser offers to save this page as HTML instead of the catalog.
+document.addEventListener("keydown", (evt) => {
+  if (!(evt.ctrlKey || evt.metaKey) || evt.altKey || evt.shiftKey || evt.key.toLowerCase() !== "s") return;
+  evt.preventDefault();
+  if (!evt.repeat && db) void actionSave();
+});
+
+// The browser shows its own generic "leave site?" prompt — the text can't be
+// customized. Same condition as the "●" on Save, so the two never disagree.
+window.addEventListener("beforeunload", (evt) => {
+  if (!unsavedWorkAtRisk()) return;
+  evt.preventDefault();
+  evt.returnValue = "";
+});
 
 void boot();
