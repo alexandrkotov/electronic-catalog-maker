@@ -685,6 +685,17 @@
   </footer>
 
   <script>
+    // An anonymous "this was clicked" counter for the analytics (GoatCounter,
+    // loaded further down). Sends the event name only. Silent where the counter
+    // isn't running — it skips localhost and anyone who opted out of being counted.
+    window.ecmEvent = function (name) {
+      try {
+        var g = window.goatcounter;
+        if (g && g.count) g.count({ event: true, path: name, title: name });
+      } catch (e) {}
+    };
+  </script>
+  <script>
     (function () {
       var frame = document.getElementById("frame");
       var buttons = document.querySelectorAll(".tabs button");
@@ -761,10 +772,10 @@
           frame.appendChild(el);
         });
       }
-      buttons.forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.cat); }); });
+      buttons.forEach(function (b) { b.addEventListener("click", function () { window.ecmEvent("landing-demo:" + b.dataset.cat); show(b.dataset.cat); }); });
       // A "Who it's for" link that opens its example in the widget above
       // (the href scrolls there) rather than in the full viewer.
-      document.querySelectorAll("a[data-demo-cat]").forEach(function (a) { a.addEventListener("click", function () { show(a.dataset.demoCat); }); });
+      document.querySelectorAll("a[data-demo-cat]").forEach(function (a) { a.addEventListener("click", function () { window.ecmEvent("landing-demo:" + a.dataset.demoCat); show(a.dataset.demoCat); }); });
       show("living-room");
     })();
   </script>
@@ -821,6 +832,7 @@
       wireDialog("wizard", "wizard-open");
       // The wizard page (and sql.js with it) loads only when somebody asks for it.
       document.getElementById("wizard-open").addEventListener("click", function () {
+        window.ecmEvent("landing-wizard-open");
         var frame = document.getElementById("wizard-frame");
         if (!frame.src) frame.src = frame.dataset.src;
       });

@@ -1,5 +1,6 @@
 export * from "./types.js";
 export * from "./schema.js";
+export * from "./analytics.js";
 export * from "./db.js";
 export * from "./undo.js";
 export * from "./theme.js";

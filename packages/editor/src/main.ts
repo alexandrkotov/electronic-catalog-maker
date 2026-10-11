@@ -66,6 +66,7 @@ import {
   applyTheme,
   currentTheme,
   toggleTheme,
+  trackEvent,
   findRowByUrl,
   syncGridCaptions,
   rowExistsForUrl,
@@ -810,6 +811,7 @@ function createNewCatalog() {
   const name = prompt(t("catalog.newPrompt"), t("catalog.untitled"));
   if (name === null) return;
   db = createEmptyCatalog(SQL, name || t("catalog.untitled"));
+  trackEvent("editor-new-catalog");
   hasUnsavedChanges = false;
   activeImageId = null;
   openedFileHandle = null;
@@ -1255,6 +1257,7 @@ async function actionSave() {
   }
 
   downloadBytes(bytes);
+  trackEvent("editor-save");
   hasUnsavedChanges = false;
   setStatus(t("status.downloadedCopy"));
 }
@@ -1287,6 +1290,7 @@ async function writeToOpenedHandle(bytes: Uint8Array) {
     await writable.close();
     const saved = await openedFileHandle.getFile();
     openedFileStamp = { size: saved.size, lastModified: saved.lastModified };
+    trackEvent("editor-save");
     hasUnsavedChanges = false;
     setStatus(t("status.saved", { name: openedFileHandle.name }));
   } catch (err) {
@@ -2091,6 +2095,7 @@ async function actionAddImage(file: File) {
     folder: activeFolder,
   });
   activeImageId = id;
+  trackEvent("editor-add-image");
   resetTransientEditState();
   setStatus(t("image.added", { name: file.name }));
 }
@@ -2489,6 +2494,7 @@ function actionAddLink(name: string, url: string) {
     if (!db) return;
     try {
       applyAddAndBroadcast("addLink", addLink, { imageId, name, url, top, left });
+      trackEvent("editor-add-hotspot");
       pendingHotspot = null;
       setStatus(t("link.added", { name }));
     } catch (err) {
