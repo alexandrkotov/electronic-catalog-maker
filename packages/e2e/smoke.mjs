@@ -1,10 +1,12 @@
-// End-to-end smoke test for the editor: create → save → open → edit → save →
-// open again. Runs against the production build (packages/editor/dist), the
-// same bytes that get deployed, in a real Chromium — so it catches what
-// typecheck and unit tests can't: a bundle that doesn't boot, sql.js/WASM not
-// loading, the save and open paths drifting apart.
+// End-to-end smoke test: the editor creates a catalog, saves it, opens it
+// again, edits it (including undo/redo) and saves; the viewer then opens the
+// result. Runs against the production builds (packages/editor/dist and
+// packages/viewer/dist), the same bytes that get deployed, in a real Chromium
+// — so it catches what typecheck and unit tests can't: a bundle that doesn't
+// boot, sql.js/WASM not loading, the save and open paths drifting apart, the
+// viewer not reading what the editor wrote.
 //
-//   pnpm --filter @ecm/editor build && pnpm --filter @ecm/e2e test
+//   pnpm --filter @ecm/editor build && pnpm --filter @ecm/viewer build && pnpm --filter @ecm/e2e test
 //
 // Needs a browser once: pnpm --filter @ecm/e2e exec playwright install chromium
 import assert from "node:assert/strict";
@@ -17,12 +19,6 @@ import { fileURLToPath } from "node:url";
 import { deflateSync, crc32 } from "node:zlib";
 import { chromium } from "playwright";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "../editor/dist");
-if (!existsSync(join(root, "index.html"))) {
-  console.error(`No build at ${root} — run: pnpm --filter @ecm/editor build`);
-  process.exit(2);
-}
-
 const TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -33,17 +29,30 @@ const TYPES = {
   ".png": "image/png",
   ".webmanifest": "application/manifest+json",
 };
-const server = createServer((req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, "http://x").pathname)).replace(/^([/\\])+/, "");
-  let file = join(root, path);
-  if (!file.startsWith(root)) return void res.writeHead(403).end();
-  if (existsSync(file) && statSync(file).isDirectory()) file = join(file, "index.html");
-  if (!existsSync(file)) return void res.writeHead(404).end();
-  res.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream" });
-  createReadStream(file).pipe(res);
-});
-await new Promise((ok) => server.listen(0, "127.0.0.1", ok));
-const url = `http://127.0.0.1:${server.address().port}/`;
+
+/** Serves a built app's dist folder on a free local port; resolves to its URL. */
+async function serve(app) {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), `../${app}/dist`);
+  if (!existsSync(join(root, "index.html"))) {
+    console.error(`No build at ${root} — run: pnpm --filter @ecm/${app} build`);
+    process.exit(2);
+  }
+  const server = createServer((req, res) => {
+    const path = normalize(decodeURIComponent(new URL(req.url, "http://x").pathname)).replace(/^([/\\])+/, "");
+    let file = join(root, path);
+    if (!file.startsWith(root)) return void res.writeHead(403).end();
+    if (existsSync(file) && statSync(file).isDirectory()) file = join(file, "index.html");
+    if (!existsSync(file)) return void res.writeHead(404).end();
+    res.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream" });
+    createReadStream(file).pipe(res);
+  });
+  await new Promise((ok) => server.listen(0, "127.0.0.1", ok));
+  servers.push(server);
+  return `http://127.0.0.1:${server.address().port}/`;
+}
+const servers = [];
+const editorUrl = await serve("editor");
+const viewerUrl = await serve("viewer");
 
 const work = mkdtempSync(join(tmpdir(), "ecm-smoke-"));
 const imagePath = join(work, "plan.png");
@@ -53,7 +62,7 @@ const browser = await chromium.launch();
 let failed = false;
 try {
   // 1. A new catalog with one image, saved to a file.
-  let page = await freshPage("Smoke catalog");
+  let page = await freshPage(editorUrl, "Smoke catalog");
   await page.click("#btn-new");
   await page.waitForSelector("#btn-add-image:not([disabled])");
   await page.setInputFiles("#file-image", imagePath);
@@ -65,7 +74,7 @@ try {
   step("created a catalog with an image and saved it");
 
   // 2. Open that file, edit it (a hotspot and its table row), save it again.
-  page = await freshPage();
+  page = await freshPage(editorUrl);
   await page.setInputFiles("#file-open", first);
   await page.waitForSelector("#stage-img");
   assert.equal((await page.$$(".image-list-name")).length, 1, "the saved image is listed after opening");
@@ -82,33 +91,67 @@ try {
   await page.click("#form-row button[type=submit]");
   await page.waitForSelector("tr[data-row-id]");
   assert.ok((await page.title()).startsWith("●"), "editing marks the catalog as unsaved");
+
+  // Undo takes the row away and redo brings it back with its data.
+  const rowCount = async () => (await page.$$("tr[data-row-id]")).length;
+  await page.keyboard.press("Control+z");
+  await page.waitForFunction(() => document.querySelectorAll("tr[data-row-id]").length === 0);
+  await page.keyboard.press("Control+Shift+z");
+  await page.waitForSelector("tr[data-row-id]");
+  const redone = await page.$$eval("tr[data-row-id] td", (tds) => tds.map((td) => td.textContent));
+  assert.ok(redone.includes("Hex bolt M8") && redone.includes("HB-M8"), `redo restored the row's data: ${redone.join(" | ")}`);
+  assert.equal(await rowCount(), 1);
+
+  // A second hotspot, undone with the toolbar button, must not reach the file.
+  const box2 = await (await page.$("#stage-img")).boundingBox();
+  await page.mouse.click(box2.x + 260, box2.y + 180);
+  await page.waitForSelector("#form-link");
+  await page.fill("#form-link input[name=name]", "Nut");
+  await page.fill("#form-link input[name=url]", "p-200");
+  await page.click("#form-link button[type=submit]");
+  await page.waitForFunction(() => document.querySelectorAll("#stage-inner .hotspot:not(.pending)").length === 2);
+  await page.click("#btn-undo");
+  await page.waitForFunction(() => document.querySelectorAll("#stage-inner .hotspot:not(.pending)").length === 1);
   const second = join(work, "second.ecatm");
   await saveTo(page, second);
   assert.ok(!(await page.title()).startsWith("●"), "saving clears the unsaved mark");
   await page.context().close();
-  step("opened it, added a hotspot and a row, saved");
+  step("opened it, added a hotspot and a row, undid and redid, undid a second hotspot, saved");
 
   // 3. Open the saved result in a clean tab: the edit must have made it to disk.
-  page = await freshPage();
+  page = await freshPage(editorUrl);
   await page.setInputFiles("#file-open", second);
   await page.waitForSelector("#stage-img");
   const hotspots = await page.$$eval("#stage-inner .hotspot:not(.pending)", (els) => els.map((e) => e.textContent));
-  assert.deepEqual(hotspots, ["Bolt"], "the hotspot survived the round trip");
+  assert.deepEqual(hotspots, ["Bolt"], "the saved hotspot survived the round trip and the undone one did not");
   const cells = await page.$$eval("tr[data-row-id] td", (tds) => tds.map((td) => td.textContent));
   assert.ok(cells.includes("p-100") && cells.includes("Hex bolt M8") && cells.includes("HB-M8"), `the row survived: ${cells.join(" | ")}`);
   await page.context().close();
-  step("reopened the saved file: hotspot and row are there");
+  step("reopened the saved file in the editor: hotspot and row are there, the undone hotspot is not");
+
+  // 4. The viewer reads what the editor wrote: picture, hotspot, table row.
+  page = await freshPage(viewerUrl);
+  await page.setInputFiles("#file-open", second);
+  await page.waitForSelector("#stage-img");
+  const viewerHotspots = await page.$$eval(".hotspot[data-id]", (els) => els.map((e) => e.textContent.trim()));
+  assert.deepEqual(viewerHotspots, ["Bolt"], "the viewer shows the hotspot");
+  const viewerRow = await page.$eval("tr[data-url='p-100']", (tr) => tr.textContent);
+  assert.ok(viewerRow.includes("Hex bolt M8") && viewerRow.includes("HB-M8"), `the viewer lists the row: ${viewerRow}`);
+  await page.click(".hotspot[data-id]");
+  await page.waitForFunction(() => document.querySelector("tr[data-url='p-100']")?.classList.contains("selected"));
+  await page.context().close();
+  step("opened the saved file in the viewer: hotspot shown, row listed, clicking the hotspot selects its row");
 } catch (err) {
   failed = true;
   console.error("\nSMOKE TEST FAILED\n", err);
 } finally {
   await browser.close();
-  server.close();
+  for (const server of servers) server.close();
 }
 process.exit(failed ? 1 : 0);
 
-/** A tab on the editor with the picker APIs removed, so Save downloads and Open uses the file input. */
-async function freshPage(catalogName = "Untitled") {
+/** A tab on an app with the picker APIs removed, so Save downloads and Open uses the file input. */
+async function freshPage(url, catalogName = "Untitled") {
   const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1400, height: 900 } });
   const page = await context.newPage();
   await page.addInitScript(() => {
@@ -121,7 +164,7 @@ async function freshPage(catalogName = "Untitled") {
     console.error("page error:", e.message);
   });
   await page.goto(url);
-  await page.waitForSelector("#btn-new");
+  await page.waitForSelector("#btn-open");
   return page;
 }
 
