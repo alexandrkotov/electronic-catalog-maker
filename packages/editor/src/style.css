@@ -275,15 +275,26 @@ body {
      traps a wider-than-panel image's start-side overflow behind a
      scrollLeft that can never go negative (found via mobile testing: an
      870px-wide demo image left ~240px of its own left edge permanently
-     unreachable, unscrollable). `margin: 0 auto` on .stage-inner below
+     unreachable, unscrollable). `margin: 0 auto` on .stage-sizer below
      still centers a small image the same way, but simply lets you scroll
      to see the rest of a big one instead — same fix as .confirm-box. */
 }
 
-.stage-inner {
+/* A transform doesn't change an element's layout size, so a zoomed-out
+   .stage-inner would still take up (and be centered, and scroll) as the
+   full-size image while only a small copy of it shows at its left edge.
+   This wrapper is given the scaled size inline (main.ts) so centering and
+   the scrollbars follow what is actually on screen. */
+.stage-sizer {
   position: relative;
-  display: inline-block;
+  flex: none;
   margin: 0 auto;
+}
+
+.stage-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
   transform-origin: top left;
 }
 

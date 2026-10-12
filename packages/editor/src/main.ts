@@ -2929,7 +2929,7 @@ function render() {
       <div class="stage-scroll" id="stage-scroll">
         ${
           activeImage
-            ? `<div class="stage-inner" id="stage-inner" style="transform: scale(${zoom})">
+            ? `<div class="stage-sizer" style="width:${activeImage.width * zoom}px;height:${activeImage.height * zoom}px"><div class="stage-inner" id="stage-inner" style="width:${activeImage.width}px;height:${activeImage.height}px;transform: scale(${zoom})">
                  <img id="stage-img" src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
                  <div class="crosshair-box" id="crosshair-box"></div>
                  <div class="crosshair-h" id="crosshair-h"></div>
@@ -2937,7 +2937,7 @@ function render() {
                  ${links.map((l) => hotspotHtml(l, editingUrl)).join("")}
                  ${pendingHotspot ? `<div class="hotspot pending" style="top:${pendingHotspot.top}px;left:${pendingHotspot.left}px">${te("hotspot.pending")}</div>` : ""}
                  <div id="editing-balloons">${renderEditingBalloons(links, activeImage.id)}</div>
-               </div>`
+               </div></div>`
             : `<p class="hint" style="padding:2rem">${te("stage.select")}</p>`
         }
       </div>

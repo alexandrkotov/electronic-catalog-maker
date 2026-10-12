@@ -149,6 +149,20 @@ async function runScenario(config) {
     await page.waitForFunction(() => document.querySelectorAll("#stage-inner .hotspot:not(.pending)").length === 2);
     await page.click("#btn-undo");
     await page.waitForFunction(() => document.querySelectorAll("#stage-inner .hotspot:not(.pending)").length === 1);
+    // Zoomed out, the image sits in the middle of the stage and nothing scrolls
+    // (it used to hug the left edge of a still full-size box, scrollbars and all).
+    await showTab(page, "stage");
+    await page.click("#btn-zoom-out");
+    await page.click("#btn-zoom-out");
+    const stage = await page.evaluate(() => {
+      const scroll = document.getElementById("stage-scroll");
+      const box = scroll.getBoundingClientRect();
+      const img = document.getElementById("stage-img").getBoundingClientRect();
+      return { left: img.left - box.left, right: box.right - img.right, overflowX: scroll.scrollWidth - scroll.clientWidth };
+    });
+    assert.ok(Math.abs(stage.left - stage.right) <= 1, `zoomed-out image is centered (gaps ${stage.left} / ${stage.right})`);
+    assert.ok(stage.left > 1, "zoomed-out image has room around it");
+    assert.equal(stage.overflowX, 0, "a zoomed-out image does not scroll sideways");
     const second = join(work, `${config.name}-second.ecatm`);
     await saveTo(page, second);
     assert.ok(!(await page.title()).startsWith("●"), "saving clears the unsaved mark");
