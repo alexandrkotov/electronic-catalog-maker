@@ -14,6 +14,7 @@ import {
   findRowByUrl,
   initSqlite,
   isAddOp,
+  opFootprint,
   listImages,
   listLinksForImage,
   listRowsForImage,
@@ -155,5 +156,76 @@ describe("undo capture round-trips through the db functions", () => {
     expect(captureUndoBefore(db, "somethingNew", [])).toBeNull();
     expect(captureUndoBefore(db, "updateLink", [9999, { name: "x", url: "y" }])).toEqual([]);
     expect(captureUndoAfterAdd(db, "addLink", {})).toBeNull();
+  });
+});
+
+describe("opFootprint — which edits by other people make an undo unsafe", () => {
+  /** True when an edit by someone else (`remote`) touches something `mine` needs left alone. */
+  function conflicts(mine: { needs: string[] }, remote: { writes: string[] }) {
+    return remote.writes.some((k) => mine.needs.includes(k));
+  }
+
+  test("two hotspots added to one picture don't get in each other's way", () => {
+    const s = seeded();
+    const mine = opFootprint(s.db, "addLink", [{ id: 901, imageId: s.img, url: "p-new-1", name: "a", top: 1, left: 1 }]);
+    const theirs = opFootprint(s.db, "addLink", [{ id: 902, imageId: s.img, url: "p-new-2", name: "b", top: 2, left: 2 }]);
+    expect(conflicts(mine, theirs)).toBe(false);
+    expect(conflicts(theirs, mine)).toBe(false);
+  });
+
+  test("editing the row of the hotspot I added blocks my undo, which would delete that row", () => {
+    const s = seeded();
+    const row = findRowByUrl(s.db, "p-1")!;
+    const mine = opFootprint(s.db, "addLink", [{ id: 901, imageId: s.img, url: "p-1", name: "a", top: 1, left: 1 }]);
+    expect(conflicts(mine, opFootprint(s.db, "updateRow", [row.id, { name: "x" }]))).toBe(true);
+  });
+
+  test("someone adding a hotspot to a picture I added blocks undoing my add (it would delete theirs)", () => {
+    const s = seeded();
+    const mine = opFootprint(s.db, "addImage", [{ id: 700, name: "N" }]);
+    const theirs = opFootprint(s.db, "addLink", [{ id: 901, imageId: 700, url: "q", name: "a", top: 1, left: 1 }]);
+    expect(conflicts(mine, theirs)).toBe(true);
+  });
+
+  test("moving or renaming a hotspot someone else is editing conflicts, other hotspots don't", () => {
+    const s = seeded();
+    const mine = opFootprint(s.db, "updateLink", [s.l1, { name: "renamed", url: "p-1" }]);
+    expect(conflicts(mine, opFootprint(s.db, "updateLinkPosition", [s.l1, 5, 5]))).toBe(true);
+    expect(conflicts(mine, opFootprint(s.db, "updateLinkPosition", [s.l3, 5, 5]))).toBe(false);
+  });
+
+  test("deleting an image takes every record on it with it", () => {
+    const s = seeded();
+    const row = findRowByUrl(s.db, "p-1")!;
+    const del = opFootprint(s.db, "deleteImage", [s.img]);
+    for (const key of [`image:${s.img}`, `link:${s.l1}`, `link:${s.l3}`, `row:${row.id}`, "url:p-1", "rowurl:p-1"]) {
+      expect(del.writes).toContain(key);
+    }
+    const mine = opFootprint(s.db, "updateRow", [row.id, { name: "x" }]);
+    expect(conflicts(mine, del)).toBe(true);
+    // ...and a hotspot added to that picture can't be undone once the picture is gone
+    const added = opFootprint(s.db, "addLink", [{ id: 901, imageId: s.img, url: "z", name: "a", top: 1, left: 1 }]);
+    expect(conflicts(added, del)).toBe(true);
+  });
+
+  test("someone deleting the table row doesn't take away the undo of my hotspot", () => {
+    const s = seeded();
+    const mine = opFootprint(s.db, "addLink", [{ id: 901, imageId: s.img, url: "p-new", name: "a", top: 1, left: 1 }]);
+    const theirs = opFootprint(s.db, "addRow", [{ id: 902, imageId: s.img, url: "p-new", name: "r" }]);
+    expect(conflicts(mine, theirs)).toBe(false);
+    // ...but it does take away the undo of the row itself
+    const myRow = opFootprint(s.db, "addRow", [{ id: 902, imageId: s.img, url: "p-new", name: "r" }]);
+    addRow(s.db, { id: 902, imageId: s.img, url: "p-new", name: "r" });
+    expect(conflicts(myRow, opFootprint(s.db, "deleteRow", [902]))).toBe(true);
+  });
+
+  test("deleting the last hotspot on a url removes its row, so that counts as writing the row", () => {
+    const s = seeded();
+    const row = findRowByUrl(s.db, "p-1")!;
+    // p-1 has two hotspots: deleting one leaves the row alone, deleting the second takes it
+    expect(opFootprint(s.db, "deleteLink", [s.l1]).writes).not.toContain(`row:${row.id}`);
+    deleteLink(s.db, s.l1);
+    const second = listLinksForImage(s.db, s.img).find((l) => l.url === "p-1")!;
+    expect(opFootprint(s.db, "deleteLink", [second.id]).writes).toContain(`row:${row.id}`);
   });
 });

@@ -51,6 +51,7 @@ import {
   listRowsForImage,
   openCatalog,
   isAddOp,
+  opFootprint,
   isListMode,
   isProtectedCatalog,
   makeCoverThumbnail,
@@ -245,20 +246,27 @@ let openedFileStamp: { size: number; lastModified: number } | null = null;
 let hasUnsavedChanges = false;
 
 // ---------- undo / redo ----------
-// Local editing only. Each entry holds the edits that put things back as they
-// were (captured by captureUndoBefore/captureUndoAfterAdd in @ecm/shared
-// just before or after the edit ran), so replaying an entry is ordinary
-// editing — and what that replay records is the matching redo entry. History
-// belongs to one database object: opening, creating or joining something
-// else starts it empty (see recordUndo), and it is dropped for good when a
-// shared session begins, since other people's edits can land between yours
-// and an undo of them (see canUndo).
+// Each entry holds the edits that put things back as they were (captured by
+// captureUndoBefore/captureUndoAfterAdd in @ecm/shared just before or after
+// the edit ran), so replaying an entry is ordinary editing — and what that
+// replay records is the matching redo entry. History belongs to one database
+// object: opening, creating or joining something else starts it empty (see
+// recordUndo), and it starts fresh when a shared session begins or ends.
+//
+// In a shared session it only ever covers *your own* edits, and only while
+// nobody else has touched what it would put back: every entry remembers the
+// records it needs left alone (opFootprint's `needs`), and each edit relayed
+// from someone else drops the entries it overlaps (invalidateHistory). The
+// rest stay undoable — two people adding hotspots to one picture never
+// take each other's undo away.
 interface UndoEntry {
   /** The edit's function name — picks the "undo.op.<name>" wording in the tooltip and status. */
   label: string;
   /** The image to show after replaying it, so the change is visible. */
   imageId: number | null;
   ops: UndoOp[];
+  /** Records this entry must find untouched to be replayed safely; only tracked in a shared session. */
+  needs: string[];
 }
 const UNDO_LIMIT = 100;
 let undoStack: UndoEntry[] = [];
@@ -1329,10 +1337,11 @@ const OP_HANDLERS: Record<string, (db: Database, ...args: never[]) => unknown> =
  * (including the one that receives this later) supplies its own local one.
  */
 function applyAndBroadcast<Args extends unknown[], R>(fnName: string, fn: (db: Database, ...args: Args) => R, ...args: Args): R {
-  const inverse = collabRoomId ? null : captureUndoBefore(db as Database, fnName, args);
+  const inverse = captureUndoBefore(db as Database, fnName, args);
+  const needs = collabRoomId ? opFootprint(db as Database, fnName, args).needs : [];
   const result = fn(db as Database, ...args);
   shareOp(fnName, args);
-  recordUndo(fnName, inverse, undoTargetImage(fnName, args[0]));
+  recordUndo(fnName, inverse, undoTargetImage(fnName, args[0]), needs);
   return result;
 }
 
@@ -1361,13 +1370,10 @@ function applyAddAndBroadcast<Input extends { id?: number }>(
   if (collabRoomId && input.id === undefined) {
     input = { ...input, id: Math.floor(Math.random() * 0x7fffffff) + 1 };
   }
+  const needs = collabRoomId ? opFootprint(db as Database, fnName, [input]).needs : [];
   const id = fn(db as Database, input);
   shareOp(fnName, [{ ...input, id }]);
-  recordUndo(
-    fnName,
-    collabRoomId ? null : captureUndoAfterAdd(db as Database, fnName, { id }),
-    undoTargetImage(fnName, { ...input, id }),
-  );
+  recordUndo(fnName, captureUndoAfterAdd(db as Database, fnName, { id }), undoTargetImage(fnName, { ...input, id }), needs);
   return id;
 }
 
@@ -1385,8 +1391,8 @@ function undoTargetImage(fnName: string, firstArg: unknown): number | null {
  * means "can't be reversed": the history is dropped rather than left
  * pointing at a database that no longer matches it.
  */
-function recordUndo(fnName: string, inverse: UndoOp[] | null, imageId: number | null) {
-  if (collabRoomId || inverse === null) {
+function recordUndo(fnName: string, inverse: UndoOp[] | null, imageId: number | null, needs: string[]) {
+  if (inverse === null) {
     clearUndoHistory();
     return;
   }
@@ -1398,9 +1404,10 @@ function recordUndo(fnName: string, inverse: UndoOp[] | null, imageId: number | 
   if (replayingEntry) {
     // Edits replay in order, so what undoes them runs in the reverse order.
     replayingEntry.ops.unshift(...inverse);
+    replayingEntry.needs.push(...needs);
     return;
   }
-  undoStack.push({ label: fnName, imageId, ops: inverse });
+  undoStack.push({ label: fnName, imageId, ops: inverse, needs });
   if (undoStack.length > UNDO_LIMIT) undoStack.shift();
   redoStack = [];
 }
@@ -1411,9 +1418,59 @@ function clearUndoHistory() {
   undoHistoryDb = null;
 }
 
-/** Not offered in a shared session: a remote edit may have touched what an undo would put back. */
+/**
+ * An edit by someone else, about to be applied here, wrote `writes` — drop
+ * every entry (undo or redo) that needed one of those records untouched.
+ * Called before the edit lands, with the footprint read from the database
+ * as it still is, so a deletion's cascade is still visible.
+ */
+function invalidateHistory(writes: string[]) {
+  if (writes.length === 0 || (undoStack.length === 0 && redoStack.length === 0)) return;
+  const touched = new Set(writes);
+  const stillSafe = (entry: UndoEntry) => !entry.needs.some((key) => touched.has(key));
+  undoStack = undoStack.filter(stillSafe);
+  redoStack = redoStack.filter(stillSafe);
+}
+
+/** The footprint's writes for an edit about to be applied here, or null when it can't be worked out (the history is then dropped rather than trusted). */
+function remoteWrites(fn: string, args: unknown[]): string[] | null {
+  try {
+    return opFootprint(db as Database, fn, args).writes;
+  } catch {
+    clearUndoHistory();
+    return null;
+  }
+}
+
+/**
+ * Ops this tab already sent to the room. The room never echoes an op back to
+ * its sender, so after a reconnect the catch-up replay hands this tab its own
+ * earlier edits again — which must not count as "someone else touched it".
+ * Compared by content (the log carries no sender); an identical edit by
+ * someone else leaves the very same state, so it is just as harmless.
+ */
+const sentOps = new Map<string, number>();
+const SENT_OPS_LIMIT = 1000;
+function sentOpKey(fn: string, args: unknown[]): string {
+  return fn === "addImage" ? `addImage:${(args[0] as { id?: number }).id}` : JSON.stringify([fn, args]);
+}
+function rememberSentOp(fn: string, args: unknown[]) {
+  const key = sentOpKey(fn, args);
+  sentOps.set(key, (sentOps.get(key) ?? 0) + 1);
+  if (sentOps.size > SENT_OPS_LIMIT) sentOps.delete(sentOps.keys().next().value as string);
+}
+/** True (once) for an op this tab sent itself. */
+function takeSentOp(fn: string, args: unknown[]): boolean {
+  const key = sentOpKey(fn, args);
+  const count = sentOps.get(key);
+  if (!count) return false;
+  if (count === 1) sentOps.delete(key);
+  else sentOps.set(key, count - 1);
+  return true;
+}
+
 function undoAllowed(): boolean {
-  return !!db && !collabRoomId && undoHistoryDb === db;
+  return !!db && undoHistoryDb === db;
 }
 function canUndo(): boolean {
   return undoAllowed() && undoStack.length > 0;
@@ -1431,10 +1488,10 @@ function actionRedo() {
 }
 
 function replayHistory(direction: "undo" | "redo") {
-  if (!db || collabRoomId) return;
+  if (!db) return;
   const entry = (direction === "undo" ? undoStack : redoStack).pop();
   if (!entry) return;
-  const mirrored: UndoEntry = { label: entry.label, imageId: entry.imageId, ops: [] };
+  const mirrored: UndoEntry = { label: entry.label, imageId: entry.imageId, ops: [], needs: [] };
   replayingEntry = mirrored;
   try {
     for (const op of entry.ops) {
@@ -1483,6 +1540,7 @@ function shareOp(fn: string, args: unknown[]) {
   hasUnsavedChanges = true; // every local edit funnels through here, in or out of a session
   if (!collabRoomId) return;
   if (collab?.status === "connected") {
+    rememberSentOp(fn, args);
     collab.sendOp(fn, args);
   } else {
     outbox.push({ fn, args });
@@ -1551,10 +1609,17 @@ function applyRemoteOp(op: Op) {
     return;
   }
   try {
+    // Before it lands: what this edit writes may be exactly what some of this tab's undo entries would put back.
+    if (!takeSentOp(op.fn, op.args)) {
+      const writes = remoteWrites(op.fn, op.args);
+      if (writes) invalidateHistory(writes);
+    }
     if (op.fn === "addRow") {
       const input = op.args[0] as Parameters<typeof addRow>[1];
       const existing = findRowByUrl(db, input.url);
       if (existing && existing.id !== input.id) {
+        const replaced = remoteWrites("deleteRow", [existing.id]);
+        if (replaced) invalidateHistory(replaced);
         deleteRow(db, existing.id);
         addRow(db, input);
       } else if (!existing) {
@@ -1605,6 +1670,8 @@ function applyQueuedOpAsOverwrite(queued: QueuedOp) {
     }
     // Their row isn't actually there after all (e.g. it was since deleted) — a normal add is safe again.
   }
+  const writes = remoteWrites(queued.fn, queued.args);
+  if (writes) invalidateHistory(writes);
   OP_HANDLERS[queued.fn]?.(db, ...(queued.args as never[]));
   shareOp(queued.fn, queued.args); // not collab?.sendOp directly — see drainOutbox's note on why that's unsafe here
 }
@@ -1762,8 +1829,12 @@ async function connectAndSync(roomId: string) {
       if (status === "disconnected") scheduleReconnect(roomId);
     },
   );
+  // A reconnect keeps the history: what was missed arrives through applyRemoteOp, which drops what it touches.
+  if (collabRoomId !== roomId) {
+    clearUndoHistory();
+    sentOps.clear();
+  }
   collabRoomId = roomId;
-  clearUndoHistory(); // see the undo section: remote edits make older entries unsafe to replay
 
   // The socket's own handshake and this REST call have no ordering
   // guarantee otherwise — waiting here is what makes drainOutbox() below
@@ -1944,7 +2015,8 @@ function collabErrorMessage(action: "start" | "join" | "end", err: unknown): str
  */
 function exitCollaboration() {
   const roomId = collabRoomId;
-  clearUndoHistory(); // edits made in the session were never recorded, so what's left would no longer match
+  clearUndoHistory(); // the footprints it carries only mean something while remote edits are being watched for
+  sentOps.clear();
   collabRoomId = null; // first, so a reconnect already in flight (or a status callback about to fire from collab.close() below) becomes a no-op
   if (reconnectTimer !== null) {
     clearTimeout(reconnectTimer);
@@ -2892,7 +2964,7 @@ function render() {
       <button id="btn-add-image" ${db ? "" : "disabled"}>${te("toolbar.addImage")}</button>
       <input type="file" id="file-image" accept="image/*" style="display:none" />
       <button id="btn-save" ${db ? "" : "disabled"} title="${te("toolbar.save.tip")}">${unsavedWorkAtRisk() ? `<span class="unsaved-dot" aria-hidden="true">●</span> ` : ""}${te("toolbar.save")}</button>
-      ${db && !collabRoomId ? renderUndoButtons() : ""}
+      ${db ? renderUndoButtons() : ""}
       <button id="btn-export" ${db ? "" : "disabled"} title="${te("toolbar.export.tip")}">${te("toolbar.export", { ext: CATALOG_FILE_EXTENSION })}</button>
       <button id="btn-export-protected" ${db ? "" : "disabled"} title="${te("toolbar.exportProtected.tip")}">${te("toolbar.exportProtected")}</button>
       <button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="${te("toolbar.exportPdf.tip")}">${exportPdfBusy ? te("toolbar.exportPdf.busy") : te("toolbar.exportPdf")}</button>

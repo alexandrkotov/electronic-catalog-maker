@@ -126,6 +126,115 @@ export function captureUndoBefore(db: Database, fn: string, args: unknown[]): Un
   }
 }
 
+/**
+ * What one edit touches, for undo in a shared session. Other people's edits
+ * land between yours and an undo of them, so an undo entry is only safe to
+ * replay while nothing it would put back has been touched by someone else:
+ *   - `writes` are the keys the edit changes — a remote edit's writes are
+ *     compared against the entries still on the history stacks;
+ *   - `needs` are the keys that must stay untouched for the edit to be
+ *     undone (or redone) safely — what an entry remembers about itself.
+ * Keys name records, not values: `link:7`, `row:3`, `image:2` (the image
+ * exists), `imageprops:2` (its name/folder), `content:2` (which hotspots and
+ * rows it holds), `url:p-100` (which hotspots sit on that url) and
+ * `rowurl:p-100` (whether a data row sits there — only one can), `settings`.
+ *
+ * Read from `db` before the edit runs (an add carries everything it needs
+ * in its input, which must already have its id). Edits of different records
+ * share no key, so two people adding hotspots to the same picture can each
+ * still undo their own.
+ */
+export interface OpFootprint {
+  writes: string[];
+  needs: string[];
+}
+
+export function opFootprint(db: Database, fn: string, args: unknown[]): OpFootprint {
+  const writes: string[] = [];
+  const needs: string[] = [];
+  const both = (...keys: string[]) => {
+    writes.push(...keys);
+    needs.push(...keys);
+  };
+  switch (fn) {
+    case "addImage": {
+      const id = (args[0] as { id: number }).id;
+      both(`image:${id}`, `imageprops:${id}`, `content:${id}`);
+      break;
+    }
+    case "updateImage": {
+      const id = args[0] as number;
+      writes.push(`imageprops:${id}`);
+      needs.push(`imageprops:${id}`, `image:${id}`);
+      break;
+    }
+    case "deleteImage": {
+      const id = args[0] as number;
+      both(`image:${id}`, `imageprops:${id}`, `content:${id}`);
+      for (const link of listLinksForImage(db, id)) both(`link:${link.id}`, `url:${link.url}`);
+      for (const row of listRowsForImage(db, id)) both(`row:${row.id}`, `rowurl:${row.url}`);
+      break;
+    }
+    case "addLink": {
+      const input = args[0] as { id: number; imageId: number; url: string };
+      writes.push(`link:${input.id}`, `url:${input.url}`, `content:${input.imageId}`);
+      needs.push(`link:${input.id}`, `image:${input.imageId}`);
+      // Undoing the add deletes the hotspot — and with it a data row that was already waiting on this url.
+      // That row is put back afterwards, which only works while it and its url are as they were.
+      const row = findRowByUrl(db, input.url);
+      if (row) needs.push(`row:${row.id}`, `rowurl:${input.url}`, `url:${input.url}`);
+      break;
+    }
+    case "updateLink": {
+      const id = args[0] as number;
+      both(`link:${id}`);
+      const link = getLink(db, id);
+      const url = (args[1] as { url: string }).url;
+      if (link && link.url !== url) {
+        both(`url:${link.url}`, `url:${url}`, `rowurl:${link.url}`, `rowurl:${url}`);
+        for (const key of [link.url, url]) {
+          const row = findRowByUrl(db, key);
+          if (row) both(`row:${row.id}`);
+        }
+      }
+      break;
+    }
+    case "updateLinkPosition":
+      both(`link:${args[0] as number}`);
+      break;
+    case "deleteLink": {
+      const link = getLink(db, args[0] as number);
+      if (!link) break;
+      writes.push(`link:${link.id}`, `url:${link.url}`, `content:${link.imageId}`);
+      needs.push(`link:${link.id}`, `image:${link.imageId}`);
+      // The last hotspot on a url takes its data row along; undoing brings it back.
+      const row = hasOtherLinkForUrl(db, link.url, link.id) ? null : findRowByUrl(db, link.url);
+      if (row) both(`row:${row.id}`, `rowurl:${link.url}`);
+      break;
+    }
+    case "addRow": {
+      const input = args[0] as { id: number; imageId: number; url: string };
+      writes.push(`row:${input.id}`, `rowurl:${input.url}`, `content:${input.imageId}`);
+      needs.push(`row:${input.id}`, `image:${input.imageId}`);
+      break;
+    }
+    case "updateRow":
+      both(`row:${args[0] as number}`);
+      break;
+    case "deleteRow": {
+      const row = getRow(db, args[0] as number);
+      if (!row) break;
+      writes.push(`row:${row.id}`, `rowurl:${row.url}`, `content:${row.imageId}`);
+      needs.push(`row:${row.id}`, `rowurl:${row.url}`, `image:${row.imageId}`);
+      break;
+    }
+    case "updateStoreSettings":
+      both("settings");
+      break;
+  }
+  return { writes, needs };
+}
+
 /** The inverse of an add, called after it ran with the id it landed on (`input.id` must be set). */
 export function captureUndoAfterAdd(db: Database, fn: string, input: { id?: number }): UndoOp[] | null {
   const id = input.id;

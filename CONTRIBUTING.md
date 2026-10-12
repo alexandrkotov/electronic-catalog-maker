@@ -33,7 +33,8 @@ pnpm --filter @ecm/shared test
 pnpm --filter @ecm/composer test
 pnpm --filter @ecm/collab-server test      # needs Bun
 pnpm --filter @ecm/store-importer test     # needs Bun
-pnpm --filter @ecm/e2e test                # editor + viewer smoke test in Chromium, WebKit and a phone screen;
+pnpm --filter @ecm/e2e test                # editor + viewer smoke test in Chromium, WebKit and a phone screen,
+                                           # then two browsers undoing in one shared session (needs Bun);
                                            # needs the build above and, once, `pnpm --filter @ecm/e2e exec
                                            # playwright install --with-deps chromium webkit`
 bun scripts/generate-site.ts --check

@@ -35,6 +35,8 @@ jobs:
       # (packages/e2e/smoke.mjs). Catches a bundle that doesn't boot, a
       # save/open path that has drifted, or a viewer that no longer reads what
       # the editor writes — none of which typecheck and the unit tests can see.
+      # The same test run also has two people undo their own edits in one
+      # shared session on the real collab-server (packages/e2e/collab.mjs).
       - run: pnpm --filter @ecm/e2e exec playwright install --with-deps chromium webkit
       - run: pnpm --filter @ecm/e2e test
       - name: Generated landing pages match their templates and dictionaries
