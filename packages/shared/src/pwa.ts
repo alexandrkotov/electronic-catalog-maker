@@ -16,6 +16,8 @@
  *      request that slips through anyway (see sw.js). Belt and suspenders.
  */
 
+import { analyticsPath, analyticsReferrer } from "./analytics.js";
+
 const GOATCOUNTER_SRC = "//gc.zgo.at/count.js";
 const GOATCOUNTER_ENDPOINT = "https://ecatm.goatcounter.com/count";
 
@@ -27,11 +29,59 @@ function notifyServiceWorker(standalone: boolean) {
   navigator.serviceWorker?.controller?.postMessage({ type: "display-mode", standalone });
 }
 
+interface CountJs {
+  get_data?: (vars?: unknown) => Record<string, unknown>;
+  count?: (vars?: unknown) => void;
+}
+
+/**
+ * Sends the page view with no query string and a cleaned referrer. count.js
+ * builds both inside get_data(), so that is the one place to wrap — events
+ * pass through the same function.
+ *
+ * The server reads `q` only to work out campaigns, and we don't use them. Left
+ * alone it did harm: `src` (this site's "which catalog to open" parameter) was
+ * taken for a campaign source, so every viewer demo visit had its real
+ * referrer replaced by the catalog's address, and `collab` room ids and
+ * `blob:` addresses were sent along for nothing.
+ */
+function countFilteredPageView() {
+  const counter = (window as unknown as { goatcounter?: CountJs }).goatcounter;
+  const getData = counter?.get_data;
+  const count = counter?.count;
+  if (!counter || typeof getData !== "function" || typeof count !== "function") return;
+  counter.get_data = (vars) => {
+    const data = getData(vars);
+    data.q = "";
+    if (typeof data.r === "string") data.r = analyticsReferrer(data.r);
+    return data;
+  };
+  // What count.js does on its own: not before the tab is actually visible.
+  const send = () => count.call(counter);
+  if (document.visibilityState === "visible") {
+    send();
+    return;
+  }
+  const onVisible = () => {
+    if (document.visibilityState !== "visible") return;
+    document.removeEventListener("visibilitychange", onVisible);
+    send();
+  };
+  document.addEventListener("visibilitychange", onVisible);
+}
+
 /** Only for a normal browser tab — an installed standalone app never gets
  * this tag in its DOM at all (layer 1 of the block described above). */
 function loadAnalyticsIfBrowserTab() {
   if (isStandalone()) return;
+  // count.js picks its settings up from whatever is already on window.goatcounter.
+  // `no_onload`: the page view is sent from script.onload below instead, once
+  // get_data() is wrapped — by default count.js sends it before that can happen.
+  const counter = ((window as unknown as { goatcounter?: Record<string, unknown> }).goatcounter ??= {});
+  counter.path = analyticsPath;
+  counter.no_onload = true;
   const script = document.createElement("script");
+  script.onload = countFilteredPageView;
   script.async = true;
   script.src = GOATCOUNTER_SRC;
   script.dataset.goatcounter = GOATCOUNTER_ENDPOINT;

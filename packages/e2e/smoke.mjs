@@ -163,6 +163,9 @@ async function runScenario(config) {
     assert.deepEqual(hotspots, ["Bolt"], "the saved hotspot survived the round trip and the undone one did not");
     const cells = await page.$$eval("tr[data-row-id] td", (tds) => tds.map((td) => td.textContent));
     assert.ok(cells.includes("p-100") && cells.includes("Hex bolt M8") && cells.includes("HB-M8"), `the row survived: ${cells.join(" | ")}`);
+    // The page-view path the counter is given has the per-visit parts taken out.
+    const filed = await page.evaluate(() => window.goatcounter.path("/editor/?lang=ru&src=blob%3Ahttps%3A%2F%2Ftapalog.com%2F7b1c"));
+    assert.equal(filed, "/editor/?lang=ru&src=blob", "blob: sources are filed under one path");
     await closePage(page);
     say("reopened the saved file in the editor: hotspot and row are there, the undone hotspot is not");
 
