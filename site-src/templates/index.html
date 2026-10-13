@@ -299,14 +299,6 @@
   footer a {
     color: inherit;
   }
-  #visits {
-    margin-top: 1rem;
-    font-size: 0.85rem;
-    color: var(--muted);
-  }
-  #visits strong {
-    color: var(--text);
-  }
   .built-by {
     margin-top: 0.6rem;
   }
@@ -633,7 +625,6 @@
     <a href="{url_github}">{{common.footer.source}}</a>
     {{common.footer.note}}
     <div><a href="{{@base}}privacy.html">{{common.footer.privacy}}</a></div>
-    <div id="visits"></div>
     <div class="built-by">
       {{common.footer.builtBy}}
     </div>
@@ -794,49 +785,10 @@
     })();
   </script>
   <!-- Privacy-friendly, cookie-free page-view counting (goatcounter.com) —
-       tracks this page's own path automatically. -->
+       tracks this page's own path automatically. The public visit count that
+       used to be rendered in the footer was removed on purpose (it counted
+       the author's own visits and was never a reliable number); the stats
+       live only on the private dashboard, ecatm.goatcounter.com. -->
   <script data-goatcounter="https://ecatm.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
-  <script>
-    // GoatCounter's own embeddable widget is an <iframe> — its serif/purple
-    // default styling can't be reached by this page's CSS at all, and it
-    // clashed with everything else here. Fetching the plain JSON count and
-    // rendering it as normal text instead. "TOTAL" is the site-wide visitor
-    // count across landing+editor+viewer. GoatCounter's docs say `count` is
-    // the number of visitors (cookie-free, so roughly per-browser-session) and
-    // `count_unique` is a deprecated alias of the same number — so this is
-    // labelled "visits", not "people": one person coming back, or opening
-    // the landing page and then the editor, is counted more than once.
-    // `count` comes back as a formatted string ("1,234"), hence the comma
-    // strip before parsing.
-    //
-    // GoatCounter's TOTAL.json sits behind a CDN (Fastly/Vinyl-Cache) that
-    // can get permanently stuck on either the no-date-range URL or the
-    // `?start=year` one — confirmed live on both sides at different times.
-    // A cache-busting query param does NOT help: the CDN ignores the query
-    // string for its cache key entirely (confirmed via curl — a brand-new
-    // nanosecond-timestamp param still returned the same stale response
-    // with an unchanged `age` header). Since the real count only ever goes
-    // up, fetching both known variants and taking the max sidesteps
-    // whichever one happens to be frozen at any given moment.
-    Promise.all(
-      [
-        "https://ecatm.goatcounter.com/counter/TOTAL.json",
-        "https://ecatm.goatcounter.com/counter/TOTAL.json?start=year",
-      ].map((url) =>
-        fetch(url)
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null),
-      ),
-    ).then((results) => {
-      const counts = results
-        .filter(Boolean)
-        .map((data) => parseInt(String(data.count ?? data.count_unique).replace(/[,\s]/g, ""), 10))
-        .filter((n) => !Number.isNaN(n));
-      if (counts.length === 0) return;
-      const n = Math.max(...counts);
-      document.getElementById("visits").innerHTML =
-        (T["visits." + new Intl.PluralRules(LANG).select(n)] || T["visits.other"]).replace("{n}", n.toLocaleString(LANG));
-    });
-  </script>
 </body>
 </html>

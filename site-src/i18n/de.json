@@ -177,8 +177,6 @@
   "js.demoLoadFailed": "Die Live-Demo konnte nicht geladen werden. Nutze „Ganze Demo öffnen“ unten.",
   "js.demoBookingBack": "Zurück zu allen Leistungen",
   "js.demoMapBack": "Zurück zur Karte",
-  "js.visits.one": "Bisher <strong>{n}</strong> Besuch auf dieser Website.",
-  "js.visits.other": "Bisher <strong>{n}</strong> Besuche auf dieser Website.",
   "toolset.heading": "Electronic Catalog Maker – wie die Apps zusammenspielen",
   "toolset.title": "Von einem Onlineshop, Fotos, einer Karte oder einem beliebigen Bild zu einer .ecatm-Katalogdatei – geteilt per Link, Website, Catalog Server oder gedrucktem QR-Code und im Viewer geöffnet von Käufern, Mechanikern, Heimwerkern, Lernenden, Fitnessstudios und Restaurantgästen.",
   "toolset.row.start": "AUSGANGSPUNKT",

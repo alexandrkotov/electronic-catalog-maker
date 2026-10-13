@@ -20,8 +20,7 @@ pictograms both the landing section and `catalog-types.svg` pull in with
 - `i18n/<lang>.json` — flat `key: message` dictionaries (messages are trusted
   HTML). `en.json` is the source of truth; every other language is checked
   against it (missing/extra keys, plural forms, `{placeholders}`). Keys
-  starting with `js.` are handed to the page's own scripts as `T.<key>`;
-  plurals there use `Intl.PluralRules` (`js.visits.one/few/many/other`).
+  starting with `js.` are handed to the page's own scripts as `T.<key>`.
 - `links.json` — external URLs; `{hl}` becomes the language's Microsoft
   Store locale.
 
