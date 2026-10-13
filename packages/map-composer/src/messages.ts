@@ -1,11 +1,11 @@
 /**
- * The map composer's own UI strings (en/ru/uk). Small enough to live inline
+ * The map composer's own UI strings (en/ru/uk/de). Small enough to live inline
  * rather than as JSON files under packages/shared/src/locales.
  */
 import type { Messages } from "@ecm/shared";
 
-export const MAP_COMPOSER_LOCALES = ["en", "ru", "uk"] as const;
-export const MAP_COMPOSER_LOCALE_NAMES: Record<string, string> = { en: "English", ru: "Русский", uk: "Українська" };
+export const MAP_COMPOSER_LOCALES = ["en", "ru", "uk", "de"] as const;
+export const MAP_COMPOSER_LOCALE_NAMES: Record<string, string> = { en: "English", ru: "Русский", uk: "Українська", de: "Deutsch" };
 
 const en: Messages = {
   "app.title": "Map Composer",
@@ -205,4 +205,70 @@ const uk: Messages = {
   "page.placeholderHint": "Заміни цю картинку в редакторі",
 };
 
-export const mapComposerMessages: Record<string, Messages> = { en, ru, uk };
+const de: Messages = {
+  "app.title": "Map Composer",
+  "app.tagline": "Eine Karte + deine Orte → ein Katalog, in dem jeder Punkt seine eigene Seite öffnet. Den Feinschliff machst du danach im Editor.",
+  "theme.toggle": "Helles/dunkles Design umschalten",
+  "theme.light": "☀️ Hell",
+  "theme.dark": "🌙 Dunkel",
+
+  "settings.heading": "1. Einstellungen",
+  "settings.name": "Name des Katalogs",
+  "settings.nameDefault": "Meine Karte",
+  "settings.style": "Kartenstil",
+  "settings.style.liberty": "Farbig",
+  "settings.style.bright": "Hell",
+  "settings.style.positron": "Hellgrau",
+  "settings.shape": "Bildformat",
+  "settings.shape.wide": "Breit (3:2)",
+  "settings.shape.classic": "Klassisch (4:3)",
+  "settings.shape.square": "Quadratisch",
+  "settings.shape.tall": "Hoch (3:4)",
+  "settings.label": "Markierungen zeigen",
+  "settings.label.name": "Namen",
+  "settings.label.number": "Nummern",
+  "settings.labelSize": "Größe der Markierungen",
+  "settings.labelSize.small": "Klein",
+  "settings.labelSize.medium": "Mittel",
+  "settings.labelSize.large": "Groß",
+
+  "map.heading": "2. Karte",
+  "map.hint": "Verschiebe und zoome die Karte, bis sie deine Gegend zeigt: Der Katalog bekommt genau dieses Bild. Ein Klick auf die Karte setzt einen Punkt, durch Ziehen verschiebst du ihn.",
+  "map.unsupported": "Dieser Browser kann die Karte nicht zeichnen: WebGL ist ausgeschaltet oder nicht verfügbar. Probier einen anderen Browser oder ein anderes Gerät.",
+  "search.placeholder": "Adresse oder Ort",
+  "search.button": "Suchen",
+  "search.searching": "Suche läuft…",
+  "search.none": "Nichts gefunden.",
+  "search.failed": "Suche fehlgeschlagen: {message}",
+  "search.addPoint": "+ Punkt",
+  "search.credit": "Suche über Nominatim, © OpenStreetMap-Mitwirkende.",
+
+  "points.heading": "3. Punkte",
+  "points.none": "Noch keine Punkte. Klick auf die Karte, um den ersten zu setzen.",
+  "points.defaultName": "Punkt {n}",
+  "points.name": "Name",
+  "points.photo": "Foto…",
+  "points.photoChange": "Foto ändern…",
+  "points.photoRemove": "Foto entfernen",
+  "points.photoHint": "Das Foto eines Punkts wird zu seiner Seite. Ohne Foto bekommt der Punkt eine Platzhalterseite, die du im Editor ersetzen kannst. Zieh ein Bild auf einen Punkt, um es anzuhängen.",
+  "points.show": "Auf der Karte zeigen",
+  "points.delete": "Löschen",
+  "points.outside": "außerhalb der Karte, wird weggelassen",
+  "points.noPhoto": "Platzhalter",
+
+  "result.heading": "4. Katalog",
+  "result.build": "Katalog bauen",
+  "result.needPoints": "Setze mindestens einen Punkt innerhalb der Karte.",
+  "result.building": "Wird gebaut…",
+  "result.done": "Fertig: {points} Punkte, {size}.",
+  "result.skipped": "Weggelassen, außerhalb der Karte: {list}.",
+  "result.badPhotos": "Diese Fotos ließen sich nicht lesen, deshalb haben die Punkte Platzhalterseiten bekommen: {list}.",
+  "result.download": ".ecatm herunterladen",
+  "result.openEditor": "Im Editor öffnen",
+  "result.openViewer": "Im Viewer öffnen",
+  "result.failed": "Bauen fehlgeschlagen: {message}",
+
+  "page.placeholderHint": "Ersetze dieses Bild im Editor",
+};
+
+export const mapComposerMessages: Record<string, Messages> = { en, ru, uk, de };

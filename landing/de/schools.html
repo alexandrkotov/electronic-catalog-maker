@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script>
+  // Page language + the few strings the page scripts need (from the dictionary's js.* keys).
+  var LANG = "de";
+  var T = {"themeLight":"☀️ Hell","themeDark":"🌙 Dunkel","demoLoadFailed":"Die Live-Demo konnte nicht geladen werden. Nutze „Ganze Demo öffnen“ unten.","demoBookingBack":"Zurück zu allen Leistungen","demoMapBack":"Zurück zur Karte","visits.one":"Bisher \u003cstrong>{n}\u003c/strong> Besuch auf dieser Website.","visits.other":"Bisher \u003cstrong>{n}\u003c/strong> Besuche auf dieser Website."};
+</script>
+<script>
+  // Apply the saved (or OS-preferred) theme before first paint — no light flash.
+  // Same key/values as the Editor and Viewer (packages/shared/src/theme.ts),
+  // so one choice carries across the whole site.
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("ecm-theme"); } catch (e) {}
+    if (t !== "light" && t !== "dark") {
+      t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
+<link rel="alternate" hreflang="en" href="https://tapalog.com/schools.html" />
+<link rel="alternate" hreflang="ru" href="https://tapalog.com/ru/schools.html" />
+<link rel="alternate" hreflang="uk" href="https://tapalog.com/uk/schools.html" />
+<link rel="alternate" hreflang="de" href="https://tapalog.com/de/schools.html" />
+<link rel="alternate" hreflang="x-default" href="https://tapalog.com/schools.html" />
+<link rel="canonical" href="https://tapalog.com/de/schools.html" />
+<title>Electronic Catalog Maker für Schulen</title>
+<meta name="description" content="Du hast ein Schaubild? In wenigen Minuten wird daraus ein Klassenprojekt zum Durchklicken – ohne Konten, ohne Cloud, ohne Kosten." />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Electronic Catalog Maker" />
+<meta property="og:locale" content="de_DE" />
+<meta property="og:url" content="https://tapalog.com/de/schools.html" />
+<meta property="og:title" content="Electronic Catalog Maker für Schulen" />
+<meta property="og:description" content="Du hast ein Schaubild? In wenigen Minuten wird daraus ein Klassenprojekt zum Durchklicken – ohne Konten, ohne Cloud, ohne Kosten." />
+<meta property="og:image" content="https://tapalog.com/og-schools.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Electronic Catalog Maker für Schulen" />
+<meta name="twitter:description" content="Du hast ein Schaubild? In wenigen Minuten wird daraus ein Klassenprojekt zum Durchklicken – ohne Konten, ohne Cloud, ohne Kosten." />
+<meta name="twitter:image" content="https://tapalog.com/og-schools.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png" />
+<link rel="apple-touch-icon" href="../icon-192.png" />
+<style>
+  .lang-switch { font-size: 0.9rem; color: var(--muted); text-decoration: none; padding: 0.35rem 0.6rem; min-height: 40px; display: inline-flex; align-items: center; white-space: nowrap; }
+  .lang-switch:hover { color: var(--link); text-decoration: underline; }
+  :root {
+    color-scheme: light;
+    --bg: #fff; --text: #1a1a1a; --text-2: #444; --muted: #666; --faint: #888;
+    --border: #d0d5dd; --link: #2563eb;
+    --tile-bg: #f6f8fe; --tile-border: #dbe3fb;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #14161b; --text: #e5e7eb; --text-2: #c4c9d2; --muted: #9aa1ac; --faint: #7d8590;
+    --border: #3a3f4b; --link: #60a5fa;
+    --tile-bg: #1c2233; --tile-border: #2b3550;
+  }
+  .theme-toggle {
+    font: inherit; font-size: 0.9rem;
+    color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 0.35rem 0.9rem; min-height: 40px; cursor: pointer; white-space: nowrap;
+  }
+  .top-actions { display: flex; align-items: center; gap: 0.5rem; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; flex-wrap: wrap; }
+  /* Light-only, deliberately — see landing/index.html's own note on this. */
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    max-width: 960px;
+    margin: 3rem auto 4rem;
+    padding: 0 1.5rem;
+    line-height: 1.5;
+    color: var(--text);
+    background: var(--bg);
+  }
+  a { color: var(--link); }
+  .back {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--muted);
+    text-decoration: none;
+    margin-bottom: 1.25rem;
+  }
+  .back:hover { color: var(--link); }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .brand img {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.45rem;
+  }
+  .brand h1 {
+    margin: 0;
+    font-size: 1.6rem;
+  }
+  p.tagline {
+    color: var(--text-2);
+    margin: 0.5rem 0 0;
+    font-size: 1.15rem;
+  }
+  .points {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin: 2.25rem 0;
+  }
+  .points > div:last-child { grid-column: 1 / -1; }
+  @media (min-width: 820px) {
+    .points { grid-template-columns: repeat(6, 1fr); }
+    .points > div { grid-column: span 2; }
+    .points > div:nth-last-child(-n+2) { grid-column: span 3; }
+  }
+  @media (max-width: 640px) {
+    .points { grid-template-columns: 1fr; }
+  }
+  .points > div {
+    background: var(--tile-bg);
+    border: 1px solid var(--tile-border);
+    border-radius: 10px;
+    padding: 1.1rem 1.15rem;
+  }
+  .points .point-icon {
+    font-size: 1.4rem;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+  }
+  .points h3 {
+    margin: 0 0 0.35rem;
+    font-size: 0.98rem;
+  }
+  .points p {
+    margin: 0;
+    font-size: 0.88rem;
+    color: var(--text-2);
+  }
+  .demo-section {
+    margin: 2.5rem 0 2rem;
+  }
+  .demo-section h2 {
+    font-size: 1.15rem;
+    margin: 0 0 0.3rem;
+  }
+  .demo-section p.hint {
+    margin: 0 0 1rem;
+    font-size: 0.88rem;
+    color: var(--muted);
+  }
+  ecm-viewer {
+    display: block;
+    width: 100%;
+    height: 560px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .demo-links {
+    margin-top: 0.6rem;
+    font-size: 0.85rem;
+  }
+  .demo-links a {
+    margin-right: 1rem;
+  }
+  .cta {
+    margin: 2.5rem 0 1.5rem;
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .cta h2 {
+    font-size: 1.1rem;
+    margin: 0 0 0.5rem;
+  }
+  .cta p {
+    margin: 0 0 0.75rem;
+    font-size: 0.9rem;
+    color: var(--text-2);
+  }
+  .cta a.btn {
+    display: inline-block;
+    padding: 0.55rem 1rem;
+    background: #2563eb;
+    color: #fff;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 0.9rem;
+    margin-right: 0.6rem;
+  }
+  .cta a.btn.secondary {
+    background: transparent;
+    color: var(--link);
+    border: 1px solid var(--link);
+  }
+  footer {
+    margin-top: 2rem;
+    font-size: 0.85rem;
+    color: var(--faint);
+  }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+  <div class="topbar"><a class="back" href="./">← Electronic Catalog Maker</a><span class="top-actions"><a class="lang-switch" href="../schools.html" hreflang="en" lang="en">English</a> <a class="lang-switch" href="../ru/schools.html" hreflang="ru" lang="ru">Русский</a> <a class="lang-switch" href="../uk/schools.html" hreflang="uk" lang="uk">Українська</a><button type="button" class="theme-toggle" id="theme-toggle"></button></span></div>
+
+  <div class="brand">
+    <img src="../icon-192.png" alt="" width="32" height="32" />
+    <h1>ECM für Schulen 🎓</h1>
+  </div>
+  <p class="tagline">
+    Du hast ein Schaubild? In wenigen Minuten wird daraus ein Klassenprojekt zum Durchklicken – ohne Konten, ohne Cloud, ohne Kosten.
+  </p>
+
+  <div class="points">
+    <div>
+      <div class="point-icon">🔒</div>
+      <h3>Keine Konten, keine Schülerdaten</h3>
+      <p>Ein Katalog ist einfach eine Datei auf deinem eigenen Gerät. Dahinter steht keine Cloud-Datenbank, und niemand in der Klasse muss sich irgendwo registrieren.</p>
+    </div>
+    <div>
+      <div class="point-icon">👥</div>
+      <h3>Gruppenprojekte in Echtzeit</h3>
+      <p>Eine ganze Klasse kann ein Schaubild gemeinsam beschriften – live und gleichzeitig in derselben Datei, mit dem kostenlosen, optionalen Collaboration Server.</p>
+    </div>
+    <div>
+      <div class="point-icon">📅</div>
+      <h3>Funktioniert auch nächstes Jahr</h3>
+      <p>Eine im September gespeicherte Datei öffnet sich im Juni genau gleich – keine Verlängerung, kein ablaufendes Konto, kein Update, das etwas kaputt macht.</p>
+    </div>
+    <div>
+      <div class="point-icon">💸</div>
+      <h3>Kostenlose Apps, kein Abo</h3>
+      <p>Derselbe Editor und Viewer wie für alle anderen – nur im Modus „Bildung“, der „Kaufen“ und „Warenkorb“ in „Mehr erfahren“ und „Sammlung“ umbenennt.</p>
+    </div>
+    <div>
+      <div class="point-icon">📝</div>
+      <h3>Quiz zur Selbstkontrolle</h3>
+      <p>Mach aus demselben Schaubild ein Quiz zur Selbstkontrolle: Die Lernenden tippen eine Antwort an, sie wird sofort grün oder rot und bekommt eine kurze Erklärung; das Ergebnis lässt sich ausdrucken. Zum Üben, nicht als beaufsichtigte Prüfung.</p>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>🧫 Probier es aus – eine Tierzelle zum Durchklicken</h2>
+    <p class="hint">
+      In diesem Demo-Katalog ist der Modus „Bildung“ eingeschaltet: In der Werkzeugleiste steht „📚 Sammlung“ statt „🛒 Warenkorb“, und bei jedem Teil „Mehr erfahren“ statt „Kaufen“ – dieselbe App, dasselbe Dateiformat, nur fürs Klassenzimmer umbenannt.
+    </p>
+    <ecm-viewer mode="full" panels="17,26" src="../demo/cell-biology.ecatm"></ecm-viewer>
+    <p class="demo-links">
+      <a href="../viewer/?src=..%2Fdemo%2Fcell-biology.ecatm&lang=de">Im Viewer öffnen</a>
+      <a href="../editor/?src=..%2Fdemo%2Fcell-biology.ecatm&lang=de">Im Editor öffnen</a>
+    </p>
+  </div>
+
+  <div class="demo-section">
+    <h2>📝 Probier ein Quiz – acht Fragen zur Zelle</h2>
+    <p class="hint">
+      Tippe eine Antwort an: Sie wird sofort grün oder rot, mit einer kurzen Erklärung. Frage 7 braucht zwei Antworten. Der Punktestand wächst mit jeder Antwort. Es ist eine Selbstkontrolle zum Üben – die Antworten stecken in der Datei, also keine beaufsichtigte Prüfung.
+    </p>
+    <ecm-viewer mode="full" panels="30,26" src="../demo/quiz-cell-biology-en.ecatm"></ecm-viewer>
+    <p class="demo-links">
+      <a href="../viewer/?src=..%2Fdemo%2Fquiz-cell-biology-en.ecatm&lang=de">Im Viewer öffnen</a>
+      <a href="../editor/?src=..%2Fdemo%2Fquiz-cell-biology-en.ecatm&lang=de">Im Editor öffnen</a>
+    </p>
+  </div>
+
+  <div class="cta">
+    <h2>✏️ Bau dein eigenes</h2>
+    <p>Zieh ein Schaubild hinein – eine Zelle, einen Motor, eine Karte, eine Maschine –, setze ein paar Hotspots, und fertig ist das Klassenprojekt. Funktioniert offline nach dem ersten Öffnen auf Computer, Tablet oder Handy – und auch dann noch, wenn am letzten Schultag die Glocke geläutet hat.</p>
+    <a class="btn" href="../editor/?lang=de">Editor öffnen →</a>
+    <a class="btn secondary" href="./">Zur ganzen App →</a>
+  </div>
+
+  <footer>
+    <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Quellcode auf GitHub</a>
+    – Kataloge bleiben auf deinem Gerät, sofern sie nicht über eine URL geöffnet werden.
+    <div><a href="../privacy.html">Datenschutzerklärung</a></div>
+  </footer>
+
+  <script>
+    // jsDelivr serves the @main bundle with max-age=7 days, so a returning
+    // visitor's browser could pair this page with an old cached bundle (an
+    // English-only widget on a translated page, say). Revalidate first — an
+    // unchanged bundle costs one tiny 304 — then load it; offline or blocked,
+    // fall through to whatever is cached. Same approach as the landing page.
+    (function () {
+      var BUNDLE = "https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js";
+      function inject() {
+        var s = document.createElement("script");
+        s.src = BUNDLE;
+        document.head.appendChild(s);
+      }
+      if (window.fetch) fetch(BUNDLE, { cache: "no-cache" }).then(inject, inject);
+      else inject();
+    })();
+  </script>
+  <script>
+    // Theme toggle (same behavior as the landing page). If an embedded viewer
+    // is on the page it follows the toggle, and the page follows its own button.
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById("theme-toggle");
+      function label() { btn.textContent = root.dataset.theme === "dark" ? T.themeLight : T.themeDark; }
+      function setTheme(t, store) {
+        root.dataset.theme = t;
+        document.querySelectorAll("ecm-viewer").forEach(function (w) { if (w.dataset.theme !== t) w.dataset.theme = t; });
+        if (store) { try { localStorage.setItem("ecm-theme", t); } catch (e) {} }
+        label();
+      }
+      btn.addEventListener("click", function () { setTheme(root.dataset.theme === "dark" ? "light" : "dark", true); });
+      label();
+      document.querySelectorAll("ecm-viewer").forEach(function (w) {
+        if (w.dataset.theme !== root.dataset.theme) w.dataset.theme = root.dataset.theme;
+        new MutationObserver(function () {
+          var t = w.dataset.theme;
+          if ((t === "light" || t === "dark") && t !== root.dataset.theme) setTheme(t, false);
+        }).observe(w, { attributes: true, attributeFilter: ["data-theme"] });
+      });
+    })();
+  </script>
+</body>
+</html>

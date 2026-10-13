@@ -28,7 +28,7 @@ cp landing/privacy.html site/privacy.html
 cp landing/toolset.svg site/toolset.svg
 cp landing/catalog-types.svg site/catalog-types.svg
 # Translated copies of the landing/schools pages (generated and committed — see site-src/README.md).
-for lang in ru uk; do
+for lang in ru uk de; do
   mkdir -p "site/$lang"
   cp "landing/$lang/index.html" "site/$lang/index.html"
   cp "landing/$lang/schools.html" "site/$lang/schools.html"

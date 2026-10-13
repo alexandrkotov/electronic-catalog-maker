@@ -14,7 +14,7 @@
  *   {{some.key}}   -> the dictionary message (trusted HTML), missing key = error
  *   {url_name}     -> an external URL from site-src/links.json (also usable
  *                     inside messages, so translators keep every link intact)
- *   {{@lang}} {{@base}} {{@q}} {{@a}} {{@alternates}} {{@switch}} {{@messages}} {{@jsonld}} -> per-page values
+ *   {{@lang}} {{@demoLang}} {{@base}} {{@q}} {{@a}} {{@alternates}} {{@switch}} {{@messages}} {{@jsonld}} -> per-page values
  *   {{@typeIcons}} -> the catalog-type pictograms (templates/_catalog-type-icons.svg)
  *
  * Usage: bun scripts/generate-site.ts [--check]
@@ -43,8 +43,12 @@ const LANGS: Record<string, LangConfig> = {
   en: { dir: "landing", path: "/", base: "", name: "English", storeLocale: "en-US" },
   ru: { dir: "landing/ru", path: "/ru/", base: "../", name: "Русский", storeLocale: "ru-RU" },
   uk: { dir: "landing/uk", path: "/uk/", base: "../", name: "Українська", storeLocale: "uk-UA" },
+  de: { dir: "landing/de", path: "/de/", base: "../", name: "Deutsch", storeLocale: "de-DE" },
 };
 const DEFAULT_LANG = "en";
+// Languages the per-language demo catalogs (demo/fitness-<lang>.ecatm, …) exist
+// in; a page in any other language links to the default language's files.
+const DEMO_LANGS = ["en", "ru", "uk"];
 // toolset.svg is the full toolset map the landing's short one links to (and
 // README.md shows) — a standalone SVG, so its messages must stay XML-safe
 // (no HTML-only entities like &nbsp;). catalog-types.svg is the same kind of
@@ -68,7 +72,7 @@ const OG_IMAGES: Record<string, string> = {
   "index.html": SITE_ORIGIN + "/og-default.png",
   "schools.html": SITE_ORIGIN + "/og-schools.png",
 };
-const OG_LOCALE: Record<string, string> = { en: "en_US", ru: "ru_RU", uk: "uk_UA" };
+const OG_LOCALE: Record<string, string> = { en: "en_US", ru: "ru_RU", uk: "uk_UA", de: "de_DE" };
 const escapeAttr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
 function render(template: string, page: string, lang: string): string {
@@ -82,6 +86,7 @@ function render(template: string, page: string, lang: string): string {
   };
   const special: Record<string, () => string> = {
     "@lang": () => lang,
+    "@demoLang": () => (DEMO_LANGS.includes(lang) ? lang : DEFAULT_LANG),
     "@base": () => cfg.base,
     // Hand the page's language to the apps it links to (apps read ?lang=).
     // English pages add nothing — the apps' own detection already covers it.

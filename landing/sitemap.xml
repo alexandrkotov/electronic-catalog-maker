@@ -5,6 +5,7 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://tapalog.com/" />
     <xhtml:link rel="alternate" hreflang="ru" href="https://tapalog.com/ru/" />
     <xhtml:link rel="alternate" hreflang="uk" href="https://tapalog.com/uk/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://tapalog.com/de/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://tapalog.com/" />
   </url>
   <url>
@@ -12,6 +13,7 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://tapalog.com/" />
     <xhtml:link rel="alternate" hreflang="ru" href="https://tapalog.com/ru/" />
     <xhtml:link rel="alternate" hreflang="uk" href="https://tapalog.com/uk/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://tapalog.com/de/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://tapalog.com/" />
   </url>
   <url>
@@ -19,6 +21,15 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://tapalog.com/" />
     <xhtml:link rel="alternate" hreflang="ru" href="https://tapalog.com/ru/" />
     <xhtml:link rel="alternate" hreflang="uk" href="https://tapalog.com/uk/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://tapalog.com/de/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://tapalog.com/" />
+  </url>
+  <url>
+    <loc>https://tapalog.com/de/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://tapalog.com/" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://tapalog.com/ru/" />
+    <xhtml:link rel="alternate" hreflang="uk" href="https://tapalog.com/uk/" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://tapalog.com/de/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://tapalog.com/" />
   </url>
   <url>
@@ -26,6 +37,7 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://tapalog.com/schools.html" />
     <xhtml:link rel="alternate" hreflang="ru" href="https://tapalog.com/ru/schools.html" />
     <xhtml:link rel="alternate" hreflang="uk" href="https://tapalog.com/uk/schools.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://tapalog.com/de/schools.html" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://tapalog.com/schools.html" />
   </url>
   <url>
@@ -33,6 +45,7 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://tapalog.com/schools.html" />
     <xhtml:link rel="alternate" hreflang="ru" href="https://tapalog.com/ru/schools.html" />
     <xhtml:link rel="alternate" hreflang="uk" href="https://tapalog.com/uk/schools.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://tapalog.com/de/schools.html" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://tapalog.com/schools.html" />
   </url>
   <url>
@@ -40,6 +53,15 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://tapalog.com/schools.html" />
     <xhtml:link rel="alternate" hreflang="ru" href="https://tapalog.com/ru/schools.html" />
     <xhtml:link rel="alternate" hreflang="uk" href="https://tapalog.com/uk/schools.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://tapalog.com/de/schools.html" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://tapalog.com/schools.html" />
+  </url>
+  <url>
+    <loc>https://tapalog.com/de/schools.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://tapalog.com/schools.html" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://tapalog.com/ru/schools.html" />
+    <xhtml:link rel="alternate" hreflang="uk" href="https://tapalog.com/uk/schools.html" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://tapalog.com/de/schools.html" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://tapalog.com/schools.html" />
   </url>
   <url>

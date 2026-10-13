@@ -14,7 +14,7 @@ pictograms both the landing section and `catalog-types.svg` pull in with
 - `templates/` — one HTML template per page, shared by every language.
   `{{some.key}}` pulls a message from the dictionary; `{url_name}` an external
   link from `links.json` (also usable inside messages, so a translation can't
-  silently lose a link); `{{@lang}}`, `{{@base}}`, `{{@alternates}}`,
+  silently lose a link); `{{@lang}}`, `{{@demoLang}}`, `{{@base}}`, `{{@alternates}}`,
   `{{@switch}}`, `{{@messages}}`, `{{@typeIcons}}`, `{{@jsonld}}` are per-page values (see
   `scripts/generate-site.ts`).
 - `i18n/<lang>.json` — flat `key: message` dictionaries (messages are trusted
@@ -42,9 +42,13 @@ generator to break when it matters.
 
 ## Adding a language
 
-1. Add it to `LANGS` in `scripts/generate-site.ts`.
+1. Add it to `LANGS` and `OG_LOCALE` in `scripts/generate-site.ts`. Add it
+   to `DEMO_LANGS` there only if `demo/` has the per-language catalogs
+   (`fitness-<lang>.ecatm`, …) in it; otherwise the pages link to the English ones.
 2. Copy `i18n/en.json` to `i18n/<lang>.json` and translate (keep every
    `{url_…}`, `{n}` and HTML tag; add the plural forms the language needs).
-3. Add its `cp` line to `scripts/build-site.sh`.
+3. Add it to the `for lang in …` loop in `scripts/build-site.sh`.
 4. Generate, commit, and add the language to the viewer/editor
-   (`packages/shared/src/locales/*`) if the embedded demos should follow.
+   (`packages/shared/src/locales/*`) and to the two composers
+   (`packages/composer/src/messages.ts`, `packages/map-composer/src/messages.ts`)
+   if the embedded demos and the catalog wizard should follow.

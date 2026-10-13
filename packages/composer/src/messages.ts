@@ -1,11 +1,11 @@
 /**
- * The composer's own UI strings (en/ru/uk). Small enough to live inline
+ * The composer's own UI strings (en/ru/uk/de). Small enough to live inline
  * rather than as JSON files under packages/shared/src/locales.
  */
 import type { Messages } from "@ecm/shared";
 
-export const COMPOSER_LOCALES = ["en", "ru", "uk"] as const;
-export const COMPOSER_LOCALE_NAMES: Record<string, string> = { en: "English", ru: "Русский", uk: "Українська" };
+export const COMPOSER_LOCALES = ["en", "ru", "uk", "de"] as const;
+export const COMPOSER_LOCALE_NAMES: Record<string, string> = { en: "English", ru: "Русский", uk: "Українська", de: "Deutsch" };
 
 const en: Messages = {
   "app.title": "Grid Composer",
@@ -304,4 +304,102 @@ const uk: Messages = {
   "wizard.done.change": "← Змінити товари",
 };
 
-export const composerMessages: Record<string, Messages> = { en, ru, uk };
+const de: Messages = {
+  "app.title": "Grid Composer",
+  "app.tagline": "Ein Ordner mit Fotos + eine Tabelle → ein fertiger Kachelkatalog. Den Feinschliff machst du danach im Editor.",
+  "theme.toggle": "Helles/dunkles Design umschalten",
+  "theme.light": "☀️ Hell",
+  "theme.dark": "🌙 Dunkel",
+
+  "settings.heading": "1. Einstellungen",
+  "settings.name": "Name des Katalogs",
+  "settings.nameDefault": "Mein Katalog",
+  "settings.columns": "Kacheln pro Reihe",
+  "settings.fit": "Foto in der Kachel",
+  "settings.fit.contain": "Ganzes Foto (einpassen)",
+  "settings.fit.cover": "Kachel füllen (zuschneiden)",
+  "settings.subtitle": "Unter dem Namen auf der Kachel",
+  "settings.subtitleHint": "Was auf der Kachel unter dem Produktnamen steht: die Artikelnummer, der Preis oder eine andere Spalte der Tabelle.",
+  "settings.subtitleHintNoTable": "Was auf der Kachel unter dem Produktnamen steht. Der Preis und die anderen Spalten der Tabelle erscheinen in dieser Liste, sobald du die Tabelle lädst (Schritt 3).",
+  "settings.subtitleHintNoExtra": "Was auf der Kachel unter dem Produktnamen steht. Die Tabelle hat keine Spalten nach „Beschreibung“, deshalb gibt es nur die Artikelnummer – füge z. B. eine Spalte „Preis“ hinzu, um den Preis zu zeigen.",
+  "settings.subtitle.none": "Nichts",
+  "settings.subtitle.sku": "Artikelnr.",
+  "settings.accent": "Farbe des Rastertitels",
+  "settings.accentHint": "Das Etikett mit dem Namen des Rasters oben auf jedem Raster. Der Preis (oder die andere gewählte Spalte) unter dem Produktnamen bekommt dieselbe Farbe.",
+
+  "photos.heading": "2. Fotos",
+  "photos.hint": "Ein Ordner mit Fotos, benannt nach Nummern: 1.jpg, 2.jpg, … Größe und Seitenverhältnis sind egal – jedes Foto wird in eine quadratische Kachel eingepasst.",
+  "photos.chooseFolder": "Fotoordner wählen…",
+  "photos.chooseFiles": "…oder Dateien auswählen",
+  "photos.count": "Fotos: {count}",
+  "photos.none": "Noch keine Fotos gewählt.",
+
+  "table.heading": "3. Tabelle",
+  "table.hint": "Erste Zeile = Überschriften. Spalten: Nr. · Ordner · Name · Artikelnr. · Beschreibung · danach beliebige weitere Schlüssel (Preis, buy_url, …). Ist „Ordner“ leer, kommt der Artikel ins Hauptraster.",
+  "table.chooseFile": "CSV-/TSV-Datei wählen…",
+  "table.template": "Vorlage herunterladen",
+  "table.pasteLabel": "…oder einen aus Excel / Google Sheets kopierten Bereich einfügen:",
+  "table.pastePlaceholder": "Kopiere die Zellen samt Kopfzeile und füge sie hier ein (Strg+V)",
+  "table.loaded": "Zeilen: {count} · weitere Schlüssel: {keys}",
+  "table.noExtra": "keine",
+  "table.none": "Noch keine Tabelle.",
+
+  "report.heading": "4. Bericht",
+  "report.waiting": "Wähle Fotos und eine Tabelle, um den Bericht zu sehen.",
+  "report.grids": "Raster, die gebaut werden",
+  "report.root": "(Hauptraster)",
+  "report.gridLine": "{title} – {count} Kacheln",
+  "report.errors": "Vor dem Bauen zu beheben",
+  "report.warnings": "Warnungen (gebaut wird trotzdem)",
+  "report.ok": "Jede Zeile hat ein Foto und jedes Foto eine Zeile.",
+  "report.noItems": "Die Tabelle hat keine Artikelzeilen.",
+  "report.badNumber": "Zeile {line}: „{value}“ ist keine ganze Zahl in der Spalte „Nr.“.",
+  "report.duplicateNumber": "Nr. {no} kommt mehrfach vor (Zeilen {lines}).",
+  "report.missingPhotos": "Kein Foto für Nr. {list} – stattdessen wird eine Kachel „Kein Foto“ gezeichnet.",
+  "report.orphanPhotos": "Fotos ohne Tabellenzeile (übersprungen): {list}",
+  "report.duplicatePhotos": "Dieselbe Nummer doppelt, übersprungen: {list}",
+  "report.unrecognized": "Kein nummeriertes Foto, ignoriert: {list}",
+  "report.duplicateSku": "Die Artikelnr. „{sku}“ teilen sich Nr. {list}.",
+  "report.emptyNames": "Kein Name für Nr. {list} – die Kachel zeigt die Nummer.",
+  "report.noBuyUrl": "Keine Spalte buy_url: Der Katalog bekommt keine Kaufen-Buttons und im gedruckten PDF keine QR-Codes. Füge eine Spalte buy_url mit einem Produktlink pro Artikel hinzu, um beides zu bekommen.",
+  "report.build": "Katalog bauen",
+
+  "result.heading": "5. Katalog",
+  "result.building": "Raster {n} von {total} wird gebaut…",
+  "result.done": "Fertig: {grids} Raster, {items} Artikel, {size}.",
+  "result.download": ".ecatm herunterladen",
+  "result.openEditor": "Im Editor öffnen",
+  "result.openViewer": "Im Viewer öffnen",
+  "result.failed": "Bauen fehlgeschlagen: {message}",
+
+  "tile.noPhoto": "Kein Foto",
+
+  "wizard.step.items": "Produkte",
+  "wizard.step.name": "Name",
+  "wizard.step.done": "Fertig",
+  "wizard.items.title": "Füge deine Produkte oder Dienstleistungen hinzu",
+  "wizard.items.drop": "Fotos hierher ziehen oder zum Auswählen klicken",
+  "wizard.items.dropHint": "Jedes Foto wird ein Eintrag. Keine Fotos? Füge unten Einträge nur mit Namen hinzu.",
+  "wizard.items.addPlain": "+ Eintrag ohne Foto",
+  "wizard.item.name": "Name",
+  "wizard.item.price": "Preis",
+  "wizard.item.description": "Beschreibung",
+  "wizard.item.link": "Link zum Kaufen oder Buchen (optional)",
+  "wizard.item.more": "+ Beschreibung und Link",
+  "wizard.item.remove": "Entfernen",
+  "wizard.next": "Weiter →",
+  "wizard.back": "← Zurück",
+  "wizard.name.title": "Gib deinem Katalog einen Namen",
+  "wizard.name.hint": "Einträge darin: {count}. Der Name steht oben im Katalog.",
+  "wizard.name.unnamed": "Einträge ohne Namen: {count}. Ihre Kacheln zeigen nur eine Nummer – geh zurück, um sie zu benennen.",
+  "wizard.building": "Dein Katalog wird gebaut…",
+  "wizard.done.title": "Dein Katalog ist fertig",
+  "wizard.done.hint": "Probier es aus: Wähle die Nummer auf einer Kachel.",
+  "wizard.done.download": "Katalogdatei herunterladen",
+  "wizard.done.viewer": "Im Viewer öffnen",
+  "wizard.done.editor": "Im Editor verfeinern",
+  "wizard.done.next": "Die Datei ist der ganze Katalog: Öffne sie im Viewer auf dem Handy oder Computer, binde sie in deine Website ein oder drucke sie aus dem Viewer – Einträge mit Link bekommen einen QR-Code. Im Editor kannst du alles ändern.",
+  "wizard.done.change": "← Einträge ändern",
+};
+
+export const composerMessages: Record<string, Messages> = { en, ru, uk, de };

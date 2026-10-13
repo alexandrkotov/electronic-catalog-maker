@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script>
+  // Page language + the few strings the page scripts need (from the dictionary's js.* keys).
+  var LANG = "de";
+  var T = {"themeLight":"☀️ Hell","themeDark":"🌙 Dunkel","demoLoadFailed":"Die Live-Demo konnte nicht geladen werden. Nutze „Ganze Demo öffnen“ unten.","demoBookingBack":"Zurück zu allen Leistungen","demoMapBack":"Zurück zur Karte","visits.one":"Bisher \u003cstrong>{n}\u003c/strong> Besuch auf dieser Website.","visits.other":"Bisher \u003cstrong>{n}\u003c/strong> Besuche auf dieser Website."};
+</script>
+<script>
+  // Apply the saved (or OS-preferred) theme before first paint — no light flash.
+  // Same key/values as the Editor and Viewer (packages/shared/src/theme.ts),
+  // so one choice carries across the whole site.
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("ecm-theme"); } catch (e) {}
+    if (t !== "light" && t !== "dark") {
+      t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
+<link rel="alternate" hreflang="en" href="https://tapalog.com/" />
+<link rel="alternate" hreflang="ru" href="https://tapalog.com/ru/" />
+<link rel="alternate" hreflang="uk" href="https://tapalog.com/uk/" />
+<link rel="alternate" hreflang="de" href="https://tapalog.com/de/" />
+<link rel="alternate" hreflang="x-default" href="https://tapalog.com/" />
+<link rel="canonical" href="https://tapalog.com/de/" />
+<title>Electronic Catalog Maker – Kostenlose Kataloge mit Bild-Hotspots | Tapalog</title>
+<meta name="description" content="Setze klickbare Hotspots auf Fotos und Zeichnungen. Hänge Produktdetails, Teilenummern und Links an – alles in einer Katalogdatei." />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Electronic Catalog Maker" />
+<meta property="og:locale" content="de_DE" />
+<meta property="og:url" content="https://tapalog.com/de/" />
+<meta property="og:title" content="Electronic Catalog Maker – Kostenlose Kataloge mit Bild-Hotspots | Tapalog" />
+<meta property="og:description" content="Setze klickbare Hotspots auf Fotos und Zeichnungen. Hänge Produktdetails, Teilenummern und Links an – alles in einer Katalogdatei." />
+<meta property="og:image" content="https://tapalog.com/og-default.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Electronic Catalog Maker – Kostenlose Kataloge mit Bild-Hotspots | Tapalog" />
+<meta name="twitter:description" content="Setze klickbare Hotspots auf Fotos und Zeichnungen. Hänge Produktdetails, Teilenummern und Links an – alles in einer Katalogdatei." />
+<meta name="twitter:image" content="https://tapalog.com/og-default.png" />
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"SoftwareApplication","name":"Electronic Catalog Maker","alternateName":"Tapalog","url":"https://tapalog.com/de/","description":"Setze klickbare Hotspots auf Fotos und Zeichnungen. Hänge Produktdetails, Teilenummern und Links an – alles in einer Katalogdatei.","image":"https://tapalog.com/og-default.png","inLanguage":"de","applicationCategory":"BusinessApplication","operatingSystem":"Web browser, Windows, macOS, Linux","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"license":"https://opensource.org/licenses/MIT","codeRepository":"https://github.com/alexandrkotov/electronic-catalog-maker","author":{"@type":"Person","name":"Alexander Kotov","sameAs":["https://www.linkedin.com/in/alexkotovwa/","https://x.com/kotov_wa"]}}]}</script>
+<link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png" />
+<link rel="apple-touch-icon" href="../icon-192.png" />
+<style>
+  .lang-switch { font-size: 0.9rem; color: var(--muted); text-decoration: none; padding: 0.35rem 0.6rem; min-height: 40px; display: inline-flex; align-items: center; white-space: nowrap; }
+  .lang-switch:hover { color: var(--link); text-decoration: underline; }
+  :root {
+    color-scheme: light;
+    --bg: #fff; --text: #1a1a1a; --text-2: #444; --muted: #666; --faint: #888;
+    --border: #d0d5dd; --border-soft: #eee; --frame-bg: #f8fafc;
+    --link: #2563eb; --yes: #16a34a; --no: #dc2626;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #14161b; --text: #e5e7eb; --text-2: #c4c9d2; --muted: #9aa1ac; --faint: #7d8590;
+    --border: #3a3f4b; --border-soft: #2a2e37; --frame-bg: #1c1f26;
+    --link: #60a5fa; --yes: #4ade80; --no: #f87171;
+  }
+  a { color: var(--link); }
+  .brand a, footer a { color: inherit; }
+  .top-actions { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
+  .theme-toggle {
+    font: inherit; font-size: 0.9rem; font-weight: 400;
+    color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 0.35rem 0.9rem; min-height: 40px; cursor: pointer; white-space: nowrap;
+  }
+
+  /* Light-only, deliberately — no `color-scheme: light dark` (see the
+     editor/viewer's own style.css for why: without every element paired
+     with explicit colors, browser dark-mode heuristics repaint things
+     unpredictably). This page is tiny and static; not worth a real theme. */
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    max-width: 960px;
+    margin: 4rem auto;
+    padding: 0 1.5rem;
+    line-height: 1.5;
+    color: var(--text);
+    background: var(--bg);
+  }
+  h1 { margin-bottom: 0.25rem; }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .brand img {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.45rem;
+  }
+  .brand h1 {
+    margin: 0;
+  }
+  @media (max-width: 480px) { .brand .brand-domain { display: none; } }
+  /* Three or more languages: let the switches drop to their own row instead of overflowing. */
+  @media (max-width: 600px) { .brand { flex-wrap: wrap; } .top-actions { flex-basis: 100%; margin-left: 0; } }
+  p.tagline { color: var(--muted); margin-top: 0; }
+  .hero { padding: 2.5rem 0 1.5rem; }
+  .hero h1 { font-size: clamp(1.9rem, 5vw, 2.8rem); line-height: 1.15; margin: 0 0 0.75rem; }
+  .hero p { font-size: 1.15rem; color: var(--text-2); margin: 0 0 1.5rem; }
+  .cta { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+  .btn {
+    display: inline-block;
+    padding: 0.7rem 1.25rem;
+    border-radius: 8px;
+    border: 1px solid var(--link);
+    font-weight: 600;
+    text-decoration: none;
+    min-height: 44px;
+  }
+  .btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .btn.secondary { background: var(--bg); color: var(--link); }
+  .hero .cta-alt { font-size: 0.95rem; margin: 0.9rem 0 0; }
+  button.btn { font: inherit; font-weight: 600; cursor: pointer; }
+
+  .demo { margin: 1.5rem 0 2.5rem; }
+  .demo h2 { margin: 0 0 0.25rem; }
+  .demo .intro { margin: 0 0 0.75rem; color: var(--text-2); }
+  .tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
+  .tabs button {
+    color: var(--text);
+    font: inherit;
+    padding: 0.4rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg);
+    cursor: pointer;
+    min-height: 40px;
+  }
+  .tabs button[aria-pressed="true"] { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .frame {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    height: 560px;
+    background: var(--frame-bg);
+  }
+  .frame ecm-viewer { display: block; width: 100%; height: 100%; }
+  .demo-links { margin: 0.6rem 0 0; font-size: 0.95rem; }
+  .demo-links a + a { margin-left: 1rem; }
+  .demo-note { margin: 0.4rem 0 0; font-size: 0.9rem; color: var(--muted); }
+  .steps-line { margin: 1rem 0 0; color: var(--text-2); }
+  .steps-line code { white-space: nowrap; }
+  /* "Ready for AI assistants" label next to the WebMCP line under the demo. */
+  .ai-chip {
+    display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.45rem;
+    max-width: 100%; padding: 0.1rem 0.7rem; margin-right: 0.35rem;
+    border: 1px solid var(--border); border-radius: 14px;
+    background: var(--frame-bg);
+  }
+  .ai-chip small { color: var(--muted); font-size: 0.8em; }
+  @media (max-width: 600px) { .ai-chip { display: flex; width: fit-content; margin: 0 0 0.4rem; } }
+  .agent-video { margin: 0.6rem 0 0; }
+  .agent-video summary { cursor: pointer; color: var(--link); }
+  .agent-video video { display: block; width: 100%; max-width: 100%; margin-top: 0.6rem; border: 1px solid var(--border); border-radius: 8px; background: #000; }
+
+
+  
+  @media (max-width: 700px) {
+    /* Let the demo grow with the selected item's details (the viewer's
+       stacked layout keeps the image at a fixed height) instead of scrolling
+       inside a short card. */
+    .frame { height: auto; }
+    .frame ecm-viewer { height: auto; }
+    .btn { flex: 1 1 100%; text-align: center; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .btn { transition: background 0.15s; }
+  }
+
+  * { box-sizing: border-box; }
+  a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+  .card-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 0 0 2rem; }
+  .use-cases { grid-template-columns: repeat(2, 1fr); }
+  .apps-row { grid-template-columns: repeat(3, 1fr); }
+  .apps-row.web { grid-template-columns: repeat(2, 1fr); margin-bottom: 1rem; }
+  /* The app cards stay folded behind one button: the short map above already says what the apps do. */
+  .apps-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1.25rem; margin: 0 0 2rem; }
+  .apps-more[open] { flex-basis: 100%; }
+  /* Straight into the browser apps without unfolding; the open cards carry the same links, so the row steps aside. */
+  .apps-quick { margin: 0; min-width: 0; font-size: 0.95rem; line-height: 1.9; color: var(--text-2); }
+  .apps-quick a { margin: 0 0.35rem; white-space: nowrap; }
+  @media (max-width: 700px) { .apps-quick a { margin: 0 0.7rem 0 0; } }
+  .apps-bar:has(.apps-more[open]) .apps-quick { display: none; }
+  .apps-more > summary { list-style: none; cursor: pointer; user-select: none; }
+  .apps-more > summary::-webkit-details-marker { display: none; }
+  .apps-more > summary::after { content: "▾"; display: inline-block; margin-left: 0.5rem; }
+  .apps-more[open] > summary { margin-bottom: 1.25rem; }
+  .apps-more[open] > summary::after { transform: rotate(180deg); }
+  .apps-more .apps-row:last-child { margin-bottom: 0; }
+  @media (max-width: 700px) { .apps-more { flex-basis: 100%; } .apps-more > summary { display: block; text-align: center; } }
+  h3.apps-h { margin: 0 0 0.6rem; font-size: 1rem; color: var(--text-2); }
+  .card { padding: 1.25rem; border: 1px solid var(--border); border-radius: 8px; }
+  .card h2, .card h3 { margin: 0 0 0.4rem; font-size: 1.1rem; }
+  .card p { margin: 0 0 0.4rem; font-size: 0.9rem; color: var(--text-2); }
+  .card p:last-child { margin-bottom: 0; }
+  .card h2 a { color: inherit; text-decoration: none; }
+  .card h2 a:hover { text-decoration: underline; }
+  section > h2.section-h { margin: 2rem 0 0.75rem; }
+  .card .links { list-style: none; margin: 0; padding: 0; font-size: 0.9rem; }
+  .card .links li { margin: 0 0 0.35rem; }
+  dialog.collab {
+    width: min(640px, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    background: var(--bg);
+  }
+  dialog.collab::backdrop { background: rgba(0, 0, 0, 0.45); }
+  dialog.collab h2 { margin: 0 2rem 0.5rem 0; font-size: 1.15rem; }
+  dialog.collab p { font-size: 0.9rem; color: var(--text-2); margin: 0.6rem 0 0; }
+  dialog.collab .close {
+    position: absolute; top: 0.6rem; right: 0.75rem;
+    font: inherit; font-size: 1.4rem; line-height: 1;
+    background: none; border: 0; cursor: pointer; color: var(--text-2);
+    min-width: 44px; min-height: 44px;
+  }
+  /* "Create your catalog in 3 simple steps": Grid Composer's wizard page in a dialog. */
+  dialog.wizard { width: min(820px, calc(100vw - 1rem)); padding: 1rem 0 0; overflow: hidden; }
+  dialog.wizard h2 { margin: 0 3.5rem 0.75rem 1.25rem; }
+  dialog.wizard iframe { display: block; width: 100%; height: min(760px, calc(100vh - 6.5rem)); border: 0; border-top: 1px solid var(--border); }
+  @media (max-width: 700px) { .card-row, .use-cases, .apps-row, .apps-row.web { grid-template-columns: 1fr; } }
+  /* "What a catalog can be": four levels of pictograms + live demos written as one pick per level.
+     The same picture as one image is catalog-types.svg (README). */
+  .ct { margin: 0 0 2rem; }
+  .ct > h2 { margin-bottom: 0.75rem; }
+  .ct .intro { margin: 0 0 0.75rem; color: var(--text-2); }
+  .ct > h3 { margin: 1.25rem 0 0.25rem; font-size: 1.1rem; }
+  .ct-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+  .ct-level { display: flex; gap: 1rem; align-items: flex-start; padding: 1rem; margin: 0 0 0.6rem; background: var(--frame-bg); border: 1px solid var(--border); border-radius: 8px; }
+  .ct-head { display: flex; gap: 0.6rem; align-items: flex-start; flex: 0 0 13rem; }
+  .ct-head strong { display: block; }
+  .ct-head small { display: block; font-size: 0.85rem; color: var(--muted); }
+  .ct-num { flex: none; width: 1.75rem; height: 1.75rem; border-radius: 50%; background: var(--link); color: var(--bg); font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; }
+  .ct-opts, .ct-examples { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; }
+  .ct-opts { gap: 0.75rem 0.5rem; flex: 1 1 auto; align-self: stretch; }
+  .ct-opts li { width: 6rem; display: flex; flex-direction: column; align-items: center; gap: 0.3rem; text-align: center; font-size: 0.8rem; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; hyphens: auto; }
+  .ct-tile { display: block; width: 76px; height: 56px; padding: 6px 8px; box-sizing: border-box; background: var(--bg); border: 1.5px solid var(--border); border-radius: 10px; }
+  .ct-tile.ct-mini { width: 52px; height: 38px; padding: 4px 6px; border-radius: 8px; }
+  .ct-examples { gap: 1rem 1.5rem; }
+  .ct-examples li { flex: 0 0 calc(25% - 1.125rem); min-width: 12.5rem; }
+  .ct-examples a { display: block; margin-bottom: 0.3rem; font-size: 0.9rem; font-weight: 600; text-decoration: none; }
+  .ct-examples a:hover { text-decoration: underline; }
+  .ct-formula { display: flex; align-items: center; gap: 0.35rem; }
+  .ct-formula i { font-style: normal; color: var(--muted); }
+  .ct-legend { margin: 1rem 0 0; font-size: 0.85rem; color: var(--muted); }
+  .ct-legend svg { width: 1rem; height: 1rem; vertical-align: -0.2em; }
+  @media (max-width: 700px) { .ct-level { flex-direction: column; gap: 0.75rem; } .ct-head { flex-basis: auto; } .ct-examples li { flex-basis: calc(50% - 0.75rem); min-width: 0; } }
+  @media (max-width: 420px) { .ct-opts li { width: calc(33.33% - 0.34rem); } .ct-examples li { flex-basis: 100%; } }
+  /* Short toolset map at the top of "Apps" — the whole thing links to the full map (toolset.svg). */
+  .tm-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+  .toolset-map { display: block; margin: 0 0 1.5rem; color: inherit; text-decoration: none;
+    --tm-card: var(--bg); --tm-ink: #fff; }
+  :root[data-theme="dark"] .toolset-map { --tm-card: #1c1f26; --tm-ink: #0b1220; }
+  .toolset-map .tm-frame { position: relative; display: block; padding: 1rem; background: var(--frame-bg); border: 1px solid var(--border); border-radius: 8px; }
+  .toolset-map:hover .tm-frame { border-color: var(--link); }
+  .toolset-map svg { display: block; width: 100%; height: auto; }
+  .toolset-map .tm-narrow { display: none; max-width: 360px; margin: 0 auto; }
+  @media (max-width: 700px) { .toolset-map .tm-wide { display: none; } .toolset-map .tm-narrow { display: block; } }
+  .toolset-map .tm-open { display: inline-block; margin-top: 0.5rem; font-size: 0.9rem; color: var(--link); }
+  .toolset-map:hover .tm-open { text-decoration: underline; }
+  /* Hover hint, centered on the frame's top border; touch screens have no hover and keep just the link below. */
+  .toolset-map .tm-tip {
+    position: absolute; top: 0; left: 50%; transform: translate(-50%, -40%);
+    padding: 0.3rem 0.8rem; border-radius: 999px; white-space: nowrap;
+    font-size: 0.85rem; background: var(--link); color: #fff;
+    opacity: 0; pointer-events: none;
+  }
+  :root[data-theme="dark"] .toolset-map .tm-tip { color: #0b1220; }
+  .toolset-map:hover .tm-tip, .toolset-map:focus-visible .tm-tip { opacity: 1; transform: translate(-50%, -50%); }
+  @media (prefers-reduced-motion: no-preference) { .toolset-map .tm-tip { transition: opacity 0.15s, transform 0.15s; } }
+  @media (hover: none) { .toolset-map .tm-tip { display: none; } }
+  /* Named fonts first: on Linux system-ui is often the wide DejaVu Sans, which overflows the blocks. */
+  .toolset-map text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Liberation Sans", Arial, system-ui, sans-serif; }
+  .tm-card { fill: var(--tm-card); stroke: var(--border); stroke-width: 1.5; }
+  .tm-hero { fill: var(--link); }
+  .tm-t { fill: var(--text); font-size: 18px; font-weight: 650; }
+  .tm-s { fill: var(--muted); font-size: 14px; }
+  .tm-ht { fill: var(--tm-ink); font-size: 24px; font-weight: 700; }
+  .tm-hs { fill: var(--tm-ink); font-size: 14px; opacity: 0.85; }
+  .tm-ic { color: var(--link); }
+  .tm-hic { color: var(--tm-ink); }
+  .tm-a { fill: none; stroke: var(--link); stroke-width: 3.5; stroke-linecap: round; }
+  .benefits {
+    margin: 0 0 2rem;
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .benefits h2 { font-size: 1.1rem; margin: 0 0 0.9rem; }
+  .benefits ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem 2rem;
+  }
+  .benefits li { font-size: 0.9rem; color: var(--text-2); }
+  .benefits li strong { display: block; color: var(--text); margin-bottom: 0.15rem; }
+  @media (max-width: 700px) { .benefits ul { grid-template-columns: 1fr; } }
+  footer {
+    margin-top: 1.5rem;
+    font-size: 0.85rem;
+    color: var(--faint);
+  }
+  footer a {
+    color: inherit;
+  }
+  #visits {
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  #visits strong {
+    color: var(--text);
+  }
+  .built-by {
+    margin-top: 0.6rem;
+  }
+</style>
+<body>
+  <div class="brand">
+    <img src="../icon-192.png" alt="" width="32" height="32" />
+    Electronic Catalog Maker <span class="brand-domain">tapalog.com</span>
+    <span class="top-actions"><a class="lang-switch" href="../" hreflang="en" lang="en">English</a> <a class="lang-switch" href="../ru/" hreflang="ru" lang="ru">Русский</a> <a class="lang-switch" href="../uk/" hreflang="uk" lang="uk">Українська</a><button type="button" class="theme-toggle" id="theme-toggle"></button></span>
+  </div>
+
+  <header class="hero">
+    <h1>Mach aus jedem Bild einen interaktiven Katalog.</h1>
+    <p>Mit diesem Werkzeug baust du schnell und einfach einen Katalog deiner Produkte oder Dienstleistungen. Von Websites, Datenbanken und anderen komplizierten Dingen musst du nichts verstehen. Es genügen Fotos oder Zeichnungen deines Angebots – oder einfach nur die Namen. Den fertigen Katalog bindest du in deine bestehende Website ein oder druckst ihn aus: mit einem QR-Code für jedes Produkt und jede Dienstleistung, zu der du einen Link hinterlegt hast.</p>
+    <div class="cta">
+      <button type="button" class="btn primary" id="wizard-open">Katalog in 3 einfachen Schritten erstellen</button>
+      <a class="btn secondary" href="#demo">Demo ansehen</a>
+    </div>
+    <p class="cta-alt"><a href="../editor/?lang=de">Lieber alles von Hand einrichten? Editor öffnen →</a></p>
+  </header>
+
+  <main>
+    <section class="demo" id="demo" aria-labelledby="demo-h">
+      <h2 id="demo-h">So funktioniert es</h2>
+      <!-- One hint per example, shown with its tab (see show() below); data-hint="*" = every other tab. -->
+      <p class="intro" data-hint="living-room">Wähle eine Markierung, um das Möbelstück aus der Nähe zu sehen – dort findest du die Details und „Kaufen“. ⌂ bringt dich zurück ins Zimmer.</p>
+      <p class="intro" data-hint="product-grid" hidden>Wähle die Nummer auf einer Kachel, um Details und „Kaufen“ zu sehen. Die Liste oben wechselt zwischen den Gruppen. <a href="../composer/?lang=de">Du hast Fotos und eine Tabelle? Der Grid Composer baut dir so ein Raster →</a></p>
+      <p class="intro" data-hint="diy-stool-en" hidden>Demo-Passwort: <strong>stool-2026</strong>. Gib es unten auf dem Sperrbildschirm ein; Titelbild und Titel sind auch ohne Passwort sichtbar.</p>
+      <p class="intro" data-hint="cosmetologist-en" hidden>Wähle eine Leistung und lies, was sie umfasst und wie sie abläuft – „Buchen“ öffnet den Terminkalender. ⌂ bringt dich zurück zur Liste.</p>
+      <p class="intro" data-hint="nail-techs-en" hidden>Wähle eine Markierung auf der Karte, um die Seite dieses Nagelstudios zu öffnen – dort stehen Leistungen, Preise und „Buchen“. ⌂ bringt dich zurück zur Karte. <a href="../map-composer/?lang=de">Der Map Composer baut so eine Karte aus deinen eigenen Punkten →</a></p>
+      <p class="intro" data-hint="*" hidden>Wähle eine Markierung oder nutze die Pfeile, um die Details anzusehen. Mit „Einpassen“ siehst du das ganze Bild.</p>
+      <div class="tabs" role="group" aria-label="Beispielkatalog">
+        <button type="button" data-cat="living-room" aria-pressed="true">Shop the Look</button>
+        <button type="button" data-cat="auto-spare-parts" aria-pressed="false">Explosionszeichnung</button>
+        <button type="button" data-cat="furniture" aria-pressed="false">Produktfoto</button>
+        <button type="button" data-cat="product-grid" aria-pressed="false">Produktraster</button>
+        <button type="button" data-cat="cosmetologist-en" aria-pressed="false">Leistungen mit Buchung</button>
+        <button type="button" data-cat="nail-techs-en" aria-pressed="false">Karte mit Punkten</button>
+        <button type="button" data-cat="diy-stool-en" aria-pressed="false">Passwortgeschützt</button>
+      </div>
+      <div class="frame" id="frame"></div>
+      <p class="demo-links">
+        <a id="open-full" href="../viewer/?src=..%2Fdemo%2Fliving-room.ecatm&lang=de">Ganze Demo öffnen</a>
+        <a id="edit-this" href="../editor/?src=..%2Fdemo%2Fliving-room.ecatm&lang=de">Dieses Beispiel bearbeiten</a>
+      </p>
+      <p class="demo-note" id="demo-note">„Kaufen“ öffnet die Kasse unseres Demo-Shops, in dem jeder Artikel 0 $ kostet.</p>
+      <p class="demo-note" id="demo-note-booking" hidden>„Buchen“ öffnet einen Demo-Terminkalender – dort gebuchte Termine sind nicht echt.</p>
+      <p class="steps-line"><strong>Bau deinen eigenen:</strong> Bild hinzufügen → Details mit Hotspots markieren → Katalogdatei speichern und im Viewer öffnen.</p>
+      <p class="steps-line"><strong>Auf deiner eigenen Website:</strong> Die Demo oben ist bereits das einbettbare Widget – ein <code>&lt;script&gt;</code>-Tag und eine Zeile <code>&lt;ecm-viewer&gt;</code> bringen es auf deine Seite. <a href="../demo/embed-demo.html">Auf einer Beispiel-Shopseite ansehen →</a> · <a href="https://github.com/alexandrkotov/electronic-catalog-maker#embedding-the-viewer">So bindest du es ein →</a></p>
+      <p class="steps-line"><span class="ai-chip"><strong>Bereit für KI-Assistenten</strong> <small>experimentell</small></span> In einem Browser mit WebMCP-Unterstützung kann ein Assistent den Katalog durchsuchen, dir einen Artikel zeigen und den Warenkorb für dich füllen. <a href="https://github.com/alexandrkotov/electronic-catalog-maker#agent-ready-webmcp">So funktioniert es →</a></p>
+      <details class="agent-video">
+        <summary>Sieh es dir an: ChatGPT richtet eine Leseecke ein (76 s, ohne Ton)</summary>
+        <video controls preload="none" playsinline poster="../webmcp-demo-poster.jpg" aria-label="Bildschirmaufnahme: ChatGPT öffnet den Tapalog-Wohnzimmerkatalog in seinem eingebauten Browser, zeigt das Lowboard, öffnet dann einen Sessel, eine Stehlampe und einen Teppich und legt sie in den Warenkorb">
+          <source src="../webmcp-demo.mp4" type="video/mp4">
+        </video>
+        <p class="demo-note">Bildschirmaufnahme; Wartezeiten sind gerafft. WebMCP ist experimentell und funktioniert nur in manchen Browsern und Assistenten.</p>
+      </details>
+      <noscript><p>Die Live-Demo braucht JavaScript – nutze „Ganze Demo öffnen“ oben.</p></noscript>
+    </section>
+
+    <h2>Für wen es gedacht ist</h2>
+    <div class="card-row use-cases">
+      <div class="card"><h3>Möbel und Wohnen</h3><p>Shop the Look: Tippe im Raumfoto auf ein Möbelstück, und es öffnet sich mit Details und Kaufen-Button. Oder zeig das ganze Sortiment als Produktraster. <a href="../viewer/?src=..%2Fdemo%2Fliving-room.ecatm&lang=de">Demo öffnen →</a> · <a href="../composer/?lang=de">Raster aus deinen Fotos bauen →</a></p></div>
+      <div class="card"><h3>Ersatzteile und Geräte</h3><p>Explosionszeichnungen, verknüpft mit Teilenummern, Beschreibungen und einem Kaufen-Button – die Nummer in der Zeichnung entspricht der Zeile in der Tabelle. <a href="../viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm&lang=de">Demo öffnen →</a></p></div>
+      <div class="card"><h3>Kataloge zum Verkauf und nur für Mitglieder</h3><p>Verkaufe eine Anleitung oder einen Kurs – oder teile manche Kataloge mit allen und andere nur mit denen, die das Passwort von dir bekommen. Ein Passwort pro Datei – ohne Konten, ohne Server; wer das Passwort hat, kann sie öffnen. Die geschützte Kopie erstellst du im Editor. <a href="../viewer/?src=..%2Fdemo%2Fdiy-stool-en.ecatm&lang=de">Demo öffnen (Passwort: stool-2026) →</a></p></div>
+      <div class="card"><h3>Lehren und Lernen</h3><p>Schaubilder zum Erkunden für Unterricht und Klassenprojekte – ohne Schülerkonten, ohne Cloud. <a href="schools.html">Zur Seite für Schulen →</a></p></div>
+      <div class="card"><h3>Fitnessstudios</h3><p>Muskelgruppe wählen, Gerät finden, Einstellung ansehen und das Training ausdrucken – ohne App, ohne Konto. <a href="../viewer/?src=..%2Fdemo%2Ffitness-en.ecatm&lang=de">Demo öffnen →</a></p></div>
+      <div class="card"><h3>Dienstleistungen und Buchung</h3><p>Deine Leistungen als Fotoliste: Wer bei dir buchen will, wählt eine aus, liest, wie sie abläuft, und tippt auf „Buchen“ – dein Terminkalender öffnet sich. <a href="#demo" data-demo-cat="cosmetologist-en">Demo ausprobieren →</a></p></div>
+      <div class="card"><h3>Lokale Profis auf der Karte</h3><p>Eine Karte deiner Gegend mit einer Markierung für jeden Profi: Kunden wählen, wer am nächsten ist, sehen Leistungen und Preise und tippen auf „Buchen“. <a href="#demo" data-demo-cat="nail-techs-en">Demo ausprobieren →</a> · <a href="../map-composer/?lang=de">Eigene Karte bauen →</a></p></div>
+      <div class="card"><h3>Tests und Selbstkontrolle</h3><p>Die Antwortmöglichkeiten liegen direkt auf dem Bild – tippe eine an, und sie wird grün oder rot; der Punktestand läuft mit. <a href="../viewer/?src=..%2Fdemo%2Fquiz-citizenship-en.ecatm&lang=de">Demo ausprobieren →</a></p></div>
+    </div>
+
+    <section class="ct" aria-labelledby="types-h">
+      <h2 id="types-h">Was ein Katalog sein kann</h2>
+      <!-- Pictograms shared with landing/<lang>/catalog-types.svg (the README picture). -->
+      <svg class="ct-defs" width="0" height="0" aria-hidden="true" focusable="false">
+<style>
+  /* Catalog-type pictograms — shared by the landing section and catalog-types.svg (see scripts/generate-site.ts {{@typeIcons}}). */
+  .ct-ic { fill: none; stroke: var(--text); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .ct-ic .ct-dot { fill: var(--link); stroke: none; }
+  .ct-ic .ct-soft { fill: var(--muted); stroke: none; opacity: .3; }
+  .ct-ic .ct-faint { opacity: .45; }
+  .ct-ic .ct-ok { stroke: var(--yes); }
+  .ct-ic .ct-bad { stroke: var(--no); }
+  .ct-badge { fill: var(--yes); }
+  .ct-badge-plus { fill: none; stroke: var(--bg); stroke-width: 2; stroke-linecap: round; }
+</style>
+<defs>
+  <symbol id="ct-i-single" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-21" y="-15" width="42" height="30" rx="3"/><path d="M-21 9L-9 -3L1 7L7 2L21 11"/><circle cx="10" cy="-7" r="3"/></g></symbol>
+  <symbol id="ct-i-list" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-24" y="-14" width="11" height="7" rx="1.5"/><rect x="-24" y="-3.5" width="11" height="7" rx="1.5"/><rect x="-24" y="7" width="11" height="7" rx="1.5"/><rect x="-8" y="-15" width="32" height="30" rx="3"/></g></symbol>
+  <symbol id="ct-i-home" viewBox="-30 -22 60 44"><g class="ct-ic"><path d="M-17 0L0 -15L17 0M-11 -4V14H11V-4M-3 14V5H3V14"/></g></symbol>
+  <symbol id="ct-i-one" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-24" y="-16" width="48" height="32" rx="3"/><path class="ct-faint" d="M-24 10L-10 -2L0 8L8 2L24 12"/><circle class="ct-dot" cx="0" cy="-5" r="4"/></g></symbol>
+  <symbol id="ct-i-photo" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-24" y="-16" width="48" height="32" rx="3"/><path class="ct-faint" d="M-24 10L-10 -2L0 8L8 2L24 12"/><circle class="ct-dot" cx="-11" cy="-6" r="3.5"/><circle class="ct-dot" cx="3" cy="-8" r="3.5"/><circle class="ct-dot" cx="14" cy="-2" r="3.5"/></g></symbol>
+  <symbol id="ct-i-exploded" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-24" y="-16" width="48" height="32" rx="3"/><circle class="ct-dot" cx="-14" cy="-6" r="3"/><circle class="ct-dot" cx="-2" cy="4" r="3"/><circle class="ct-dot" cx="8" cy="-8" r="3"/><circle class="ct-dot" cx="16" cy="6" r="3"/><circle class="ct-dot" cx="-12" cy="9" r="3"/><circle class="ct-dot" cx="0" cy="-9" r="3"/></g></symbol>
+  <symbol id="ct-i-tiles" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-22" y="-14" width="12" height="12" rx="2"/><rect x="-6" y="-14" width="12" height="12" rx="2"/><rect x="10" y="-14" width="12" height="12" rx="2"/><rect x="-22" y="2" width="12" height="12" rx="2"/><rect x="-6" y="2" width="12" height="12" rx="2"/><rect x="10" y="2" width="12" height="12" rx="2"/></g></symbol>
+  <symbol id="ct-i-map" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-24" y="-16" width="48" height="32" rx="3"/><path class="ct-faint" d="M-24 4H24M-5 -16V16M7 -16L24 -3"/><circle class="ct-dot" cx="-15" cy="-6" r="3.5"/><circle class="ct-dot" cx="6" cy="10" r="3.5"/><circle class="ct-dot" cx="15" cy="-9" r="3.5"/></g></symbol>
+  <symbol id="ct-i-table" viewBox="-30 -22 60 44"><g class="ct-ic"><rect class="ct-soft" x="-22" y="-15" width="44" height="9"/><rect x="-22" y="-15" width="44" height="30" rx="3"/><path d="M-22 -6H22M-22 4H22M-8 -15V15M7 -15V15"/></g></symbol>
+  <symbol id="ct-i-card" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-22" y="-15" width="44" height="30" rx="3"/><rect class="ct-soft" x="-17" y="-10" width="14" height="13"/><path d="M2 -7H17M2 -1H13M-17 9H17"/></g></symbol>
+  <symbol id="ct-i-buy" viewBox="-30 -22 60 44"><g class="ct-ic"><path d="M-22 -12H-15L-9 5H9L13 -6H-13"/><circle cx="-6" cy="11" r="2.5"/><circle cx="7" cy="11" r="2.5"/></g></symbol>
+  <symbol id="ct-i-learn" viewBox="-30 -22 60 44"><g class="ct-ic"><path d="M-2 -9C-8 -13,-15 -13,-21 -11V11C-15 9,-8 9,-2 13C4 9,11 9,17 11V-11C11 -13,4 -13,-2 -9ZM-2 -9V13"/></g></symbol>
+  <symbol id="ct-i-exercise" viewBox="-30 -22 60 44"><g class="ct-ic"><path d="M-10 2H8"/><rect x="-16" y="-8" width="6" height="20" rx="1.5"/><rect x="8" y="-8" width="6" height="20" rx="1.5"/><path d="M-20 -2V6M18 -2V6"/></g></symbol>
+  <symbol id="ct-i-book" viewBox="-30 -22 60 44"><g class="ct-ic"><rect x="-17" y="-11" width="32" height="26" rx="3"/><path d="M-17 -3H15M-9 -15V-8M7 -15V-8M-7 5L-2 10L6 1"/></g></symbol>
+  <symbol id="ct-i-answer" viewBox="-30 -22 60 44"><g class="ct-ic"><circle class="ct-ok" cx="-11" cy="0" r="9"/><path class="ct-ok" d="M-15 0L-12 3.5L-7 -3"/><circle class="ct-bad" cx="11" cy="0" r="9"/><path class="ct-bad" d="M7.5 -3.5L14.5 3.5M14.5 -3.5L7.5 3.5"/></g></symbol>
+  <symbol id="ct-i-look" viewBox="-30 -22 60 44"><g class="ct-ic"><path d="M-20 0C-10 -14,10 -14,20 0C10 14,-10 14,-20 0Z"/><circle cx="0" cy="0" r="5"/></g></symbol>
+  <symbol id="ct-i-plus" viewBox="-30 -22 60 44"><circle class="ct-badge" cx="20" cy="-13" r="7"/><path class="ct-badge-plus" d="M16.5 -13H23.5M20 -16.5V-9.5"/></symbol>
+</defs>
+      </svg>
+      <div class="ct-level">
+        <div class="ct-head"><span class="ct-num">1</span><span><strong>Navigation</strong><small>wie du zwischen Bildern wechselst</small></span></div>
+        <ul class="ct-opts">
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-single" x="-30" y="-22" width="60" height="44"/></svg><span>Nur ein Bild</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-list" x="-30" y="-22" width="60" height="44"/></svg><span>Aus einer Liste</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-home" x="-30" y="-22" width="60" height="44"/></svg><span>Von einem Startbild</span></li>
+        </ul>
+      </div>
+      <div class="ct-level">
+        <div class="ct-head"><span class="ct-num">2</span><span><strong>Bild</strong><small>was darauf ist</small></span></div>
+        <ul class="ct-opts">
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-one" x="-30" y="-22" width="60" height="44"/></svg><span>Ein Artikel</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-photo" x="-30" y="-22" width="60" height="44"/></svg><span>Foto mit Hotspots</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-exploded" x="-30" y="-22" width="60" height="44"/></svg><span>Explosionszeichnung</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-tiles" x="-30" y="-22" width="60" height="44"/></svg><span>Kachelraster</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-map" x="-30" y="-22" width="60" height="44"/></svg><span>Karte mit Punkten</span></li>
+        </ul>
+      </div>
+      <div class="ct-level">
+        <div class="ct-head"><span class="ct-num">3</span><span><strong>Details</strong><small>wie die Daten gezeigt werden</small></span></div>
+        <ul class="ct-opts">
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-table" x="-30" y="-22" width="60" height="44"/></svg><span>Tabelle</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-card" x="-30" y="-22" width="60" height="44"/></svg><span>Detailkarte</span></li>
+        </ul>
+      </div>
+      <div class="ct-level">
+        <div class="ct-head"><span class="ct-num">4</span><span><strong>Aktion</strong><small>was ein Tipp bewirkt</small></span></div>
+        <ul class="ct-opts">
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-buy" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg><span>Kaufen</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-learn" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg><span>Mehr erfahren</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-exercise" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg><span>Übung</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-book" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg><span>Buchen</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-answer" x="-30" y="-22" width="60" height="44"/></svg><span>Antworten</span></li>
+          <li><svg class="ct-tile" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-look" x="-30" y="-22" width="60" height="44"/></svg><span>Keine Aktion</span></li>
+        </ul>
+      </div>
+      <h3>Beispiele</h3>
+      <p class="intro">Live-Demos: je eine Wahl aus den Ebenen 1, 2 und 4 (jeder Katalog hat Tabelle und Detailkarte).</p>
+      <ul class="ct-examples">
+        <li><a href="../viewer/?src=..%2Fdemo%2Fproduct-grid.ecatm&lang=de">Produktraster</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-list" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-tiles" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-buy" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+        <li><a href="../viewer/?src=..%2Fdemo%2Fauto-spare-parts.ecatm&lang=de">Autoteile</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-list" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-exploded" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-buy" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+        <li><a href="../viewer/?src=..%2Fdemo%2Ffurniture.ecatm&lang=de">Möbel</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-list" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-photo" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-buy" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+        <li><a href="../viewer/?src=..%2Fdemo%2Fliving-room.ecatm&lang=de">Wohnzimmer</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-home" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-one" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-buy" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+        <li><a href="../viewer/?src=..%2Fdemo%2Fcell-biology.ecatm&lang=de">Zellbiologie</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-single" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-exploded" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-learn" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+        <li><a href="../viewer/?src=..%2Fdemo%2Ffitness-en.ecatm&lang=de">Fitness</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-list" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-photo" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-exercise" x="-30" y="-22" width="60" height="44"/><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+        <li><a href="../viewer/?src=..%2Fdemo%2Fcosmetologist-en.ecatm&lang=de">Kosmetikbehandlungen</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-home" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-one" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-book" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+        <li><a href="../viewer/?src=..%2Fdemo%2Fnail-techs-en.ecatm&lang=de">Nagelstudios auf der Karte</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-home" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-map" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-book" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+        <li><a href="../viewer/?src=..%2Fdemo%2Fquiz-citizenship-en.ecatm&lang=de">Quiz</a><span class="ct-formula"><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-list" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-photo" x="-30" y="-22" width="60" height="44"/></svg><i>+</i><svg class="ct-tile ct-mini" viewBox="-30 -22 60 44" aria-hidden="true"><use href="#ct-i-answer" x="-30" y="-22" width="60" height="44"/></svg></span></li>
+      </ul>
+      <p class="ct-legend"><svg viewBox="12 -21 16 16" aria-hidden="true"><use href="#ct-i-plus" x="-30" y="-22" width="60" height="44"/></svg> mit dem Plus landet die Auswahl in einer Liste (Warenkorb, Sammlung, Training, Auswahl); ohne Plus passiert die Aktion sofort. Das ist eine Einstellung des Katalogs.</p>
+    </section>
+
+    <h2>Die Apps</h2>
+    <svg class="tm-defs" width="0" height="0" aria-hidden="true" focusable="false">
+      <defs>
+      <marker id="tm-ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L10 5L0 10z" style="fill: var(--link)"/></marker>
+      <symbol id="tm-i-store" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16l1.5 5h-21z"/><path d="M4.5 9v11h15V9"/><path d="M10 20v-6h4v6"/></symbol>
+      <symbol id="tm-i-photos" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3" width="12" height="10" rx="1.5"/><path d="M2.5 11l3.5-3.5 3.5 3.5"/><rect x="10.5" y="11" width="11" height="10" rx="1"/><path d="M10.5 14.5h11M10.5 17.8h11M14.5 11v10"/></symbol>
+      <symbol id="tm-i-picture" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 17l5-4 4 3 3-2 6 4"/><circle cx="9" cy="9.5" r="1.8" fill="currentColor"/><circle cx="16" cy="9" r="1.8" fill="currentColor"/></symbol>
+      <symbol id="tm-i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2.5h8l5 5v14H6z"/><path d="M14 2.5v5h5"/><circle cx="10" cy="13" r="1.4" fill="currentColor"/><circle cx="15" cy="17" r="1.4" fill="currentColor"/></symbol>
+      <symbol id="tm-i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><path d="M12 15v2"/></symbol>
+      <symbol id="tm-i-web" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="2"/><path d="M2.5 8.5h19"/><path d="M9.5 12l-2.5 2.5 2.5 2.5M14.5 12l2.5 2.5-2.5 2.5"/></symbol>
+      <symbol id="tm-i-qr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM18 18h3v3h-3zM14 20.5h1.5M20.5 14v1.5"/></symbol>
+      <symbol id="tm-i-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="7" rx="1.5"/><rect x="4" y="13.5" width="16" height="7" rx="1.5"/><path d="M8 7h.01M8 17h.01"/></symbol>
+      <symbol id="tm-i-cart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.5 12h11L21 7H6"/></symbol>
+      <symbol id="tm-i-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+      <symbol id="tm-i-cap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2.2 9 2.2 12 0v-5"/><path d="M22 9v5"/></symbol>
+      <symbol id="tm-i-gym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6v12M3 9v6M18 6v12M21 9v6M6 12h12"/></symbol>
+      </defs>
+    </svg>
+    <!-- Short toolset map (wide on desktop, stacked on phones); opens the full one, landing/<lang>/toolset.svg. -->
+    <a class="toolset-map" href="toolset.svg" target="_blank" rel="noopener">
+      <span class="tm-frame">
+      <span class="tm-tip" aria-hidden="true">Klicken für die ganze Übersicht</span>
+      <svg class="tm-wide" viewBox="20 30 1120 140" role="img" aria-label="Aus deinem Shop, deinen Fotos oder einem beliebigen Bild wird ein .ecatm-Katalog, der über eine Website, einen QR-Code oder den Catalog Server auf jedes Handy und jeden PC kommt.">
+      <path class="tm-a" d="M280 100H316" marker-end="url(#tm-ah)"/>
+      <path class="tm-a" d="M570 100H606" marker-end="url(#tm-ah)"/>
+      <path class="tm-a" d="M860 100H896" marker-end="url(#tm-ah)"/>
+      <g transform="translate(30 46)"><rect class="tm-card" width="250" height="108" rx="16"/><use href="#tm-i-store" class="tm-ic" x="47" y="12" width="36" height="36"/><use href="#tm-i-photos" class="tm-ic" x="107" y="12" width="36" height="36"/><use href="#tm-i-picture" class="tm-ic" x="167" y="12" width="36" height="36"/><text class="tm-t" x="125" y="76" text-anchor="middle">Dein Shop, Fotos</text><text class="tm-t" x="125" y="97" text-anchor="middle">oder ein beliebiges Bild</text></g>
+      <g transform="translate(320 40)"><rect class="tm-hero" width="250" height="120" rx="18"/><use href="#tm-i-file" class="tm-hic" x="101" y="12" width="48" height="48"/><use href="#tm-i-lock" class="tm-hic" x="218" y="10" width="22" height="22"/><text class="tm-ht" x="125" y="90" text-anchor="middle">.ecatm-Katalog</text><text class="tm-hs" x="125" y="111" text-anchor="middle">eine Datei · Passwortschutz möglich</text></g>
+      <g transform="translate(610 46)"><rect class="tm-card" width="250" height="108" rx="16"/><use href="#tm-i-web" class="tm-ic" x="47" y="12" width="36" height="36"/><use href="#tm-i-qr" class="tm-ic" x="107" y="12" width="36" height="36"/><use href="#tm-i-server" class="tm-ic" x="167" y="12" width="36" height="36"/><text class="tm-t" x="125" y="76" text-anchor="middle">Website, QR</text><text class="tm-t" x="125" y="97" text-anchor="middle">oder Catalog Server</text></g>
+      <g transform="translate(900 46)"><rect class="tm-card" width="230" height="108" rx="16"/><use href="#tm-i-cart" class="tm-ic" x="33" y="14" width="32" height="32"/><use href="#tm-i-wrench" class="tm-ic" x="77" y="14" width="32" height="32"/><use href="#tm-i-cap" class="tm-ic" x="121" y="14" width="32" height="32"/><use href="#tm-i-gym" class="tm-ic" x="165" y="14" width="32" height="32"/><text class="tm-t" x="115" y="76" text-anchor="middle">Jedes Handy, jeder PC</text><text class="tm-s" x="115" y="97" text-anchor="middle">Läden, Werkstätten, Schulen…</text></g>
+      </svg>
+      <svg class="tm-narrow" viewBox="-2 -2 324 574" role="img" aria-label="Aus deinem Shop, deinen Fotos oder einem beliebigen Bild wird ein .ecatm-Katalog, der über eine Website, einen QR-Code oder den Catalog Server auf jedes Handy und jeden PC kommt.">
+      <path class="tm-a" d="M160 110V146" marker-end="url(#tm-ah)"/>
+      <path class="tm-a" d="M160 272V308" marker-end="url(#tm-ah)"/>
+      <path class="tm-a" d="M160 422V458" marker-end="url(#tm-ah)"/>
+      <g transform="translate(0 0)"><rect class="tm-card" width="320" height="108" rx="16"/><use href="#tm-i-store" class="tm-ic" x="82" y="12" width="36" height="36"/><use href="#tm-i-photos" class="tm-ic" x="142" y="12" width="36" height="36"/><use href="#tm-i-picture" class="tm-ic" x="202" y="12" width="36" height="36"/><text class="tm-t" x="160" y="76" text-anchor="middle">Dein Shop, Fotos</text><text class="tm-t" x="160" y="97" text-anchor="middle">oder ein beliebiges Bild</text></g>
+      <g transform="translate(0 150)"><rect class="tm-hero" width="320" height="120" rx="18"/><use href="#tm-i-file" class="tm-hic" x="136" y="12" width="48" height="48"/><use href="#tm-i-lock" class="tm-hic" x="288" y="10" width="22" height="22"/><text class="tm-ht" x="160" y="90" text-anchor="middle">.ecatm-Katalog</text><text class="tm-hs" x="160" y="111" text-anchor="middle">eine Datei · Passwortschutz möglich</text></g>
+      <g transform="translate(0 312)"><rect class="tm-card" width="320" height="108" rx="16"/><use href="#tm-i-web" class="tm-ic" x="82" y="12" width="36" height="36"/><use href="#tm-i-qr" class="tm-ic" x="142" y="12" width="36" height="36"/><use href="#tm-i-server" class="tm-ic" x="202" y="12" width="36" height="36"/><text class="tm-t" x="160" y="76" text-anchor="middle">Website, QR</text><text class="tm-t" x="160" y="97" text-anchor="middle">oder Catalog Server</text></g>
+      <g transform="translate(0 462)"><rect class="tm-card" width="320" height="108" rx="16"/><use href="#tm-i-cart" class="tm-ic" x="78" y="14" width="32" height="32"/><use href="#tm-i-wrench" class="tm-ic" x="122" y="14" width="32" height="32"/><use href="#tm-i-cap" class="tm-ic" x="166" y="14" width="32" height="32"/><use href="#tm-i-gym" class="tm-ic" x="210" y="14" width="32" height="32"/><text class="tm-t" x="160" y="76" text-anchor="middle">Jedes Handy, jeder PC</text><text class="tm-s" x="160" y="97" text-anchor="middle">Läden, Werkstätten, Schulen…</text></g>
+      </svg>
+      </span>
+      <span class="tm-open">Ganze Übersicht öffnen ↗</span>
+    </a>
+    <div class="apps-bar">
+    <details class="apps-more" id="apps">
+    <summary class="btn primary">Apps holen</summary>
+    <h3 class="apps-h">Im Browser arbeiten</h3>
+    <div class="card-row apps-row web">
+      <div class="card">
+        <h2><a href="../editor/?lang=de">Editor →</a></h2>
+        <p>Katalog bauen: Hotspots auf ein Bild setzen und mit Daten verknüpfen.</p>
+        <p><a href="https://apps.microsoft.com/detail/9p4zk48txrln?hl=de-DE&amp;gl=US">Im Microsoft Store herunterladen</a></p>
+      </div>
+      <div class="card">
+        <h2><a href="../viewer/?lang=de">Viewer →</a></h2>
+        <p>Katalogdatei öffnen und durchklicken.</p>
+        <p><a href="https://apps.microsoft.com/detail/9nb4shzt8fd1?hl=de-DE&amp;gl=US">Im Microsoft Store herunterladen</a></p>
+      </div>
+      <div class="card">
+        <h2><a href="../composer/?lang=de">Grid Composer →</a></h2>
+        <p>Baut in einem Rutsch einen Kachelkatalog aus einem Ordner nummerierter Fotos und einer Tabelle.</p>
+        <p><a href="https://apps.microsoft.com/detail/9n9s9k9fhlk2?hl=de-DE&amp;gl=US">Im Microsoft Store herunterladen</a></p>
+      </div>
+      <div class="card">
+        <h2><a href="../map-composer/?lang=de">Map Composer →</a></h2>
+        <p>Katalog aus einer Karte bauen: Markiere deine Orte, und jeder öffnet seine eigene Seite.</p>
+        <p><a href="https://apps.microsoft.com/detail/9njgrm70frvj?hl=de-DE&amp;gl=US">Im Microsoft Store herunterladen</a></p>
+      </div>
+    </div>
+    <h3 class="apps-h">Apps für deinen Computer</h3>
+    <div class="card-row apps-row">
+      <div class="card">
+        <h2>Collaboration Server</h2>
+        <p>Bearbeite einen Katalog live gemeinsam mit anderen.</p>
+        <ul class="links">
+          <li><a href="https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=de-DE&amp;gl=US">Microsoft Store (Windows)</a></li>
+          <li><a href="https://snapcraft.io/ecm-collab-server">Snap Store (Linux)</a></li>
+          <li><a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest" id="collab-other">Weitere Downloads (macOS, Chromebook, direkt)</a></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>Catalog Server</h2>
+        <p>Gib einen Ordner mit Katalogen von deinem eigenen Computer frei – im lokalen Netz oder im Internet.</p>
+        <ul class="links">
+          <li><a href="https://apps.microsoft.com/detail/9pl38zj5djmk?hl=de-DE&amp;gl=US">Microsoft Store (Windows)</a></li>
+          <li><a href="https://snapcraft.io/ecm-catalog-server">Snap Store (Linux)</a></li>
+          <li><a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/catalog-server-latest" id="catalog-server-other">Weitere Downloads (macOS, Chromebook, direkt)</a></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>Store Importer</h2>
+        <p>Macht aus deinem eigenen Shopify-, Squarespace-, Square-Online-, Wix- oder Payhip-Shop einen Fotoordner und eine Tabelle – fertig für den Grid Composer.</p>
+        <ul class="links">
+          <li><a href="https://apps.microsoft.com/detail/9pnmbwb503bp?hl=de-DE&amp;gl=US">Microsoft Store (Windows)</a></li>
+          <li><a href="https://snapcraft.io/ecm-store-importer">Snap Store (Linux)</a></li>
+          <li><a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/store-importer-latest" id="store-importer-other">Weitere Downloads (macOS, Linux, Chromebook)</a></li>
+        </ul>
+      </div>
+    </div>
+    </details>
+    <p class="apps-quick">oder im Browser öffnen: <a href="../editor/?lang=de">Editor</a> <a href="../viewer/?lang=de">Viewer</a> <a href="../composer/?lang=de">Grid Composer</a> <a href="../map-composer/?lang=de">Map Composer</a></p>
+    </div>
+
+  <section class="benefits" aria-labelledby="benefits-h">
+    <h2 id="benefits-h">Im Mittelpunkt: deine Katalogdateien</h2>
+    <ul>
+      <li>
+        <strong>Kostenlos, ohne Abo</strong>
+        Die Apps sind kostenlos und Open Source (MIT). Keine Konten, keine Tarife.
+      </li>
+      <li>
+        <strong>Dein Katalog ist eine Datei</strong>
+        Bilder, Hotspots und Daten liegen zusammen in einer einzigen <code>.ecatm</code>-Datei auf deinem Gerät. Sie geht nirgendwohin, solange du sie nicht teilst.
+      </li>
+      <li>
+        <strong>Fotos und Zeichnungen</strong>
+        Setze Hotspots auf jedes Bild – ein Raumfoto, eine Teilezeichnung, eine Anatomietafel – und verknüpfe Bilder miteinander: Ein Tipp auf das Sofa im Zimmer öffnet seine Nahaufnahme.
+      </li>
+      <li>
+        <strong>Links in deinen eigenen Shop</strong>
+        Verlinke Artikel auf jeden Onlineshop, den du schon nutzt. Kein Marktplatz und keine Kasse von uns dazwischen.
+      </li>
+      <li>
+        <strong>Funktioniert offline nach dem ersten Öffnen</strong>
+        Nach dem ersten Öffnen auf Computer, Tablet oder Handy liegen die Apps im Browser-Cache und laufen auch ohne Verbindung weiter.
+      </li>
+      <li>
+        <strong>Live-Bearbeitung und Katalogfreigabe – nur, wenn du sie willst</strong>
+        Zwei optionale Apps, die du selbst betreibst: der Collaboration Server zum gemeinsamen Live-Bearbeiten und der Catalog Server, der einen Ordner mit Katalogen im lokalen Netz oder im Internet freigibt. Alles andere funktioniert ohne sie.
+      </li>
+    </ul>
+  </section>
+
+    <dialog class="collab" id="collab" aria-labelledby="collab-h">
+      <button type="button" class="close" aria-label="Schließen">×</button>
+      <h2 id="collab-h">Collaboration Server – Downloads</h2>
+      <p>Betreibe den Collaboration Server selbst, um einen Katalog live mit anderen zu bearbeiten. Um allein einen Katalog zu erstellen oder anzusehen, brauchst du ihn nicht.</p>      <p>
+        <strong>Windows:</strong> <a href="https://apps.microsoft.com/detail/9nfr1svn0zf6?hl=de-DE&amp;gl=US">Im Microsoft Store herunterladen</a> (oder <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-windows-x64.exe">Direktdownload</a>, .exe-Datei)
+      </p>
+      <p>
+        <strong>Linux:</strong> <a href="https://snapcraft.io/ecm-collab-server">Im Snap Store herunterladen</a> (Ubuntu App Center, oder <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-linux-x64">Direktdownload</a> für andere Distributionen)
+      </p>
+      <p>
+        <strong>macOS:</strong> (ab macOS 13) <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-macos-arm64.zip">Direktdownload</a> (Apple Silicon, oder <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-macos-x64.zip">Intel</a>) – entpacken; den einzeiligen Terminal-Befehl für den ersten Start findest du auf der <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">Release-Seite</a>
+      </p>
+      <p>
+        <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/collab-server-latest/ecm-collab-server-amd64.deb">Direktdownload</a>, .deb-Datei – Einrichtung siehe <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/collab-server-latest">Release-Seite</a>
+      </p>
+    </dialog>
+
+    <dialog class="collab" id="catalog-server" aria-labelledby="catalog-server-h">
+      <button type="button" class="close" aria-label="Schließen">×</button>
+      <h2 id="catalog-server-h">Catalog Server – Downloads</h2>
+      <p>Betreibe den Catalog Server selbst, um einen Ordner mit Katalogen direkt von deinem Computer oder einem USB-Stick freizugeben – im lokalen Netz oder über das Internet. Um allein einen einzelnen Katalog zu erstellen oder anzusehen, brauchst du ihn nicht.</p>      <p>
+        <strong>Windows:</strong> <a href="https://apps.microsoft.com/detail/9pl38zj5djmk?hl=de-DE&amp;gl=US">Im Microsoft Store herunterladen</a> (oder <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-windows-x64.exe">Direktdownload</a>, .exe-Datei)
+      </p>
+      <p>
+        <strong>Linux:</strong> <a href="https://snapcraft.io/ecm-catalog-server">Im Snap Store herunterladen</a> (Ubuntu App Center, oder <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-linux-x64">Direktdownload</a> für andere Distributionen)
+      </p>
+      <p>
+        <strong>macOS:</strong> (ab macOS 13) <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-macos-arm64.zip">Direktdownload</a> (Apple Silicon, oder <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-macos-x64.zip">Intel</a>) – entpacken; den einzeiligen Terminal-Befehl für den ersten Start findest du auf der <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/catalog-server-latest">Release-Seite</a>
+      </p>
+      <p>
+        <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/catalog-server-latest/ecm-catalog-server-amd64.deb">Direktdownload</a>, .deb-Datei – Einrichtung siehe <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/catalog-server-latest">Release-Seite</a>
+      </p>
+    </dialog>
+
+    <dialog class="collab" id="store-importer" aria-labelledby="store-importer-h">
+      <button type="button" class="close" aria-label="Schließen">×</button>
+      <h2 id="store-importer-h">Store Importer – Downloads</h2>
+      <p>Der Store Importer läuft auf deinem Computer und macht aus deinem eigenen Shopify-, Squarespace-, Square-Online-, Wix- oder Payhip-Shop einen Fotoordner und eine Tabelle – daraus baust du dann im Grid Composer den Katalog.</p>
+      <p>
+        <strong>Windows:</strong> <a href="https://apps.microsoft.com/detail/9pnmbwb503bp?hl=de-DE&amp;gl=US">Im Microsoft Store herunterladen</a> (oder <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-windows-x64.exe">Direktdownload</a>, .exe-Datei)
+      </p>
+      <p>
+        <strong>Linux:</strong> <a href="https://snapcraft.io/ecm-store-importer">Im Snap Store herunterladen</a> (Ubuntu App Center, oder <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-linux-x64">Direktdownload</a> für andere Distributionen)
+      </p>
+      <p>
+        <strong>macOS:</strong> (ab macOS 13) <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-macos-arm64.zip">Direktdownload</a> (Apple Silicon, oder <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-macos-x64.zip">Intel</a>) – entpacken; den einzeiligen Terminal-Befehl für den ersten Start findest du auf der <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/store-importer-latest">Release-Seite</a>
+      </p>
+      <p>
+        <strong>Chromebook (Linux/Crostini):</strong> <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/store-importer-latest/ecm-store-importer-amd64.deb">Direktdownload</a>, .deb-Datei – Einrichtung siehe <a href="https://github.com/alexandrkotov/electronic-catalog-maker/releases/tag/store-importer-latest">Release-Seite</a>
+      </p>
+    </dialog>
+    <dialog class="collab wizard" id="wizard" aria-labelledby="wizard-h">
+      <button type="button" class="close" aria-label="Schließen">×</button>
+      <h2 id="wizard-h">Katalog in 3 einfachen Schritten erstellen</h2>
+      <!-- The wizard itself is a page of Grid Composer (packages/composer/wizard.html); src is set on first open.
+           The language is always spelled out: without it the page would follow the visitor's saved app language, not this page. -->
+      <iframe id="wizard-frame" title="Katalog in 3 einfachen Schritten erstellen" data-src="../composer/wizard.html?lang=de"></iframe>
+    </dialog>
+  </main>
+
+  <footer>
+    <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Quellcode auf GitHub</a>
+    – Kataloge bleiben auf deinem Gerät, sofern sie nicht über eine URL geöffnet werden.
+    <div><a href="../privacy.html">Datenschutzerklärung</a></div>
+    <div id="visits"></div>
+    <div class="built-by">
+      Entwickelt von Alexander Kotov (<a href="https://www.linkedin.com/in/alexkotovwa/">LinkedIn</a> · <a href="https://x.com/kotov_wa">X</a>)
+    </div>
+  </footer>
+
+  <script>
+    // An anonymous "this was clicked" counter for the analytics (GoatCounter,
+    // loaded further down). Sends the event name only. Silent where the counter
+    // isn't running — it skips localhost and anyone who opted out of being counted.
+    window.ecmEvent = function (name) {
+      try {
+        var g = window.goatcounter;
+        if (g && g.count) g.count({ event: true, path: name, title: name });
+      } catch (e) {}
+    };
+  </script>
+  <script>
+    (function () {
+      var frame = document.getElementById("frame");
+      var buttons = document.querySelectorAll(".tabs button");
+      var scriptLoaded = false;
+      // [image id, hotspot id] to show selected on load, per example catalog.
+      var START = { "living-room": [1, 1], "auto-spare-parts": [9, 580], "furniture": [1, 1], "diy-stool-en": [1, 1], "product-grid": [1, 1], "cosmetologist-en": [1, 1], "nail-techs-en": [1, 1] };
+      // Password-protected demo: it opens on a lock screen (the password is printed
+      // under the frame), and a protected file cannot be opened in the editor.
+      var LOCKED = "diy-stool-en";
+      // Services-with-booking demo: its first image is a list of services whose
+      // markers are the service names, so it opens without the details card and
+      // "Book" goes to a booking calendar instead of the demo store.
+      var BOOKING = "cosmetologist-en";
+      // Map demo: its first image is a map whose markers lead to each master's
+      // page; "Book" there goes to the same demo calendar.
+      var MAP = "nail-techs-en";
+      var BUNDLE = "https://cdn.jsdelivr.net/gh/alexandrkotov/electronic-catalog-maker@main/packages/viewer-embed/dist/ecm-viewer.js";
+      function loadScript(cb) {
+        if (scriptLoaded) return cb();
+        function inject() {
+          var s = document.createElement("script");
+          s.src = BUNDLE;
+          s.onload = function () { scriptLoaded = true; cb(); };
+          s.onerror = function () { frame.textContent = T.demoLoadFailed; frame.style.padding = "1rem"; };
+          document.head.appendChild(s);
+        }
+        // jsDelivr serves the @main bundle with max-age=7 days, so a returning
+        // visitor's browser could pair this (new) page with an old cached
+        // bundle that silently ignores mode="showcase". Revalidate first: an
+        // unchanged bundle costs one tiny 304, a changed one replaces the
+        // cached copy, and the script tag below then reads the fresh entry.
+        // Offline or blocked: fall through to whatever is cached.
+        if (window.fetch) {
+          fetch(BUNDLE, { cache: "no-cache" }).then(inject, inject);
+        } else {
+          inject();
+        }
+      }
+      function show(cat) {
+        buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.cat === cat)); });
+        var own = document.querySelector('.demo .intro[data-hint="' + cat + '"]');
+        document.querySelectorAll(".demo .intro[data-hint]").forEach(function (p) {
+          p.hidden = own ? p !== own : p.dataset.hint !== "*";
+        });
+        document.getElementById("open-full").href = "../viewer/?src=..%2Fdemo%2F" + cat + ".ecatm&lang=de";
+        document.getElementById("edit-this").href = "../editor/?src=..%2Fdemo%2F" + cat + ".ecatm&lang=de";
+        document.getElementById("edit-this").style.display = cat === LOCKED ? "none" : "";
+        document.getElementById("demo-note").hidden = cat === LOCKED || cat === BOOKING || cat === MAP;
+        document.getElementById("demo-note-booking").hidden = cat !== BOOKING && cat !== MAP;
+        loadScript(function () {
+          frame.textContent = "";
+          var el = document.createElement("ecm-viewer");
+          el.setAttribute("mode", "showcase");
+          // A representative item preselected per example, so the details card
+          // is filled from the first paint.
+          var start = START[cat];
+          el.setAttribute("initial-image", start[0]);
+          el.setAttribute("initial-link", start[1]);
+          // Phones: a dense diagram fitted whole is an unreadable pile of
+          // markers, so open close-up on the selected item (Fit shows it all).
+          // The living-room photo and the map read fine whole, so they stay fitted.
+          if (cat !== "living-room" && cat !== MAP) el.setAttribute("compact-zoom", "0.75");
+          if (cat === MAP) el.setAttribute("nav-title", T.demoMapBack);
+          if (cat === BOOKING) {
+            el.setAttribute("overview-list", "off");
+            el.setAttribute("nav-title", T.demoBookingBack);
+            // Service names as equal-width pills, smaller on a wide screen.
+            el.style.setProperty("--ecm-overview-label-min-width", "12em");
+            el.style.setProperty("--ecm-overview-label-radius", "999px");
+            el.style.setProperty("--ecm-overview-label-padding", "0.12em 0.4em");
+            if (window.matchMedia("(min-width: 701px)").matches) el.style.setProperty("--ecm-overview-label-scale", "0.65");
+          }
+          el.setAttribute("src", new URL("../demo/" + cat + ".ecatm", location.href).href);
+          frame.appendChild(el);
+        });
+      }
+      buttons.forEach(function (b) { b.addEventListener("click", function () { window.ecmEvent("landing-demo:" + b.dataset.cat); show(b.dataset.cat); }); });
+      // A "Who it's for" link that opens its example in the widget above
+      // (the href scrolls there) rather than in the full viewer.
+      document.querySelectorAll("a[data-demo-cat]").forEach(function (a) { a.addEventListener("click", function () { window.ecmEvent("landing-demo:" + a.dataset.demoCat); show(a.dataset.demoCat); }); });
+      show("living-room");
+    })();
+  </script>
+  <script>
+    // Theme toggle. Also drives the embedded viewer (it lives in a shadow root
+    // and reads its own data-theme), and follows the widget's own Dark/Light
+    // button so the page and the demo never disagree.
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById("theme-toggle");
+      function label() { btn.textContent = root.dataset.theme === "dark" ? T.themeLight : T.themeDark; }
+      function widget() { return document.querySelector("ecm-viewer"); }
+      function setTheme(t, store) {
+        root.dataset.theme = t;
+        var w = widget(); if (w && w.dataset.theme !== t) w.dataset.theme = t;
+        if (store) { try { localStorage.setItem("ecm-theme", t); } catch (e) {} }
+        label();
+      }
+      btn.addEventListener("click", function () { setTheme(root.dataset.theme === "dark" ? "light" : "dark", true); });
+      label();
+      // (Re)attach whenever the demo element is created.
+      new MutationObserver(function () {
+        var w = widget();
+        if (!w || w._themeSynced) return;
+        w._themeSynced = true;
+        if (w.dataset.theme !== root.dataset.theme) w.dataset.theme = root.dataset.theme;
+        new MutationObserver(function () {
+          var t = w.dataset.theme;
+          if ((t === "light" || t === "dark") && t !== root.dataset.theme) setTheme(t, false);
+        }).observe(w, { attributes: true, attributeFilter: ["data-theme"] });
+      }).observe(document.getElementById("frame"), { childList: true });
+    })();
+  </script>
+  <script>
+    // "Other downloads"/"Downloads" opens the full per-platform list in a
+    // dialog. Without JS the link goes to the GitHub release page, which
+    // has the same files. One wiring function, called once per app card
+    // that has this pattern (collab-server, catalog-server, store-importer) rather than a
+    // copy-pasted IIFE per card.
+    (function () {
+      function wireDialog(dialogId, linkId) {
+        var dlg = document.getElementById(dialogId);
+        var link = document.getElementById(linkId);
+        if (!dlg || !link || typeof dlg.showModal !== "function") return;
+        link.addEventListener("click", function (e) { e.preventDefault(); dlg.showModal(); });
+        dlg.querySelector(".close").addEventListener("click", function () { dlg.close(); });
+        // click on the backdrop (outside the dialog box) closes it
+        dlg.addEventListener("click", function (e) { if (e.target === dlg) dlg.close(); });
+        dlg.addEventListener("close", function () { link.focus(); });
+      }
+      wireDialog("collab", "collab-other");
+      wireDialog("catalog-server", "catalog-server-other");
+      wireDialog("store-importer", "store-importer-other");
+      wireDialog("wizard", "wizard-open");
+      // The wizard page (and sql.js with it) loads only when somebody asks for it.
+      document.getElementById("wizard-open").addEventListener("click", function () {
+        window.ecmEvent("landing-wizard-open");
+        var frame = document.getElementById("wizard-frame");
+        if (!frame.src) frame.src = frame.dataset.src;
+      });
+    })();
+  </script>
+  <!-- Privacy-friendly, cookie-free page-view counting (goatcounter.com) —
+       tracks this page's own path automatically. -->
+  <script data-goatcounter="https://ecatm.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+  <script>
+    // GoatCounter's own embeddable widget is an <iframe> — its serif/purple
+    // default styling can't be reached by this page's CSS at all, and it
+    // clashed with everything else here. Fetching the plain JSON count and
+    // rendering it as normal text instead. "TOTAL" is the site-wide visitor
+    // count across landing+editor+viewer. GoatCounter's docs say `count` is
+    // the number of visitors (cookie-free, so roughly per-browser-session) and
+    // `count_unique` is a deprecated alias of the same number — so this is
+    // labelled "visits", not "people": one person coming back, or opening
+    // the landing page and then the editor, is counted more than once.
+    // `count` comes back as a formatted string ("1,234"), hence the comma
+    // strip before parsing.
+    //
+    // GoatCounter's TOTAL.json sits behind a CDN (Fastly/Vinyl-Cache) that
+    // can get permanently stuck on either the no-date-range URL or the
+    // `?start=year` one — confirmed live on both sides at different times.
+    // A cache-busting query param does NOT help: the CDN ignores the query
+    // string for its cache key entirely (confirmed via curl — a brand-new
+    // nanosecond-timestamp param still returned the same stale response
+    // with an unchanged `age` header). Since the real count only ever goes
+    // up, fetching both known variants and taking the max sidesteps
+    // whichever one happens to be frozen at any given moment.
+    Promise.all(
+      [
+        "https://ecatm.goatcounter.com/counter/TOTAL.json",
+        "https://ecatm.goatcounter.com/counter/TOTAL.json?start=year",
+      ].map((url) =>
+        fetch(url)
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null),
+      ),
+    ).then((results) => {
+      const counts = results
+        .filter(Boolean)
+        .map((data) => parseInt(String(data.count ?? data.count_unique).replace(/[,\s]/g, ""), 10))
+        .filter((n) => !Number.isNaN(n));
+      if (counts.length === 0) return;
+      const n = Math.max(...counts);
+      document.getElementById("visits").innerHTML =
+        (T["visits." + new Intl.PluralRules(LANG).select(n)] || T["visits.other"]).replace("{n}", n.toLocaleString(LANG));
+    });
+  </script>
+</body>
+</html>
