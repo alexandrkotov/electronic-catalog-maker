@@ -2,7 +2,8 @@
  * Generates the localized static pages (landing/index.html, landing/schools.html,
  * the toolset map landing/toolset.svg, the catalog-types picture
  * landing/catalog-types.svg, and their translated copies under
- * landing/<lang>/) from the shared
+ * landing/<lang>/, plus the site-wide landing/sitemap.xml and
+ * landing/robots.txt) from the shared
  * templates in site-src/templates/ and the per-language dictionaries in
  * site-src/i18n/. The generated files are COMMITTED (the deploy script and
  * the disaster-recovery runbook just copy landing/ — no build step to break
@@ -13,7 +14,7 @@
  *   {{some.key}}   -> the dictionary message (trusted HTML), missing key = error
  *   {url_name}     -> an external URL from site-src/links.json (also usable
  *                     inside messages, so translators keep every link intact)
- *   {{@lang}} {{@base}} {{@q}} {{@a}} {{@alternates}} {{@switch}} {{@messages}} -> per-page values
+ *   {{@lang}} {{@base}} {{@q}} {{@a}} {{@alternates}} {{@switch}} {{@messages}} {{@jsonld}} -> per-page values
  *   {{@typeIcons}} -> the catalog-type pictograms (templates/_catalog-type-icons.svg)
  *
  * Usage: bun scripts/generate-site.ts [--check]
@@ -96,6 +97,8 @@ function render(template: string, page: string, lang: string): string {
       const url = pageUrl(lang, page);
       const image = OG_IMAGES[page]!;
       return [
+        // Search engines take their snippet from this one, not from og:description.
+        `<meta name="description" content="${description}" />`,
         `<meta property="og:type" content="website" />`,
         `<meta property="og:site_name" content="Electronic Catalog Maker" />`,
         `<meta property="og:locale" content="${OG_LOCALE[lang]}" />`,
@@ -110,6 +113,39 @@ function render(template: string, page: string, lang: string): string {
         `<meta name="twitter:description" content="${description}" />`,
         `<meta name="twitter:image" content="${image}" />`,
       ].join("\n");
+    },
+    // schema.org description of the product, for search engines' rich results.
+    // The site itself (WebSite) is described once, on the default-language home page.
+    "@jsonld": () => {
+      const url = pageUrl(lang, page);
+      const graph: object[] = [
+        {
+          "@type": "SoftwareApplication",
+          name: "Electronic Catalog Maker",
+          alternateName: "Tapalog",
+          url,
+          description: dict["index.description"],
+          image: OG_IMAGES[page],
+          inLanguage: lang,
+          applicationCategory: "BusinessApplication",
+          operatingSystem: "Web browser, Windows, macOS, Linux",
+          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+          license: "https://opensource.org/licenses/MIT",
+          codeRepository: links.github,
+          author: { "@type": "Person", name: "Alexander Kotov", sameAs: [links.linkedin, links.x] },
+        },
+      ];
+      if (lang === DEFAULT_LANG) {
+        graph.unshift({
+          "@type": "WebSite",
+          name: "Electronic Catalog Maker",
+          alternateName: "Tapalog",
+          url,
+          inLanguage: Object.keys(LANGS),
+        });
+      }
+      const json = JSON.stringify({ "@context": "https://schema.org", "@graph": graph }).replace(/</g, "\\u003c");
+      return `<script type="application/ld+json">${json}</script>`;
     },
     "@alternates": () =>
       [
@@ -158,26 +194,57 @@ for (const lang of Object.keys(LANGS)) {
 }
 if (problems) process.exit(1);
 
+// --- sitemap.xml and robots.txt (site-wide, so written once, next to the default language's pages) ---
+// No <lastmod>: the output has to stay the same from run to run for `--check`.
+const HTML_PAGES = PAGES.filter((p) => p.endsWith(".html"));
+// Pages that exist in one language only: the hand-written privacy page and the apps themselves.
+const SINGLE_PAGES = ["privacy.html", "editor/", "viewer/", "composer/", "map-composer/"];
+
+function sitemap(): string {
+  const entries: string[] = [];
+  for (const page of HTML_PAGES) {
+    const alternates = [
+      ...Object.keys(LANGS).map((l) => `    <xhtml:link rel="alternate" hreflang="${l}" href="${pageUrl(l, page)}" />`),
+      `    <xhtml:link rel="alternate" hreflang="x-default" href="${pageUrl(DEFAULT_LANG, page)}" />`,
+    ].join("\n");
+    for (const lang of Object.keys(LANGS)) entries.push(`  <url>\n    <loc>${pageUrl(lang, page)}</loc>\n${alternates}\n  </url>`);
+  }
+  for (const page of SINGLE_PAGES) entries.push(`  <url>\n    <loc>${SITE_ORIGIN}/${page}</loc>\n  </url>`);
+  return [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">`,
+    ...entries,
+    `</urlset>`,
+    ``,
+  ].join("\n");
+}
+
+const robots = `User-agent: *\nAllow: /\n\nSitemap: ${SITE_ORIGIN}/sitemap.xml\n`;
+
 // --- generate ---
 const check = process.argv.includes("--check");
 const stale: string[] = [];
+function emit(relPath: string, content: string): void {
+  const outPath = join(ROOT, relPath);
+  const current = existsSync(outPath) ? readFileSync(outPath, "utf8") : null;
+  if (current === content) return;
+  if (check) {
+    stale.push(relPath);
+  } else {
+    mkdirSync(dirname(outPath), { recursive: true });
+    writeFileSync(outPath, content);
+    console.log(`wrote ${relPath}`);
+  }
+}
 for (const lang of Object.keys(LANGS)) {
   const cfg = LANGS[lang]!;
   for (const page of PAGES) {
     const template = readFileSync(join(ROOT, "site-src/templates", page), "utf8");
-    const html = render(template, page, lang);
-    const outPath = join(ROOT, cfg.dir, page);
-    const current = existsSync(outPath) ? readFileSync(outPath, "utf8") : null;
-    if (current === html) continue;
-    if (check) {
-      stale.push(join(cfg.dir, page));
-    } else {
-      mkdirSync(dirname(outPath), { recursive: true });
-      writeFileSync(outPath, html);
-      console.log(`wrote ${join(cfg.dir, page)}`);
-    }
+    emit(join(cfg.dir, page), render(template, page, lang));
   }
 }
+emit(join(LANGS[DEFAULT_LANG]!.dir, "sitemap.xml"), sitemap());
+emit(join(LANGS[DEFAULT_LANG]!.dir, "robots.txt"), robots);
 if (stale.length) {
   console.error(`Generated pages are out of date:\n  ${stale.join("\n  ")}\nRun: bun scripts/generate-site.ts`);
   process.exit(1);

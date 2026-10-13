@@ -15,7 +15,7 @@ pictograms both the landing section and `catalog-types.svg` pull in with
   `{{some.key}}` pulls a message from the dictionary; `{url_name}` an external
   link from `links.json` (also usable inside messages, so a translation can't
   silently lose a link); `{{@lang}}`, `{{@base}}`, `{{@alternates}}`,
-  `{{@switch}}`, `{{@messages}}`, `{{@typeIcons}}` are per-page values (see
+  `{{@switch}}`, `{{@messages}}`, `{{@typeIcons}}`, `{{@jsonld}}` are per-page values (see
   `scripts/generate-site.ts`).
 - `i18n/<lang>.json` — flat `key: message` dictionaries (messages are trusted
   HTML). `en.json` is the source of truth; every other language is checked
@@ -24,6 +24,10 @@ pictograms both the landing section and `catalog-types.svg` pull in with
   plurals there use `Intl.PluralRules` (`js.visits.one/few/many/other`).
 - `links.json` — external URLs; `{hl}` becomes the language's Microsoft
   Store locale.
+
+`landing/sitemap.xml` and `landing/robots.txt` are generated too (the list of
+pages lives in `scripts/generate-site.ts`); a new page has to be added there
+to be listed.
 
 ## Workflow
 

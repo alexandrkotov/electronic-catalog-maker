@@ -36,6 +36,8 @@ for lang in ru uk; do
   cp "landing/$lang/catalog-types.svg" "site/$lang/catalog-types.svg"
 done
 cp landing/CNAME site/CNAME
+cp landing/sitemap.xml site/sitemap.xml
+cp landing/robots.txt site/robots.txt
 cp landing/favicon-16.png site/favicon-16.png
 cp landing/favicon-32.png site/favicon-32.png
 cp landing/icon-192.png site/icon-192.png
