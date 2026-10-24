@@ -89,6 +89,7 @@
   "quiz.feedback.right": "✓ Richtig",
   "quiz.feedback.wrong": "✗ Nicht ganz. Richtige Antwort: {answer}",
   "quiz.feedback.more": "✓ So weit richtig. Wähle noch {left}.",
+  "quiz.feedback.tryAgain": "✗ Das ist es nicht. Versuch es noch mal.",
   "print.heading@quiz": "{catalog} – Ergebnis",
   "quiz.print": "Ergebnis drucken",
   "quiz.print.tip": "Punktestand und Antworten drucken",
@@ -132,8 +133,10 @@
   "showcase.navListHint": "Wähle eine Markierung im Bild oder einen Eintrag unten.",
   "showcase.prev": "Vorheriger Artikel",
   "showcase.next": "Nächster Artikel",
+  "showcase.findHint": "Schau genau hin und tippe auf Dinge im Bild.",
   "hotspot.aria": "{name} – Details anzeigen",
   "hotspot.navAria": "{name} – öffnen",
+  "hotspot.unfoundAria": "Hier ist etwas versteckt",
 
   "copy.value": "Wert kopieren",
   "copy.done": "Kopiert",
@@ -151,6 +154,7 @@
   "lock.wrongPassword": "Falsches Passwort, oder die Datei wurde verändert. Prüfe das Passwort und versuch es noch einmal.",
   "lock.exportTip": "Entsperre zuerst den Katalog",
   "lock.linkKeyFailed": "Der Schlüssel in diesem Link hat nicht funktioniert (vielleicht wurde das Passwort geändert). Gib stattdessen das Passwort ein.",
+  "lock.back": "‹ Zurück: {name}",
 
   "search.placeholder": "Alle Zeilen durchsuchen…",
   "search.allFields": "Alle Felder",

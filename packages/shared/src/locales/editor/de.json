@@ -92,10 +92,12 @@
   "image.folder": "Ordner (leer lassen für keinen)",
   "image.fitOnOpen": "Beim Öffnen ins Fenster einpassen",
   "image.fitOnOpen.hint": "Der Viewer zeigt dieses Bild ganz statt in 100 %.",
+  "image.hideMarkers": "Markierungen verstecken, bis sie gefunden sind",
+  "image.hideMarkers.hint": "Ein Suchbild: Der Viewer zeichnet die Markierungen der Dinge unsichtbar (jede so groß wie ihre Beschriftung), bis man darauf tippt, und listet nur Gefundenes auf.",
   "image.folder.placeholder": "z. B. Kleiderschrank",
 
   "link.new.title": "Neuer Link (Hotspot)",
-  "link.new.hint": "Die Adresse eines Hotspots verbindet ihn mit einer Zeile in der Tabelle unten. Mehrere Hotspots können dieselbe Adresse haben, wenn dasselbe Teil mehrmals in diesem Schaubild vorkommt – sie zeigen dann alle auf diese eine Zeile.",
+  "link.new.hint": "Die Adresse eines Hotspots verbindet ihn mit einer Zeile in der Tabelle unten. Mehrere Hotspots können dieselbe Adresse haben, wenn dasselbe Teil mehrmals in diesem Schaubild vorkommt – sie zeigen dann alle auf diese eine Zeile. Eine Adresse der Form #catalog=datei.ecatm öffnet stattdessen einen anderen Katalog (ein nächstes Kapitel, eine passwortgeschützte Datei).",
   "link.position": "Position: oben={top}, links={left}",
   "link.reuse.label": "Dasselbe Teil wie ein vorhandener Hotspot? (optional)",
   "link.reuse.none": "— neues Teil —",

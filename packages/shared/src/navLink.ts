@@ -9,14 +9,44 @@
  */
 const NAV_LINK = /^#image=(\d+)$/;
 
+/**
+ * Catalog links: `#catalog=<address>` opens another catalog in the same
+ * viewer — a quest's next chapter, a password-protected bonus file, a
+ * related catalog. A relative address is resolved against the open
+ * catalog's own address (see resolveCatalogLink). Like `#image=`, it never
+ * gets a row.
+ */
+const CATALOG_LINK = /^#catalog=(\S+)$/;
+
 /** The target image id of a navigation link's address, or null for an ordinary (item) address. */
 export function navTargetImageId(url: string): number | null {
   const m = NAV_LINK.exec(url.trim());
   return m ? Number(m[1]) : null;
 }
 
+/** The address a catalog link opens, as written (possibly relative), or null for any other address. */
+export function catalogLinkTarget(url: string): string | null {
+  const m = CATALOG_LINK.exec(url.trim());
+  return m ? m[1]! : null;
+}
+
+/**
+ * The absolute address of a catalog link's target: relative to the open
+ * catalog's address when it was opened from one, else to the page. Only
+ * http(s) is followed. Null when the address can't be resolved.
+ */
+export function resolveCatalogLink(target: string, base: string): string | null {
+  try {
+    const url = new URL(target, base);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A hotspot that leads somewhere (another image, another catalog) instead of pointing at a data row. */
 export function isNavLink(link: { url: string }): boolean {
-  return navTargetImageId(link.url) !== null;
+  return navTargetImageId(link.url) !== null || catalogLinkTarget(link.url) !== null;
 }
 
 export function navLinkUrl(imageId: number): string {

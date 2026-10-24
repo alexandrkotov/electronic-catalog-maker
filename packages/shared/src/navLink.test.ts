@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { forwardNavLinks, isNavLink, navLinkUrl, navTargetImageId } from "./navLink.js";
+import { catalogLinkTarget, forwardNavLinks, isNavLink, navLinkUrl, navTargetImageId, resolveCatalogLink } from "./navLink.js";
 
 describe("navTargetImageId", () => {
   test("reads the target of #image=<id>, tolerating surrounding spaces", () => {
@@ -33,5 +33,29 @@ describe("forwardNavLinks", () => {
 
   test("a link to itself or to a missing image is not forward", () => {
     expect(forwardNavLinks([{ url: "#image=5" }, { url: "#image=77" }], 5, order)).toEqual([]);
+  });
+});
+
+describe("catalog links", () => {
+  test("#catalog=<address> is a navigation link to another catalog", () => {
+    expect(catalogLinkTarget("#catalog=crypt.ecatm")).toBe("crypt.ecatm");
+    expect(catalogLinkTarget(" #catalog=https://example.com/a.ecatm ")).toBe("https://example.com/a.ecatm");
+    expect(isNavLink({ url: "#catalog=crypt.ecatm" })).toBe(true);
+    expect(navTargetImageId("#catalog=crypt.ecatm")).toBeNull();
+  });
+
+  test("anything else is not one", () => {
+    for (const url of ["#catalog=", "#catalog", "catalog=a.ecatm", "#catalog=a b.ecatm", "#image=3", "#crypt"]) {
+      expect(catalogLinkTarget(url)).toBeNull();
+    }
+  });
+
+  test("resolves against the open catalog's address, http(s) only", () => {
+    expect(resolveCatalogLink("crypt.ecatm", "https://play.tapalog.com/haunted-house/house.ecatm")).toBe(
+      "https://play.tapalog.com/haunted-house/crypt.ecatm",
+    );
+    expect(resolveCatalogLink("/demo/a.ecatm", "https://tapalog.com/viewer/")).toBe("https://tapalog.com/demo/a.ecatm");
+    expect(resolveCatalogLink("javascript:alert(1)", "https://tapalog.com/")).toBeNull();
+    expect(resolveCatalogLink("data:text/plain,x", "https://tapalog.com/")).toBeNull();
   });
 });

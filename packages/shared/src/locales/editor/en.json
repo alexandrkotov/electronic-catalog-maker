@@ -92,10 +92,12 @@
   "image.folder": "Folder (leave empty for none)",
   "image.fitOnOpen": "Fit to the window when opened",
   "image.fitOnOpen.hint": "The viewer shows this image whole instead of at 100%.",
+  "image.hideMarkers": "Hide markers until found",
+  "image.hideMarkers.hint": "A find-the-object picture: the viewer draws this image's item markers invisible (each as big as its label) until the visitor taps them, and lists only the items found.",
   "image.folder.placeholder": "e.g. Wardrobe",
 
   "link.new.title": "New link (hotspot)",
-  "link.new.hint": "A hotspot's Address is what ties it to a row in the table below — several hotspots can share the same Address when the same part is drawn more than once on this diagram, and they'll all point to that one row.",
+  "link.new.hint": "A hotspot's Address is what ties it to a row in the table below — several hotspots can share the same Address when the same part is drawn more than once on this diagram, and they'll all point to that one row. An Address of the form #catalog=file.ecatm opens another catalog instead (a next chapter, a password-protected bonus).",
   "link.position": "Position: top={top}, left={left}",
   "link.reuse.label": "Same part as an existing hotspot? (optional)",
   "link.reuse.none": "— new part —",

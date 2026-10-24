@@ -28,7 +28,7 @@ import {
   detectLocalCollabServerViaBridge,
 } from "./collabClient.js";
 import { renderQrCodeSvg } from "./qrcode.js";
-import { isNavLink, navTargetImageId } from "./navLink.js";
+import { catalogLinkTarget, isNavLink, navTargetImageId, resolveCatalogLink } from "./navLink.js";
 import { catalogFileStem } from "./fileName.js";
 import { createTranslator, matchLocale, type MessageParams, type Translate } from "./i18n.js";
 import { VIEWER_LOCALES, VIEWER_LOCALE_NAMES, viewerMessages } from "./locales/viewer/index.js";
@@ -37,6 +37,7 @@ import { DEFAULT_PDF_EXPORT_OPTIONS, suggestedQrSize, type DiagramPageMode, type
 import {
   QUIZ_HIDDEN_EXTRA_KEYS,
   evaluateQuestion,
+  isCorrectRow,
   loadQuizPicks,
   quizStorageKey,
   saveQuizPicks,
@@ -269,7 +270,37 @@ export interface MountViewerOptions {
    * decision — the standalone app saves it, an embed must not.
    */
   onLocaleChange?: (locale: string) => void;
+  /**
+   * Showcase mode: an item with a buy_url gets an "Add to cart" toggle
+   * instead of a plain store link, and the bar above the image a checkout
+   * button — the cart of the full viewer, for an embed whose visitors pick
+   * several items (a candy bag, a shopping list). Ignored under cart_mode
+   * "instant". Default false.
+   */
+  showcaseCart?: boolean;
+  /**
+   * Tells the host what the visitor does — see ViewerEventType for the
+   * events and their details. Return false from a cancelable event
+   * ("checkout") to stop the viewer's own default action. The embed turns
+   * these into `ecm-<type>` DOM events on the element.
+   */
+  onEvent?: (type: ViewerEventType, detail: Record<string, unknown>, cancelable: boolean) => boolean | void;
 }
+
+/**
+ * What a viewer reports to its host (MountViewerOptions.onEvent):
+ * - "load": a catalog opened — {catalog, file, protected, images, imageId}
+ *   (protected: it was unlocked with a password).
+ * - "locked": a password-protected catalog is waiting for its password — {catalog, file}.
+ * - "image": another image is shown — {imageId, name}.
+ * - "select": an item's marker or table row was chosen — {imageId, linkId, url, name}.
+ * - "answer": a quiz answer was picked — {imageId, url, name, correct,
+ *   status ("open"|"passed"|"failed"), need, found, score {total, answered, correct, percent, finished}}.
+ * - "cart": the cart changed — {items: row urls}.
+ * - "checkout": the visitor pressed Checkout — {items: [{url, name, buyUrl}]};
+ *   cancelable: the host can show its own ending instead of the store.
+ */
+export type ViewerEventType = "load" | "locked" | "image" | "select" | "answer" | "cart" | "checkout";
 
 export interface ViewerController {
   /** Clears everything this instance rendered. Not reusable after this. */
@@ -283,6 +314,17 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   const updateAddressBar = options.updateAddressBar ?? false;
   const themeTarget = options.themeTarget ?? document.documentElement;
   const exportPdf = options.exportPdf;
+  const showcaseCart = mode === "showcase" && options.showcaseCart === true;
+
+  /** Reports to the host (options.onEvent); false when it cancelled a cancelable event. A throwing host never breaks the viewer. */
+  function emit(type: ViewerEventType, detail: Record<string, unknown>, cancelable = false): boolean {
+    try {
+      return options.onEvent?.(type, detail, cancelable) !== false;
+    } catch (err) {
+      console.error(err);
+      return true;
+    }
+  }
 
   applyTheme(resolveInitialTheme(), themeTarget);
 
@@ -356,6 +398,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // while fully offline and check out later once back in range, without
   // needing to keep the page open the whole time in between.
   let cartItems = new Set<string>(); // row urls
+  // Images with hideMarkers (see CatalogImage): the item urls the visitor has
+  // found by tapping their invisible markers, per image id. For this visit
+  // only; a quiz's saved picks count as found too (see isFound).
+  let foundUrls = new Map<number, Set<string>>();
+  // The active image's item urls still to be found, refreshed by render() and
+  // read by hotspotHtml. Empty unless the image hides its markers.
+  let unfoundUrls = new Set<string>();
   // Set alongside cartItems every time a catalog (re)loads — see openBytes().
   // Null only in the instant before any catalog has ever loaded.
   let cartStorageKeyValue: string | null = null;
@@ -452,6 +501,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   let lockBusy = false;
   let lockError: string | null = null;
   let sessionPassword: string | null = null;
+  // The catalog a `#catalog=` link was followed from, so its lock screen can
+  // offer the way back (a reader who tapped the link too early). Set by the
+  // link just before the open (nextCatalogBack) and dropped by any other open.
+  let catalogBack: { url: string; name: string } | null = null;
+  let nextCatalogBack: { url: string; name: string } | null = null;
   // A deep link's image/hotspot ids (see boot) wait here while the catalog they
   // point into is still locked, and are applied once it is unlocked.
   let initialSelectionPending = false;
@@ -887,8 +941,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     db: () => db,
     state: () => ({
       catalogMode,
-      // Same condition as the toolbar's cart button (see render): without it there is nowhere to review the list.
-      listEnabled: mode === "full" && cartMode === "accumulate" && catalogMode !== "quiz",
+      // Same condition as the cart buttons (see render): without one there is nowhere to review the list.
+      listEnabled: (mode === "full" || showcaseCart) && cartMode === "accumulate" && catalogMode !== "quiz",
       activeImageId,
       selectedUrl:
         db && activeImageId !== null && selectedLinkId !== null
@@ -1150,8 +1204,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     bytes: Uint8Array,
     sourceName = t("legacy.sourceName"),
     handle: EcmFileSystemFileHandle | null,
+    // The still-encrypted file, when `bytes` were just unlocked from it (see actionUnlock).
+    encrypted: Uint8Array | null = null,
   ) {
-    protectedSource = null;
+    protectedSource = encrypted;
+    catalogBack = nextCatalogBack;
+    nextCatalogBack = null;
     if (isProtectedCatalog(bytes)) {
       let unlocked: Uint8Array | null = null;
       // Refresh of a catalog already unlocked this session must not ask again,
@@ -1216,6 +1274,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     cartItems = loadPersistedCart(cartStorageKeyValue);
     quizStorageKeyValue = quizStorageKey(sourceName, loadedMeta.catalogName);
     quizPicks = loadQuizPicks(quizStorageKeyValue);
+    foundUrls = new Map();
     cartOpen = false;
     activeImageId = listImages(db)[0]?.id ?? null;
     selectedLinkId = null;
@@ -1244,6 +1303,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     }
     syncAgentTools();
     render();
+    emit("load", {
+      catalog: loadedMeta.catalogName,
+      file: sourceName,
+      protected: protectedSource !== null,
+      images: listImages(db).length,
+      imageId: activeImageId,
+    });
   }
 
   /**
@@ -1275,6 +1341,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     statusMessage = t("status.locked", { name: info.name });
     syncAgentTools();
     render();
+    emit("locked", { catalog: info.name, file: sourceName });
   }
 
   async function actionUnlock() {
@@ -1288,8 +1355,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       const plain = await unlockCatalog(bytes, password);
       sessionPassword = password;
       lockBusy = false;
-      await openBytes(plain, sourceName, openedFileHandle);
-      protectedSource = bytes;
+      await openBytes(plain, sourceName, openedFileHandle, bytes);
       if (initialSelectionPending) {
         initialSelectionPending = false;
         applyInitialSelection();
@@ -1373,13 +1439,25 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // Showcase has no table to fall back on, so an empty details card after a
     // switch would just be a hint — select the image's first hotspot instead
     // (same "always something to read" state as the initial preselection).
-    if (mode === "showcase" && db) {
+    // Not where choosing is the point: a quiz question, or markers to find.
+    if (mode === "showcase" && db && catalogMode !== "quiz" && !hidesMarkers(id)) {
       selectedLinkId = [...listLinksForImage(db, id)].filter((l) => !isNavLink(l)).sort((a, b) => a.id - b.id)[0]?.id ?? null;
     }
     resetZoomForImage(id);
     mobileTab = "stage"; // no-op above the mobile breakpoint — see mobileTab's declaration
     syncAddressBar();
     render();
+    emit("image", { imageId: id, name: db ? (listImages(db).find((i) => i.id === id)?.name ?? "") : "" });
+  }
+
+  /** Whether this image draws its item markers hidden until found (see CatalogImage.hideMarkers). */
+  function hidesMarkers(imageId: number | null): boolean {
+    return !!(db && imageId !== null && listImages(db).find((i) => i.id === imageId)?.hideMarkers);
+  }
+
+  /** A hidden marker's item has been found: tapped on this visit, or a saved quiz pick. */
+  function isFound(imageId: number, url: string): boolean {
+    return !!foundUrls.get(imageId)?.has(url) || (quizPicks.get(imageId) ?? []).includes(url);
   }
 
   function actionSetMobileTab(tab: "images" | "stage" | "table") {
@@ -1403,19 +1481,37 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function actionSelectHotspot(linkId: number, toTab: "stage" | "table" = "table") {
     // A navigation hotspot (address `#image=<id>`, see navLink.ts) has no row:
     // it opens its target image. A target that no longer exists does nothing.
-    if (db && activeImageId !== null) {
-      const link = listLinksForImage(db, activeImageId).find((l) => l.id === linkId);
-      const target = link ? navTargetImageId(link.url) : null;
+    // A catalog link (`#catalog=<address>`) opens that catalog in its place.
+    const link = db && activeImageId !== null ? listLinksForImage(db, activeImageId).find((l) => l.id === linkId) : undefined;
+    if (db && link) {
+      const target = navTargetImageId(link.url);
       if (target !== null) {
         if (listImages(db).some((i) => i.id === target)) actionSelectImage(target);
         return;
       }
+      const catalog = catalogLinkTarget(link.url);
+      if (catalog !== null) {
+        const resolved = resolveCatalogLink(catalog, new URL(currentSrcUrl ?? location.href, location.href).href);
+        if (resolved) {
+          nextCatalogBack = currentSrcUrl ? { url: currentSrcUrl, name: readMeta(db).catalogName } : null;
+          void loadFromUrl(resolved).then(() => (nextCatalogBack = null));
+        }
+        return;
+      }
+    }
+    if (link && activeImageId !== null && hidesMarkers(activeImageId)) {
+      const found = foundUrls.get(activeImageId) ?? new Set<string>();
+      found.add(link.url);
+      foundUrls.set(activeImageId, found);
     }
     selectedLinkId = linkId;
     mobileTab = toTab;
     syncAddressBar();
     render();
     centerSelection();
+    if (link && db) {
+      emit("select", { imageId: activeImageId, linkId, url: link.url, name: findRowByUrl(db, link.url)?.name ?? link.name });
+    }
   }
 
   /**
@@ -1446,7 +1542,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       const target = navTargetImageId(l.url);
       if (target !== null && target !== imageId && !targets.includes(target)) targets.push(target);
     }
-    return targets.flatMap((id) => listRowsForImage(db!, id));
+    // A target that hides its markers keeps its unfound items to itself.
+    return targets.flatMap((id) => listRowsForImage(db!, id).filter((r) => !hidesMarkers(id) || isFound(id, r.url)));
   }
 
   /**
@@ -1490,6 +1587,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     else cartItems.add(rowUrl);
     if (cartStorageKeyValue) savePersistedCart(cartStorageKeyValue, cartItems);
     render();
+    emit("cart", { items: [...cartItems] });
   }
 
   /** Toggles the toolbar's cart review panel (renderCartPanel) open/closed. */
@@ -1511,6 +1609,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (cartStorageKeyValue) savePersistedCart(cartStorageKeyValue, cartItems);
     if (cartItems.size === 0) cartOpen = false;
     render();
+    emit("cart", { items: [...cartItems] });
   }
 
   /**
@@ -1519,12 +1618,27 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    * caller re-renders (it selects the clicked hotspot right after).
    */
   function actionQuizAnswer(url: string) {
-    if (activeImageId === null || !quizStorageKeyValue) return;
+    if (!db || activeImageId === null || !quizStorageKeyValue) return;
     if (quizNow && quizNow.status !== "open") return;
     const picks = quizPicks.get(activeImageId) ?? [];
     if (picks.includes(url)) return;
     quizPicks.set(activeImageId, [...picks, url]);
     saveQuizPicks(quizStorageKeyValue, quizPicks);
+    const rows = listRowsForImage(db, activeImageId);
+    const row = rows.find((r) => r.url === url);
+    if (!row) return;
+    const state = evaluateQuestion(rows, quizPicks.get(activeImageId)!);
+    const score = scoreQuiz(listImages(db).map((img) => evaluateQuestion(listRowsForImage(db!, img.id), quizPicks.get(img.id) ?? [])));
+    emit("answer", {
+      imageId: activeImageId,
+      url,
+      name: row.name,
+      correct: isCorrectRow(row),
+      status: state.status,
+      need: state.need,
+      found: rows.filter((r) => isCorrectRow(r) && state.picked.includes(r.url)).length,
+      score,
+    });
   }
 
   /** Jumps to the next question (in list order, wrapping) that has not been answered yet. */
@@ -1692,22 +1806,23 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (!quizNow?.isQuestion || quizNow.picked.length === 0) return "";
     const s = quizNow;
     const last = rows.find((r) => r.url === s.picked[s.picked.length - 1]);
-    let kind: string;
-    let headline: string;
-    if (s.status === "open") {
-      kind = "open";
-      headline = t("quiz.feedback.more", { left: s.need - s.green.size });
-    } else if (s.status === "passed") {
-      kind = "right";
-      headline = t("quiz.feedback.right");
-    } else {
-      kind = "wrong";
-      const answer = rows.filter((r) => s.green.has(r.url)).map((r) => r.name).join(" · ");
-      headline = t("quiz.feedback.wrong", { answer });
-    }
+    const { kind, headline } = quizVerdict(s);
     // While the question is still open the explanation would only cover the options still to pick.
     const why = s.status !== "open" && last?.description ? `<div class="quiz-feedback-why">${escapeHtml(last.description)}</div>` : "";
     return `<div class="quiz-feedback ${kind}" role="status"><div class="quiz-feedback-head">${escapeHtml(headline)}</div>${why}</div>`;
+  }
+
+  /** The verdict on a question's last pick: "right so far" / "try again" while it is open, then right or wrong. */
+  function quizVerdict(s: QuestionState): { kind: string; headline: string } {
+    if (s.status === "passed") return { kind: "right", headline: t("quiz.feedback.right") };
+    if (s.status === "failed") {
+      const names = db && activeImageId !== null ? listRowsForImage(db, activeImageId).filter((r) => s.green.has(r.url)).map((r) => r.name) : [];
+      return { kind: "wrong", headline: t("quiz.feedback.wrong", { answer: names.join(" · ") }) };
+    }
+    // Still open: the last pick was either right (more to go) or wrong with tries left.
+    const last = s.picked[s.picked.length - 1];
+    if (last !== undefined && s.red.has(last)) return { kind: "wrong", headline: t("quiz.feedback.tryAgain") };
+    return { kind: "open", headline: t("quiz.feedback.more", { left: s.need - s.green.size }) };
   }
 
   /** The toolbar's score, "next question" and restart controls. */
@@ -1732,6 +1847,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (cartStorageKeyValue) savePersistedCart(cartStorageKeyValue, cartItems);
     cartOpen = false;
     render();
+    emit("cart", { items: [] });
   }
 
   /**
@@ -1768,15 +1884,23 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (!db || cartItems.size === 0) return;
     const combinableIds: string[] = [];
     const directUrls: string[] = [];
+    const items: { url: string; name: string; buyUrl: string }[] = [];
     for (const r of listAllRows(db)) {
       if (!cartItems.has(r.url)) continue;
       const buyUrl = typeof r.extra.buy_url === "string" ? r.extra.buy_url : "";
       if (!buyUrl) continue;
+      items.push({ url: r.url, name: r.name, buyUrl });
       const id = parseCartItemId(buyUrl, cartIdPattern);
       if (id !== null) combinableIds.push(id);
       else directUrls.push(buyUrl);
     }
     if (combinableIds.length === 0 && directUrls.length === 0) return;
+    // The host may finish the visit its own way (a game's ending) instead of the store.
+    if (!emit("checkout", { items }, true)) {
+      cartOpen = false;
+      render();
+      return;
+    }
     if (combinableIds.length > 0) {
       window.open(buildCartCheckoutUrl(combinableIds, cartItemParam, cartCheckoutBaseUrl), "_blank", "noopener,noreferrer");
     }
@@ -2143,8 +2267,18 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     imageNamesById = new Map(images.map((i) => [i.id, i.name]));
     const activeImage = images.find((i) => i.id === activeImageId) ?? null;
     const links = db && activeImage ? listLinksForImage(db, activeImage.id) : [];
-    const rows = db && activeImage ? listRowsForImage(db, activeImage.id) : [];
-    computeQuizState(images, activeImage?.id ?? null, rows);
+    const allRows = db && activeImage ? listRowsForImage(db, activeImage.id) : [];
+    computeQuizState(images, activeImage?.id ?? null, allRows);
+    // An image that hides its markers lists only the items found so far — the
+    // table would otherwise give away what there is to find.
+    unfoundUrls = new Set(
+      activeImage?.hideMarkers
+        ? links
+            .filter((l) => !isNavLink(l) && !isFound(activeImage.id, l.url) && !quizNow?.green.has(l.url) && !quizNow?.red.has(l.url))
+            .map((l) => l.url)
+        : [],
+    );
+    const rows = unfoundUrls.size ? allRows.filter((r) => !unfoundUrls.has(r.url)) : allRows;
     // An overview image whose hotspots open other images (navigation links,
     // see navLink.ts) lists those images' items in its table too — the room
     // photo's table shows the room's furniture. Clicking one opens it where it
@@ -2272,7 +2406,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
             showcase
               ? // A real bar above the image (not overlays on it), so nothing covers the
                 // diagram — and first in DOM order, so Tab reaches picker/zoom before the markers.
-                `<div class="showcase-bar">${renderShowcaseImagePicker(images)}${activeImage ? renderZoomControls() : ""}</div>`
+                `<div class="showcase-bar">${renderShowcaseImagePicker(images)}${activeImage ? renderZoomControls() : ""}${renderShowcaseCheckout()}</div>`
               : ""
           }
           <div class="stage-scroll${
@@ -2280,11 +2414,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
             // there is nothing to pan — and a scrollable box here would (a) show
             // blank scroll room past the scaled image and (b) swallow the page's
             // wheel/touch scrolling while the pointer is over the demo.
-            (showcase || wholeFit) && zoom <= fitZoom + 0.001 ? " fitted" : catalogMode === "quiz" && !userZoomed ? " quiz-fit" : ""
+            (showcase || wholeFit) && zoom <= fitZoom + 0.001 ? " fitted" : catalogMode === "quiz" && !showcase && !userZoomed ? " quiz-fit" : ""
           }" id="stage-scroll">
             ${
               activeImage
-                ? `${catalogMode === "quiz" ? `<div class="quiz-fit-box" style="width:${Math.round(activeImage.width * zoom)}px;height:${Math.round(activeImage.height * zoom)}px">` : ""}<div class="stage-inner" style="${
+                ? `${catalogMode === "quiz" && !showcase ? `<div class="quiz-fit-box" style="width:${Math.round(activeImage.width * zoom)}px;height:${Math.round(activeImage.height * zoom)}px">` : ""}<div class="stage-inner" style="${
                     showcase || wholeFit
                       ? // Centered when smaller than the stage; markers are counter-scaled
                         // (capped) so they stay legible while the whole image is shrunk to fit.
@@ -2306,7 +2440,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                        const tabStopId = live.some((l) => l.id === selectedLinkId) ? selectedLinkId : (live[0]?.id ?? null);
                        return links.map((l) => hotspotHtml(l, selectedUrl, selectedLinkId, l.id === tabStopId, l.url === staticUrl)).join("");
                      })()}
-                   </div>${catalogMode === "quiz" ? `</div>${renderQuizFeedback(rows)}` : ""}`
+                   </div>${catalogMode === "quiz" && !showcase ? `</div>${renderQuizFeedback(rows)}` : ""}`
                 : `<p class="hint" style="padding:2rem">${te("stage.noImage")}</p>`
             }
           </div>
@@ -2516,9 +2650,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       // An overview image (only navigation markers — the room photo): list the
       // items those markers lead to, each one opening where it lives, the
       // showcase counterpart of the full viewer's table (see navTargetRows).
-      const listed = onlyNav && activeImageId !== null ? navTargetRows(imageLinks, activeImageId) : [];
+      // Not in a quiz: the list would give the answers away.
+      const listed = onlyNav && activeImageId !== null && catalogMode !== "quiz" ? navTargetRows(imageLinks, activeImageId) : [];
       return `<section class="showcase-details" role="region" aria-label="${te("showcase.region")}" aria-live="polite">
-        <p class="hint">${listed.length ? te("showcase.navListHint") : onlyNav ? te("showcase.navHint") : te("showcase.hint")}</p>
+        ${renderShowcaseVerdict()}
+        <p class="hint">${listed.length ? te("showcase.navListHint") : onlyNav ? te("showcase.navHint") : hidesMarkers(activeImageId) ? te("showcase.findHint") : te("showcase.hint")}</p>
         ${
           listed.length
             ? `<ul class="showcase-list">${listed
@@ -2532,20 +2668,32 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       </section>`;
     }
     const buyUrl = typeof row.extra.buy_url === "string" && row.extra.buy_url ? row.extra.buy_url : null;
-    const entries = Object.entries(row.extra).filter(([k, v]) => k !== "buy_url" && v !== "" && v !== null && v !== undefined);
-    const showDescription = row.description && row.description.trim().toLowerCase() !== row.name.trim().toLowerCase();
+    // A quiz question still open keeps the explanation (and its own keys) to itself, as in the table (see rowHtml).
+    const quizOpen = quizNow !== null && quizNow.isQuestion && quizNow.status === "open";
+    const entries = Object.entries(row.extra).filter(
+      ([k, v]) => k !== "buy_url" && !(quizNow && QUIZ_HIDDEN_EXTRA_KEYS.includes(k)) && v !== "" && v !== null && v !== undefined,
+    );
+    const showDescription = !quizOpen && row.description && row.description.trim().toLowerCase() !== row.name.trim().toLowerCase();
     // Prev/next over the distinct items on this image (a part drawn several
     // times counts once — all its markers are highlighted together anyway).
     // Markers can be tiny on a phone-sized fit of a dense diagram, so tapping
-    // one precisely is not the only way to reach an item.
-    const items = showcaseItems(imageLinks);
+    // one precisely is not the only way to reach an item. Not on an image
+    // that hides its markers: stepping through would list what is to find.
+    const items = hidesMarkers(activeImageId) ? [] : showcaseItems(imageLinks);
     const at = items.findIndex((l) => l.url === row.url);
     const nav =
       items.length > 1 && at >= 0
         ? `<div class="showcase-nav"><button type="button" id="btn-showcase-prev" aria-label="${te("showcase.prev")}">‹</button><span>${te("nav.position", { index: at + 1, total: items.length })}</span><button type="button" id="btn-showcase-next" aria-label="${te("showcase.next")}">›</button></div>`
         : "";
+    const inCart = cartItems.has(row.url);
+    const buyControl = !buyUrl
+      ? ""
+      : showcaseCart && cartMode === "accumulate"
+        ? `<button type="button" class="buy-btn showcase-buy ${inCart ? "in-cart" : ""}" data-cart-url="${escapeHtml(row.url)}">${addLabel(inCart)}</button>`
+        : `<a class="buy-btn showcase-buy" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer">${directOpenLabel()}</a>`;
     return `<section class="showcase-details" role="region" aria-label="${te("showcase.region")}" aria-live="polite">
       ${nav}
+      ${renderShowcaseVerdict()}
       <h2>${escapeHtml(row.name)}</h2>
       ${row.sku ? `<p class="showcase-sku">${skuLabel()} ${escapeHtml(row.sku)}</p>` : ""}
       ${showDescription ? `<p class="showcase-desc">${escapeHtml(row.description)}</p>` : ""}
@@ -2559,8 +2707,21 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
               .join("")}</dl>`
           : ""
       }
-      ${buyUrl ? `<a class="buy-btn showcase-buy" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer">${directOpenLabel()}</a>` : ""}
+      ${buyControl}
     </section>`;
+  }
+
+  /** Showcase mode with options.showcaseCart: the cart's checkout (or print, for a list), once the catalog has anything to add. */
+  function renderShowcaseCheckout(): string {
+    if (!showcaseCart || cartMode !== "accumulate" || !db || !catalogHasAnyBuyUrl(listAllRows(db))) return "";
+    return `<button type="button" id="cart-checkout" class="showcase-checkout" ${cartItems.size === 0 ? "disabled" : ""}>${cartIcon()} ${te("cart.checkout")} (${cartItems.size})</button>`;
+  }
+
+  /** Showcase mode's quiz verdict, at the top of the card (the explanation is the card's own description). */
+  function renderShowcaseVerdict(): string {
+    if (catalogMode !== "quiz" || !quizNow?.isQuestion || quizNow.picked.length === 0) return "";
+    const { kind, headline } = quizVerdict(quizNow);
+    return `<div class="quiz-feedback in-card ${kind}" role="status"><div class="quiz-feedback-head">${escapeHtml(headline)}</div></div>`;
   }
 
   function renderZoomControls(): string {
@@ -2604,6 +2765,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         </div>
         ${lockError ? `<p class="error" role="alert">${escapeHtml(lockError)}</p>` : ""}
         <div class="open-actions">
+          ${catalogBack ? `<button type="button" id="lock-back" class="lock-back" ${lockBusy ? "disabled" : ""}>${te("lock.back", { name: catalogBack.name })}</button>` : ""}
           <button type="submit" id="lock-submit" ${lockBusy || !lockPassword ? "disabled" : ""}>${lockBusy ? te("lock.unlocking") : te("lock.unlock")}</button>
         </div>
       </form>
@@ -2865,26 +3027,34 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // stepping through duplicates with the instance-nav is visually obvious.
     const classes = ["hotspot"];
     const navTarget = navTargetImageId(l.url);
-    if (navTarget !== null) classes.push("nav");
+    const catalogTarget = catalogLinkTarget(l.url);
+    if (navTarget !== null || catalogTarget !== null) classes.push("nav");
     if (l.url === selectedUrl) classes.push("selected");
     if (l.id === selectedLinkId) classes.push("current");
     if (isStatic) classes.push("static");
     classes.push(...quizClasses(l.url));
+    // Not found yet on an image that hides its markers: an invisible tap zone
+    // the size of its label, no name in its tooltip or accessible name.
+    const unfound = unfoundUrls.has(l.url);
+    if (unfound) classes.push("unfound");
+    if (!isNavLink(l) && hidesMarkers(activeImageId)) classes.push("findable");
     // Showcase mode: keyboard-operable (Tab to a marker, Enter/Space to select)
     // with a spoken name instead of the raw url as tooltip.
     // Roving tabindex: with dozens of markers, Tab would otherwise step through
     // every one — only the selected marker (or the first, if none) is a tab
     // stop; arrow keys move between markers (see wireEvents). The caller picks it.
     const tabbable = tabStop;
-    const navName = navTarget !== null ? (imageNamesById.get(navTarget) ?? l.name) : null;
+    const navName = navTarget !== null ? (imageNamesById.get(navTarget) ?? l.name) : catalogTarget !== null ? l.name : null;
     const a11y =
       mode === "showcase"
         ? isStatic
           ? ` aria-hidden="true"`
           : navName !== null
           ? ` role="button" tabindex="${tabbable ? 0 : -1}" aria-label="${te("hotspot.navAria", { name: navName })}"`
-          : ` role="button" tabindex="${tabbable ? 0 : -1}" aria-label="${te("hotspot.aria", { name: l.name })}" aria-pressed="${l.id === selectedLinkId}"`
-        : "";
+          : ` role="button" tabindex="${tabbable ? 0 : -1}" aria-label="${unfound ? te("hotspot.unfoundAria") : te("hotspot.aria", { name: l.name })}" aria-pressed="${l.id === selectedLinkId}"`
+        : unfound
+          ? ` aria-label="${te("hotspot.unfoundAria")}"`
+          : "";
     // Showcase: no tooltips, except on a navigation marker whose text doesn't say
     // where it leads (a "⌂" back to the overview).
     const title =
@@ -2892,7 +3062,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         ? navName !== null && !isStatic && l.name !== navName
           ? ` title="${options.navTitle ? escapeHtml(options.navTitle) : te("hotspot.navAria", { name: navName })}"`
           : ""
-        : ` title="${navName !== null ? te("hotspot.navAria", { name: navName }) : escapeHtml(l.url)}"`;
+        : unfound
+          ? ""
+          : ` title="${navName !== null ? te("hotspot.navAria", { name: navName }) : escapeHtml(l.url)}"`;
     return `<div class="${classes.join(" ")}" data-id="${l.id}" data-url="${escapeHtml(l.url)}"${a11y} style="top:${l.top}px;left:${l.left}px;font-size:${overviewLabels ? `calc(${l.fontSize}px * var(--ecm-overview-label-scale, 1))` : `${l.fontSize}px`}"${title}>${escapeHtml(l.name)}</div>`;
   }
 
@@ -3035,6 +3207,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       lockPassword = lockInput.value;
       if (lockSubmit) lockSubmit.disabled = !lockPassword;
     });
+    root.getElementById("lock-back")?.addEventListener("click", () => {
+      if (catalogBack) void loadFromUrl(catalogBack.url);
+    });
     lockForm?.addEventListener("submit", (evt) => {
       evt.preventDefault();
       void actionUnlock();
@@ -3160,7 +3335,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
     root.querySelectorAll<HTMLDivElement>(".hotspot[data-id]:not(.static)").forEach((el) => {
       el.addEventListener("click", () => {
-        if (catalogMode === "quiz" && navTargetImageId(el.dataset.url!) === null) actionQuizAnswer(el.dataset.url!);
+        if (catalogMode === "quiz" && !isNavLink({ url: el.dataset.url! })) actionQuizAnswer(el.dataset.url!);
         actionSelectHotspot(Number(el.dataset.id), catalogMode === "quiz" ? "stage" : "table");
       });
       if (mode === "showcase") {

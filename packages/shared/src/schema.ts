@@ -48,7 +48,8 @@ CREATE TABLE IF NOT EXISTS images (
   height     INTEGER NOT NULL,
   sort_order INTEGER NOT NULL DEFAULT 0,
   folder     TEXT NOT NULL DEFAULT '', -- free-form label for two-level grouping in the image list; '' = ungrouped
-  fit_on_open INTEGER NOT NULL DEFAULT 0 -- 1 = the viewer opens this image fitted whole into its window
+  fit_on_open INTEGER NOT NULL DEFAULT 0, -- 1 = the viewer opens this image fitted whole into its window
+  hide_markers INTEGER NOT NULL DEFAULT 0 -- 1 = the viewer hides this image's item markers until each one is found
 );
 
 CREATE TABLE IF NOT EXISTS links (

@@ -59,6 +59,31 @@ describe("evaluateQuestion", () => {
     expect(evaluateQuestion(rows, ["zzz", "b", "b"]).picked).toEqual(["b"]);
   });
 
+  test("tries 3: the third wrong pick fails, until then it stays open", () => {
+    const three = [row("a", { tries: "3" }), row("b", { correct: "1" }), row("c"), row("e")];
+    const two = evaluateQuestion(three, ["a", "c"]);
+    expect(two.status).toBe("open");
+    expect([...two.red]).toEqual(["a", "c"]);
+    expect(two.green.size).toBe(0);
+    expect(evaluateQuestion(three, ["a", "c", "e"]).status).toBe("failed");
+    expect(evaluateQuestion(three, ["a", "c", "b"]).status).toBe("passed");
+  });
+
+  test("tries 0: never fails and never reveals the right answer", () => {
+    const quest = [row("a", { tries: "0" }), row("b", { correct: "1" }), row("c"), row("d")];
+    const s = evaluateQuestion(quest, ["a", "c", "d"]);
+    expect(s.status).toBe("open");
+    expect(s.tries).toBe(0);
+    expect(s.green.size).toBe(0);
+    expect(evaluateQuestion(quest, ["a", "c", "d", "b"]).status).toBe("passed");
+  });
+
+  test("tries 0 on any row wins; otherwise the largest", () => {
+    expect(evaluateQuestion([row("a", { tries: "4" }), row("b", { correct: "1", tries: "0" })], []).tries).toBe(0);
+    expect(evaluateQuestion([row("a", { tries: "2" }), row("b", { correct: "1", tries: "3" })], []).tries).toBe(3);
+    expect(evaluateQuestion(rows, []).tries).toBe(1);
+  });
+
   test("an image with no right row is not a question", () => {
     expect(evaluateQuestion([row("a"), row("b")], []).isQuestion).toBe(false);
   });

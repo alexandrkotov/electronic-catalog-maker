@@ -11,6 +11,13 @@ export interface CatalogImage {
   folder: string;
   /** The viewer opens this image fitted whole into its window instead of at its default zoom. */
   fitOnOpen: boolean;
+  /**
+   * A find-the-object picture: the viewer draws this image's item markers as
+   * invisible tap zones (each one the size its label would have) until the
+   * visitor finds them, and lists only the found items. Navigation markers
+   * stay visible.
+   */
+  hideMarkers: boolean;
 }
 
 export interface CatalogLink {

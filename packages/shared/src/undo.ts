@@ -64,7 +64,7 @@ export function captureUndoBefore(db: Database, fn: string, args: unknown[]): Un
     case "updateImage": {
       const image = getImage(db, args[0] as number);
       if (!image) return [];
-      return [{ fn, args: [image.id, { name: image.name, folder: image.folder, fitOnOpen: image.fitOnOpen }] }];
+      return [{ fn, args: [image.id, { name: image.name, folder: image.folder, fitOnOpen: image.fitOnOpen, hideMarkers: image.hideMarkers }] }];
     }
     case "deleteImage": {
       const imageId = args[0] as number;
@@ -84,6 +84,7 @@ export function captureUndoBefore(db: Database, fn: string, args: unknown[]): Un
               sortOrder: image.sortOrder,
               folder: image.folder,
               fitOnOpen: image.fitOnOpen,
+              hideMarkers: image.hideMarkers,
             } satisfies AddImageInput,
           ],
         },

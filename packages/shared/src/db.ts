@@ -66,6 +66,7 @@ function migrateLegacySchema(db: Database): void {
   migrateLinksUniqueConstraint(db);
   migrateImagesFolderColumn(db);
   migrateImagesFitOnOpenColumn(db);
+  migrateImagesHideMarkersColumn(db);
 }
 
 /**
@@ -114,6 +115,14 @@ function migrateImagesFitOnOpenColumn(db: Database): void {
   const ddl = ddlRows[0]?.values[0]?.[0];
   if (typeof ddl === "string" && /\bfit_on_open\b/i.test(ddl)) return; // already on the current schema
   db.run("ALTER TABLE images ADD COLUMN fit_on_open INTEGER NOT NULL DEFAULT 0");
+}
+
+/** Catalogs created before the per-image "hide markers" setting are missing `images.hide_markers`. */
+function migrateImagesHideMarkersColumn(db: Database): void {
+  const ddlRows = db.exec("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'images'");
+  const ddl = ddlRows[0]?.values[0]?.[0];
+  if (typeof ddl === "string" && /\bhide_markers\b/i.test(ddl)) return; // already on the current schema
+  db.run("ALTER TABLE images ADD COLUMN hide_markers INTEGER NOT NULL DEFAULT 0");
 }
 
 /** Serializes the catalog back to bytes, ready to download or fetch elsewhere. */
@@ -178,7 +187,7 @@ export function updateStoreSettings(db: Database, input: StoreSettingsInput): vo
 
 export function listImages(db: Database): CatalogImage[] {
   const stmt = db.prepare(
-    "SELECT id, name, mime_type, image_data, width, height, sort_order, folder, fit_on_open FROM images ORDER BY sort_order, id",
+    "SELECT id, name, mime_type, image_data, width, height, sort_order, folder, fit_on_open, hide_markers FROM images ORDER BY sort_order, id",
   );
   const out: CatalogImage[] = [];
   while (stmt.step()) {
@@ -193,6 +202,7 @@ export function listImages(db: Database): CatalogImage[] {
       sortOrder: Number(r.sort_order),
       folder: String(r.folder ?? ""),
       fitOnOpen: Number(r.fit_on_open ?? 0) === 1,
+      hideMarkers: Number(r.hide_markers ?? 0) === 1,
     });
   }
   stmt.free();
@@ -248,7 +258,7 @@ export function listAllRows(db: Database): CatalogRow[] {
 /** One image by id, or null if it doesn't exist. */
 export function getImage(db: Database, imageId: number): CatalogImage | null {
   const stmt = db.prepare(
-    "SELECT id, name, mime_type, image_data, width, height, sort_order, folder, fit_on_open FROM images WHERE id = ?",
+    "SELECT id, name, mime_type, image_data, width, height, sort_order, folder, fit_on_open, hide_markers FROM images WHERE id = ?",
   );
   stmt.bind([imageId]);
   let out: CatalogImage | null = null;
@@ -264,6 +274,7 @@ export function getImage(db: Database, imageId: number): CatalogImage | null {
       sortOrder: Number(r.sort_order),
       folder: String(r.folder ?? ""),
       fitOnOpen: Number(r.fit_on_open ?? 0) === 1,
+      hideMarkers: Number(r.hide_markers ?? 0) === 1,
     };
   }
   stmt.free();
@@ -376,16 +387,17 @@ export interface AddImageInput {
   sortOrder?: number;
   folder?: string;
   fitOnOpen?: boolean;
+  hideMarkers?: boolean;
 }
 
 export function addImage(db: Database, input: AddImageInput): number {
   const stmt =
     input.id === undefined
       ? db.prepare(
-          "INSERT INTO images (name, mime_type, image_data, width, height, sort_order, folder, fit_on_open) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO images (name, mime_type, image_data, width, height, sort_order, folder, fit_on_open, hide_markers) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
       : db.prepare(
-          "INSERT INTO images (id, name, mime_type, image_data, width, height, sort_order, folder, fit_on_open) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO images (id, name, mime_type, image_data, width, height, sort_order, folder, fit_on_open, hide_markers) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         );
   stmt.run([
     ...(input.id === undefined ? [] : [input.id]),
@@ -397,6 +409,7 @@ export function addImage(db: Database, input: AddImageInput): number {
     input.sortOrder ?? 0,
     input.folder ?? "",
     input.fitOnOpen ? 1 : 0,
+    input.hideMarkers ? 1 : 0,
   ]);
   stmt.free();
   return input.id ?? lastInsertRowId(db);
@@ -408,14 +421,17 @@ export interface UpdateImageInput {
   folder: string;
   /** Left unchanged when omitted (an older editor in the same collaboration session doesn't send it). */
   fitOnOpen?: boolean;
+  /** Same as fitOnOpen: left unchanged when omitted. */
+  hideMarkers?: boolean;
 }
 
-/** Renames an image, moves it into a different (or no) folder, and/or changes its "fit when opened" setting. */
+/** Renames an image, moves it into a different (or no) folder, and/or changes its "fit when opened" and "hide markers" settings. */
 export function updateImage(db: Database, imageId: number, input: UpdateImageInput): void {
   const stmt = db.prepare("UPDATE images SET name = ?, folder = ? WHERE id = ?");
   stmt.run([input.name, input.folder, imageId]);
   stmt.free();
   if (input.fitOnOpen !== undefined) db.run("UPDATE images SET fit_on_open = ? WHERE id = ?", [input.fitOnOpen ? 1 : 0, imageId]);
+  if (input.hideMarkers !== undefined) db.run("UPDATE images SET hide_markers = ? WHERE id = ?", [input.hideMarkers ? 1 : 0, imageId]);
 }
 
 /**

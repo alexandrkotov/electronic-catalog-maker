@@ -478,6 +478,51 @@ tbody tr.quiz-wrong:hover {
   font-size: 0.9em;
 }
 
+/* Showcase: the verdict heads the details card, on every layout. */
+.quiz-feedback.in-card {
+  display: block;
+  position: static;
+  margin: 0 0 0.75rem;
+  max-height: none;
+}
+
+/* An image that hides its markers (images.hide_markers): an item marker is an
+   invisible tap zone until found. It follows the image's scale instead of the
+   quiz's counter-scale, so the zone keeps covering the object it was drawn on. */
+.ecm-viewer-app .stage .hotspot.findable {
+  transform: translate(-50%, -50%);
+}
+
+.hotspot.unfound,
+.hotspot.unfound:hover {
+  background: transparent;
+  border-color: transparent;
+  color: transparent;
+  box-shadow: none;
+}
+
+.hotspot.unfound:focus-visible {
+  outline: 2px dashed var(--hotspot-selected-bg);
+}
+
+/* Found: the object is circled instead of covered by its label — the card
+   below names it. Green or red in a quiz, the selection colour otherwise. */
+.ecm-viewer-app .stage .hotspot.findable:not(.unfound) {
+  background: transparent;
+  color: transparent;
+  border: 3px solid var(--hotspot-selected-bg);
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.7);
+}
+
+.ecm-viewer-app .stage .hotspot.findable.quiz-right {
+  border-color: #16a34a;
+}
+
+.ecm-viewer-app .stage .hotspot.findable.quiz-wrong {
+  border-color: #dc2626;
+}
+
 .hotspot.current {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -1149,7 +1194,7 @@ button:disabled {
   /* Room for the lowest options to scroll clear of the verdict and the zoom
      controls. A spacer, not padding: sticky offsets ignore the scroller's own
      padding-inset, which would push the verdict up by that much. */
-  .ecm-viewer-app[data-catalog-mode="quiz"] .stage-scroll::after {
+  .ecm-viewer-app[data-catalog-mode="quiz"]:not(.mode-showcase) .stage-scroll::after {
     content: "";
     display: block;
     height: 10rem;
@@ -1385,6 +1430,13 @@ button:disabled {
   box-shadow: none;
 }
 
+/* options.showcaseCart: checkout next to the zoom controls. */
+.showcase-checkout {
+  flex: none;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+
 .mode-showcase .stage-scroll {
   top: 44px;
   /* Plain backdrop instead of the editor-style transparency checkerboard: a
@@ -1420,7 +1472,9 @@ button:disabled {
        grows with its content — the host page scrolls, not the card, so there
        is no scroll region nested inside the page. The embedding page must let
        the host's height be `auto` for this to show in full. */
-    grid-template-rows: 360px auto;
+    /* --ecm-showcase-stage-height: the embedding page's choice, e.g. a
+       square picture as wide as the phone. */
+    grid-template-rows: var(--ecm-showcase-stage-height, 360px) auto;
     grid-template-areas:
       "stage"
       "details";
@@ -1429,7 +1483,7 @@ button:disabled {
   }
 
   .ecm-viewer-app.mode-showcase.no-details {
-    grid-template-rows: 360px;
+    grid-template-rows: var(--ecm-showcase-stage-height, 360px);
   }
 
   .mode-showcase .showcase-divider {
@@ -1505,6 +1559,19 @@ button:disabled {
 
 .lock-card .hint {
   margin: 0;
+}
+
+/* "‹ Back to …" (a catalog reached through a #catalog= link) sits left,
+   Unlock right; on a narrow card Unlock wraps under it. */
+.lock-card .open-actions {
+  flex-wrap: wrap;
+}
+
+.lock-back {
+  margin-right: auto;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
 }
 
 .lock-cover {

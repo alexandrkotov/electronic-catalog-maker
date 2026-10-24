@@ -2172,15 +2172,21 @@ async function actionAddImage(file: File) {
   setStatus(t("image.added", { name: file.name }));
 }
 
-/** Renames the active image, moves it into a different (or no) folder, and/or sets "fit when opened". */
+/** Renames the active image, moves it into a different (or no) folder, and/or sets "fit when opened" and "hide markers". */
 function actionUpdateImageMeta() {
   if (!db || activeImageId === null) return;
   const nameInput = document.getElementById("image-name-input") as HTMLInputElement | null;
   const folderInput = document.getElementById("image-folder-input") as HTMLInputElement | null;
   const fitInput = document.getElementById("image-fit-input") as HTMLInputElement | null;
+  const hideInput = document.getElementById("image-hide-markers-input") as HTMLInputElement | null;
   const name = nameInput?.value.trim() || t("image.untitled");
   const folder = folderInput?.value.trim() ?? "";
-  applyAndBroadcast("updateImage", updateImage, activeImageId, { name, folder, fitOnOpen: fitInput?.checked ?? false });
+  applyAndBroadcast("updateImage", updateImage, activeImageId, {
+    name,
+    folder,
+    fitOnOpen: fitInput?.checked ?? false,
+    hideMarkers: hideInput?.checked ?? false,
+  });
   setStatus(t("image.updated", { name }));
 }
 
@@ -2560,7 +2566,7 @@ function actionAddLink(name: string, url: string) {
   const imageId = activeImageId;
   const top = pendingHotspot.top;
   const left = pendingHotspot.left;
-  const conflicts = navTargetImageId(url) === null ? findLinkConflicts(db, name, url) : [];
+  const conflicts = isNavLink({ url }) ? [] : findLinkConflicts(db, name, url);
 
   const doAdd = () => {
     if (!db) return;
@@ -2584,7 +2590,7 @@ function actionAddLink(name: string, url: string) {
 function actionUpdateLink(name: string, url: string) {
   if (!db || editingLinkId === null) return;
   const linkId = editingLinkId;
-  const conflicts = navTargetImageId(url) === null ? findLinkConflicts(db, name, url, linkId) : [];
+  const conflicts = isNavLink({ url }) ? [] : findLinkConflicts(db, name, url, linkId);
 
   const doUpdate = () => {
     if (!db) return;
@@ -3114,6 +3120,10 @@ function renderImageForm(image: CatalogImage, allImages: CatalogImage[]): string
       <div class="field">
         <label style="display:flex; gap:0.4rem; align-items:center"><input type="checkbox" id="image-fit-input" ${image.fitOnOpen ? "checked" : ""} /> ${te("image.fitOnOpen")}</label>
         <p class="hint">${te("image.fitOnOpen.hint")}</p>
+      </div>
+      <div class="field">
+        <label style="display:flex; gap:0.4rem; align-items:center"><input type="checkbox" id="image-hide-markers-input" ${image.hideMarkers ? "checked" : ""} /> ${te("image.hideMarkers")}</label>
+        <p class="hint">${te("image.hideMarkers.hint")}</p>
       </div>
       <button id="btn-save-image">${te("action.apply")}</button>
     </section>

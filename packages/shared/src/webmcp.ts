@@ -24,7 +24,7 @@
  *   built-in browser); such an agent's own permission prompts are the gate.
  */
 import { listAllRows, listImages, listLinksForImage, listRowsForImage, readMeta } from "./db.js";
-import { navTargetImageId } from "./navLink.js";
+import { isNavLink, navTargetImageId } from "./navLink.js";
 import { searchRows } from "./search.js";
 import type { CatalogImage, CatalogMode, CatalogRow } from "./types.js";
 import type { Database } from "sql.js";
@@ -99,7 +99,7 @@ export function buildViewerTools(host: ViewerAgentHost): AgentTool[] {
     const out = new Map<string, string[]>();
     for (const image of images) {
       for (const l of listLinksForImage(db, image.id)) {
-        if (navTargetImageId(l.url) !== null) continue;
+        if (isNavLink(l)) continue;
         const labels = out.get(l.url) ?? [];
         if (!labels.includes(l.name)) labels.push(l.name);
         out.set(l.url, labels);

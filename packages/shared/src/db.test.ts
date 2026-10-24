@@ -26,3 +26,27 @@ describe("images.fit_on_open", () => {
     expect(listImages(openCatalog(SQL, exportCatalog(db)))[0]?.fitOnOpen).toBe(false);
   });
 });
+
+describe("images.hide_markers", () => {
+  test("a catalog from before the column existed opens with it off", () => {
+    const old = new SQL.Database();
+    old.run(`CREATE TABLE images (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, mime_type TEXT NOT NULL DEFAULT 'image/jpeg',
+      image_data TEXT NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, folder TEXT NOT NULL DEFAULT '',
+      fit_on_open INTEGER NOT NULL DEFAULT 0);
+      INSERT INTO images (name, image_data, width, height) VALUES ('Room', '', 10, 10);`);
+    const db = openCatalog(SQL, old.export());
+    expect(listImages(db)[0]?.hideMarkers).toBe(false);
+  });
+
+  test("set on add, changed by update, kept when an update leaves it out, survives export", () => {
+    const db = createEmptyCatalog(SQL, "t");
+    const id = addImage(db, { ...image, hideMarkers: true });
+    expect(listImages(db)[0]?.hideMarkers).toBe(true);
+    updateImage(db, id, { name: "Room", folder: "", fitOnOpen: true });
+    expect(listImages(db)[0]?.hideMarkers).toBe(true);
+    updateImage(db, id, { name: "Room", folder: "", hideMarkers: false });
+    const reopened = listImages(openCatalog(SQL, exportCatalog(db)))[0];
+    expect(reopened?.hideMarkers).toBe(false);
+    expect(reopened?.fitOnOpen).toBe(true);
+  });
+});

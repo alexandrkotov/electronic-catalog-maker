@@ -89,6 +89,7 @@
   "quiz.feedback.right": "✓ Верно",
   "quiz.feedback.wrong": "✗ Не совсем. Верный ответ: {answer}",
   "quiz.feedback.more": "✓ Пока верно. Выбери ещё: {left}.",
+  "quiz.feedback.tryAgain": "✗ Не то. Попробуй ещё.",
   "print.heading@quiz": "{catalog} — Результаты",
   "quiz.print": "Распечатать результаты",
   "quiz.print.tip": "Распечатать твой счёт и ответы",
@@ -132,8 +133,10 @@
   "showcase.navListHint": "Нажми на отметку на изображении или выбери из списка ниже.",
   "showcase.prev": "Предыдущая позиция",
   "showcase.next": "Следующая позиция",
+  "showcase.findHint": "Присмотрись и нажимай на предметы на картинке.",
   "hotspot.aria": "{name} — показать сведения",
   "hotspot.navAria": "{name} — открыть",
+  "hotspot.unfoundAria": "Здесь что-то спрятано",
 
   "copy.value": "Скопировать значение",
   "copy.done": "Скопировано",
@@ -151,6 +154,7 @@
   "lock.wrongPassword": "Неверный пароль или файл был изменён. Проверь пароль и попробуй ещё раз.",
   "lock.exportTip": "Сначала открой каталог паролем",
   "lock.linkKeyFailed": "Ключ из этой ссылки не подошёл (возможно, пароль сменили). Введи пароль вручную.",
+  "lock.back": "‹ Назад: {name}",
 
   "search.placeholder": "Поиск по всем строкам…",
   "search.allFields": "Все поля",

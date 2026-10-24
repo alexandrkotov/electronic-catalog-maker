@@ -89,6 +89,7 @@
   "quiz.feedback.right": "✓ Правильно",
   "quiz.feedback.wrong": "✗ Не зовсім. Правильна відповідь: {answer}",
   "quiz.feedback.more": "✓ Поки правильно. Обери ще: {left}.",
+  "quiz.feedback.tryAgain": "✗ Не те. Спробуй ще.",
   "print.heading@quiz": "{catalog} — Результати",
   "quiz.print": "Роздрукувати результати",
   "quiz.print.tip": "Роздрукувати твій рахунок і відповіді",
@@ -132,8 +133,10 @@
   "showcase.navListHint": "Вибери точку на зображенні або позицію нижче.",
   "showcase.prev": "Попередня позиція",
   "showcase.next": "Наступна позиція",
+  "showcase.findHint": "Придивися й натискай на предмети на малюнку.",
   "hotspot.aria": "{name} — показати відомості",
   "hotspot.navAria": "{name} — відкрити",
+  "hotspot.unfoundAria": "Тут щось заховано",
 
   "copy.value": "Скопіювати значення",
   "copy.done": "Скопійовано",
@@ -151,6 +154,7 @@
   "lock.wrongPassword": "Невірний пароль або файл було змінено. Перевірте пароль і спробуй ще раз.",
   "lock.exportTip": "Спершу відкрий каталог паролем",
   "lock.linkKeyFailed": "Ключ із цього посилання не підійшов (можливо, пароль змінили). Введи пароль вручну.",
+  "lock.back": "‹ Назад: {name}",
 
   "search.placeholder": "Пошук за всіма рядками…",
   "search.allFields": "Усі поля",

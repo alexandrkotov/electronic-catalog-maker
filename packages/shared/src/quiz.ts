@@ -10,12 +10,15 @@ import type { CatalogRow } from "./types.js";
  *   need    — how many right answers the question asks for ("Name two ..."),
  *             a positive integer read from any row of the image (the largest
  *             wins), default 1 ("Name one ...").
+ *   tries   — how many wrong picks end the question, read the same way,
+ *             default 1. 0 means never: the visitor keeps trying until right
+ *             (a puzzle or a quest rather than a test).
  *
- * Answering ends the question at the first wrong pick (failed) or once `need`
- * right ones are picked (passed). Both keys are hidden from the table so they
- * don't give the answer away — see QUIZ_HIDDEN_EXTRA_KEYS.
+ * Answering ends the question at the `tries`-th wrong pick (failed) or once
+ * `need` right ones are picked (passed). The keys are hidden from the table so
+ * they don't give the answer away — see QUIZ_HIDDEN_EXTRA_KEYS.
  */
-export const QUIZ_HIDDEN_EXTRA_KEYS = ["correct", "need"];
+export const QUIZ_HIDDEN_EXTRA_KEYS = ["correct", "need", "tries"];
 
 export function isCorrectRow(row: Pick<CatalogRow, "extra">): boolean {
   const v = row.extra.correct;
@@ -30,6 +33,8 @@ export interface QuestionState {
   isQuestion: boolean;
   status: QuizStatus;
   need: number;
+  /** Wrong picks that end the question; 0 = no limit. */
+  tries: number;
   /** urls of rows to paint green: the ones picked and right, plus — once failed — every right one. */
   green: Set<string>;
   /** urls of picked wrong rows, to paint red. */
@@ -42,11 +47,17 @@ export function evaluateQuestion(rows: Pick<CatalogRow, "url" | "extra">[], pick
   const correct = new Set(rows.filter(isCorrectRow).map((r) => r.url));
   const known = new Set(rows.map((r) => r.url));
   let need = 1;
+  let tries = 1;
+  let unlimited = false;
   for (const r of rows) {
     const n = Number.parseInt(String(r.extra.need ?? ""), 10);
     if (Number.isFinite(n) && n > need) need = n;
+    const t = Number.parseInt(String(r.extra.tries ?? ""), 10);
+    if (t === 0) unlimited = true;
+    else if (Number.isFinite(t) && t > tries) tries = t;
   }
   need = Math.min(need, Math.max(correct.size, 1));
+  if (unlimited) tries = 0;
 
   const green = new Set<string>();
   const red = new Set<string>();
@@ -61,11 +72,11 @@ export function evaluateQuestion(rows: Pick<CatalogRow, "url" | "extra">[], pick
       if (green.size >= need) status = "passed";
     } else {
       red.add(url);
-      status = "failed";
+      if (tries > 0 && red.size >= tries) status = "failed";
     }
   }
   if (status === "failed") for (const url of correct) green.add(url);
-  return { isQuestion: correct.size > 0, status, need, green, red, picked };
+  return { isQuestion: correct.size > 0, status, need, tries, green, red, picked };
 }
 
 export interface QuizScore {

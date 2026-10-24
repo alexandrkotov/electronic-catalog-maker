@@ -211,6 +211,20 @@ A few other things worth knowing:
   and it never gets a table row). That's the classic room catalog — a room
   photo whose hotspots open each piece's close-up, and a "⌂" hotspot on
   every close-up back to the room.
+- An address of the form `#catalog=<file>.ecatm` opens another catalog in
+  the same viewer instead: a quest's next chapter, a password-protected
+  bonus file (the viewer asks for its password). A relative address is
+  read against the open catalog's own address.
+- Tick **Hide markers until found** on an image for a find-the-object
+  picture: the viewer draws its item markers as invisible tap zones, each
+  as big as its label (so the label's font size sets the zone), shows each
+  one once it is tapped, and lists only the items found so far.
+  Navigation markers stay visible.
+- In a quiz (**⚙️ Store settings…** → Quiz), each image is a question and
+  its rows are the answer options. Mark the right ones with Extra key
+  `correct` = 1; `need` = how many right answers the question asks for
+  (default 1); `tries` = how many wrong picks end the question (default 1,
+  `0` = keep trying until right, for a puzzle or a quest).
 - Tick **Fit to the window when opened** on an image to have the viewer
   show it whole instead of at 100% (the viewer's **Fit** button does the
   same on demand).
@@ -581,6 +595,14 @@ Two attributes:
   "Sharing a catalog via link" above — the file's host needs to allow it).
 - `mode` — `"lite"` (default) or `"full"`, as in the two examples above.
 
+A third mode, `mode="showcase"`, is for marketing pages and games: no
+toolbar, image list or table — the picture is fitted whole and the chosen
+item shows as a card next to it (under it on a phone). With `cart="on"`,
+an item's Buy link becomes an **Add to cart** toggle and the bar above the
+picture gets a **Checkout** button. The CSS custom property
+`--ecm-showcase-stage-height` on the element sets the picture's height on
+a phone (default `360px`).
+
 Optional: `panels="17,26"` sets the opening widths of the image list and the
 row table as a percentage of the widget (the diagram gets the rest). With it,
 the widget ignores the panel widths a visitor saved in their browser — those
@@ -590,6 +612,41 @@ proportions.
 Sizing and appearance are ordinary CSS on the element itself — it defaults
 to `height: 600px` with a light border, but any style/CSS rule your page
 applies to `ecm-viewer` (or a matching id/class) overrides that.
+
+### Events
+
+The element tells the page what the visitor does, with DOM events that
+bubble up from `<ecm-viewer>` (the details are in `event.detail`):
+
+| Event | When | `detail` |
+| --- | --- | --- |
+| `ecm-load` | a catalog opened (also after its password) | `catalog`, `file`, `protected`, `images`, `imageId` |
+| `ecm-locked` | a password-protected catalog waits for its password | `catalog`, `file` |
+| `ecm-image` | another picture is shown | `imageId`, `name` |
+| `ecm-select` | an item was chosen (marker or table row) | `imageId`, `linkId`, `url`, `name` |
+| `ecm-answer` | a quiz answer was picked | `imageId`, `url`, `name`, `correct`, `status` (`open`/`passed`/`failed`), `need`, `found`, `score` |
+| `ecm-cart` | the cart changed | `items` (row addresses) |
+| `ecm-checkout` | Checkout was pressed | `items` (`url`, `name`, `buyUrl`) |
+
+`ecm-checkout` is cancelable: `event.preventDefault()` keeps the viewer
+from opening the store, so the page can finish the visit its own way.
+
+```html
+<ecm-viewer id="quest" mode="showcase" cart="on" src="house.ecatm"></ecm-viewer>
+<script>
+  const quest = document.getElementById("quest");
+  quest.addEventListener("ecm-answer", (e) => console.log(e.detail.name, e.detail.correct, e.detail.score));
+  quest.addEventListener("ecm-checkout", (e) => {
+    e.preventDefault();
+    showEnding(e.detail.items);
+  });
+</script>
+```
+
+The standalone viewer sends the same events to its parent page with
+`postMessage` (`{source: "ecm-viewer", type: "ecm-answer", detail}`) when
+it is shown in an `<iframe>`; there they are notices only, nothing can be
+cancelled across frames.
 
 ## Agent-ready (WebMCP)
 
@@ -642,13 +699,14 @@ One `.ecatm` file (a SQLite database under the hood) = one catalog. Tables:
   file predates just falls back to a sensible default — no migration
   needed when this list grows.
 - `images` — one row per picture (name, embedded image data, size, an
-  optional `folder` label for grouping in the image list, and `fit_on_open`:
-  1 = the viewer opens it fitted whole into its window)
+  optional `folder` label for grouping in the image list, `fit_on_open`:
+  1 = the viewer opens it fitted whole into its window, and `hide_markers`:
+  1 = its item markers stay hidden until found)
 - `links` — one row per clickable hotspot on an image (name, url, pixel
   position). Several hotspots may share the same `name`/`url` — that's how
   the same part gets drawn at multiple positions on one exploded diagram.
   A url of the form `#image=<id>` is a navigation hotspot: it opens that
-  image and has no row.
+  image and has no row; `#catalog=<address>` likewise opens another catalog.
 - `rows` — one row of data per link, joined by `url`. Fixed columns (`name`,
   `sku`, `description`) plus a free-form `extra` JSON column for whatever
   characteristics a given catalog needs (including `buy_url`, above).

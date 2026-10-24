@@ -82,4 +82,10 @@ mountViewer({
   updateAddressBar: true,
   wasmUrl,
   exportPdf,
+  // Framed in another page (an <iframe> embed): tell that page what the
+  // visitor does, the iframe counterpart of the widget's ecm-* DOM events.
+  // A notice only — a cancelable event can't be cancelled across frames.
+  onEvent: (type, detail) => {
+    if (window.parent !== window) window.parent.postMessage({ source: "ecm-viewer", type: `ecm-${type}`, detail }, "*");
+  },
 });

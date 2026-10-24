@@ -89,6 +89,7 @@
   "quiz.feedback.right": "✓ Correct",
   "quiz.feedback.wrong": "✗ Not quite. Right answer: {answer}",
   "quiz.feedback.more": "✓ Right so far. Choose {left} more.",
+  "quiz.feedback.tryAgain": "✗ Not this one. Try again.",
   "print.heading@quiz": "{catalog} — Results",
   "quiz.print": "Print results",
   "quiz.print.tip": "Print your score and answers",
@@ -132,8 +133,10 @@
   "showcase.navListHint": "Select a marker on the image or an item below.",
   "showcase.prev": "Previous item",
   "showcase.next": "Next item",
+  "showcase.findHint": "Look closely and tap things in the picture.",
   "hotspot.aria": "{name} — show details",
   "hotspot.navAria": "{name} — open",
+  "hotspot.unfoundAria": "Something is hidden here",
 
   "copy.value": "Copy value",
   "copy.done": "Copied",
@@ -151,6 +154,7 @@
   "lock.wrongPassword": "Wrong password, or the file was modified. Check the password and try again.",
   "lock.exportTip": "Unlock the catalog first",
   "lock.linkKeyFailed": "The key in this link did not work (the password may have changed). Enter the password instead.",
+  "lock.back": "‹ Back to {name}",
 
   "search.placeholder": "Search every row…",
   "search.allFields": "All fields",

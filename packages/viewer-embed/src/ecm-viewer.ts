@@ -75,9 +75,20 @@ const HOST_DEFAULTS_CSS = `
  *   this widget ignore the panel widths saved in the visitor's browser (shared
  *   by every page on the site), so each widget keeps its own proportions.
  *
+ * - `cart` — showcase mode: "on" turns each item's store link into an
+ *   "Add to cart" toggle and adds a checkout button above the image (see
+ *   MountViewerOptions.showcaseCart).
+ *
+ * Events: the element dispatches `ecm-load`, `ecm-locked`, `ecm-image`,
+ * `ecm-select`, `ecm-answer`, `ecm-cart` and `ecm-checkout` (bubbling, with
+ * the details in `event.detail` — see ViewerEventType). Calling
+ * `preventDefault()` on `ecm-checkout` keeps the viewer from opening the store.
+ *
  * CSS custom property (set it on the element from the embedding page):
  * - `--ecm-stage-bg` — the backdrop around the image, in both themes (e.g. the
  *   page's own background colour, when the catalog's images are drawn on it).
+ * - `--ecm-showcase-stage-height` — showcase mode, narrow (stacked) layout: the
+ *   height of the picture's box above the details card (default 360px).
  */
 class EcmViewerElement extends HTMLElement {
   private controller: ViewerController | null = null;
@@ -121,6 +132,9 @@ class EcmViewerElement extends HTMLElement {
       overviewList: this.getAttribute("overview-list") !== "off",
       navTitle: this.getAttribute("nav-title") || undefined,
       panelFractions,
+      showcaseCart: this.getAttribute("cart") === "on",
+      onEvent: (type, detail, cancelable) =>
+        this.dispatchEvent(new CustomEvent(`ecm-${type}`, { detail, bubbles: true, composed: true, cancelable })),
       // Never rewrite the *embedding* page's address bar.
       updateAddressBar: false,
       // Apply data-theme to this element itself (the shadow host), never
