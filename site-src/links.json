@@ -30,6 +30,6 @@
   "linkedin": "https://www.linkedin.com/in/alexkotovwa/",
   "x": "https://x.com/kotov_wa",
   "github": "https://github.com/alexandrkotov/electronic-catalog-maker",
-  "play": "https://play.tapalog.com/",
-  "playHaunted": "https://play.tapalog.com/haunted-house/"
+  "play": "https://play.tapalog.com/{playq}",
+  "playHaunted": "https://play.tapalog.com/haunted-house/{playq}"
 }

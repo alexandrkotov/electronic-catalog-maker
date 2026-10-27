@@ -37,11 +37,13 @@ interface LangConfig {
   name: string;
   /** Microsoft Store `hl` parameter. */
   storeLocale: string;
+  /** play.tapalog.com `?lang=`, for the languages the games are in; other pages leave it to the browser. */
+  playLang?: string;
 }
 
 const LANGS: Record<string, LangConfig> = {
-  en: { dir: "landing", path: "/", base: "", name: "English", storeLocale: "en-US" },
-  ru: { dir: "landing/ru", path: "/ru/", base: "../", name: "Русский", storeLocale: "ru-RU" },
+  en: { dir: "landing", path: "/", base: "", name: "English", storeLocale: "en-US", playLang: "en" },
+  ru: { dir: "landing/ru", path: "/ru/", base: "../", name: "Русский", storeLocale: "ru-RU", playLang: "ru" },
   uk: { dir: "landing/uk", path: "/uk/", base: "../", name: "Українська", storeLocale: "uk-UA" },
   de: { dir: "landing/de", path: "/de/", base: "../", name: "Deutsch", storeLocale: "de-DE" },
 };
@@ -183,7 +185,7 @@ function render(template: string, page: string, lang: string): string {
   out = out.replace(/\{url_(\w+)\}/g, (_, name: string) => {
     const url = links[name];
     if (url === undefined) throw new Error(`${page} [${lang}]: unknown link {url_${name}}`);
-    return url.replace("{hl}", cfg.storeLocale);
+    return url.replace("{hl}", cfg.storeLocale).replace("{playq}", cfg.playLang ? `?lang=${cfg.playLang}` : "");
   });
   return out;
 }
