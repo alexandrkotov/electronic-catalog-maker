@@ -112,11 +112,8 @@
     gap: 1rem;
     margin: 2.25rem 0;
   }
-  .points > div:last-child { grid-column: 1 / -1; }
   @media (min-width: 820px) {
-    .points { grid-template-columns: repeat(6, 1fr); }
-    .points > div { grid-column: span 2; }
-    .points > div:nth-last-child(-n+2) { grid-column: span 3; }
+    .points { grid-template-columns: repeat(3, 1fr); }
   }
   @media (max-width: 640px) {
     .points { grid-template-columns: 1fr; }
@@ -243,6 +240,11 @@
       <h3>Тести для самоперевірки</h3>
       <p>Той самий малюнок перетворюється на тест: учень натискає на відповідь — вона одразу стає зеленою або червоною з коротким поясненням, а результати можна роздрукувати. Це тренування, а не іспит під наглядом.</p>
     </div>
+    <div>
+      <div class="point-icon">🗝️</div>
+      <h3>Квести</h3>
+      <p>Кімнати, сховані предмети й фінал під паролем: квест зі звичайних каталогів, зібраний у тому ж редакторі, без програмування. Такий можна зробити всім класом як проєкт. Гра англійською. <a href="https://play.tapalog.com/haunted-house/">Пройти «The Haunted House» →</a> · <a href="https://play.tapalog.com/">Усі ігри</a></p>
+    </div>
   </div>
 
   <div class="demo-section">
@@ -279,7 +281,7 @@
   <footer>
     <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Вихідний код на GitHub</a>
     — каталоги залишаються на твоєму диску, якщо їх не відкривають за URL.
-    <div><a href="../privacy.html">Політика конфіденційності (англійською)</a></div>
+    <div><a href="../privacy.html">Політика конфіденційності (англійською)</a> · <a href="https://play.tapalog.com/">Ігри та квести</a></div>
   </footer>
 
   <script>

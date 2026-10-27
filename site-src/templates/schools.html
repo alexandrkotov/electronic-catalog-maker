@@ -94,11 +94,8 @@
     gap: 1rem;
     margin: 2.25rem 0;
   }
-  .points > div:last-child { grid-column: 1 / -1; }
   @media (min-width: 820px) {
-    .points { grid-template-columns: repeat(6, 1fr); }
-    .points > div { grid-column: span 2; }
-    .points > div:nth-last-child(-n+2) { grid-column: span 3; }
+    .points { grid-template-columns: repeat(3, 1fr); }
   }
   @media (max-width: 640px) {
     .points { grid-template-columns: 1fr; }
@@ -225,6 +222,11 @@
       <h3>{{schools.points.quiz.title}}</h3>
       <p>{{schools.points.quiz.text}}</p>
     </div>
+    <div>
+      <div class="point-icon">🗝️</div>
+      <h3>{{schools.points.quest.title}}</h3>
+      <p>{{schools.points.quest.text}}</p>
+    </div>
   </div>
 
   <div class="demo-section">
@@ -261,7 +263,7 @@
   <footer>
     <a href="{url_github}">{{common.footer.source}}</a>
     {{common.footer.note}}
-    <div><a href="{{@base}}privacy.html">{{common.footer.privacy}}</a></div>
+    <div><a href="{{@base}}privacy.html">{{common.footer.privacy}}</a> · <a href="{url_play}">{{common.footer.games}}</a></div>
   </footer>
 
   <script>

@@ -112,11 +112,8 @@
     gap: 1rem;
     margin: 2.25rem 0;
   }
-  .points > div:last-child { grid-column: 1 / -1; }
   @media (min-width: 820px) {
-    .points { grid-template-columns: repeat(6, 1fr); }
-    .points > div { grid-column: span 2; }
-    .points > div:nth-last-child(-n+2) { grid-column: span 3; }
+    .points { grid-template-columns: repeat(3, 1fr); }
   }
   @media (max-width: 640px) {
     .points { grid-template-columns: 1fr; }
@@ -243,6 +240,11 @@
       <h3>Quiz zur Selbstkontrolle</h3>
       <p>Mach aus demselben Schaubild ein Quiz zur Selbstkontrolle: Die Lernenden tippen eine Antwort an, sie wird sofort grün oder rot und bekommt eine kurze Erklärung; das Ergebnis lässt sich ausdrucken. Zum Üben, nicht als beaufsichtigte Prüfung.</p>
     </div>
+    <div>
+      <div class="point-icon">🗝️</div>
+      <h3>Escape-Quests</h3>
+      <p>Räume, versteckte Gegenstände und ein Finale hinter einem Passwort: ein Escape-Spiel aus ganz normalen Katalogen, gebaut im selben Editor, ganz ohne Code. Eine Klasse kann so eines als Projekt bauen. Das Spiel ist auf Englisch. <a href="https://play.tapalog.com/haunted-house/">The Haunted House spielen →</a> · <a href="https://play.tapalog.com/">Alle Spiele</a></p>
+    </div>
   </div>
 
   <div class="demo-section">
@@ -279,7 +281,7 @@
   <footer>
     <a href="https://github.com/alexandrkotov/electronic-catalog-maker">Quellcode auf GitHub</a>
     – Kataloge bleiben auf deinem Gerät, sofern sie nicht über eine URL geöffnet werden.
-    <div><a href="../privacy.html">Datenschutzerklärung</a></div>
+    <div><a href="../privacy.html">Datenschutzerklärung</a> · <a href="https://play.tapalog.com/">Spiele und Quests</a></div>
   </footer>
 
   <script>
