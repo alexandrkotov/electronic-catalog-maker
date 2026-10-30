@@ -106,7 +106,7 @@ jobs:
           path: packages/collab-server/dist/ecm-collab-server-macos-x64.zip
           if-no-files-found: error
 
-  # Real Apple hardware, hosted by GitHub (macos-14/macos-13 runner images
+  # Real Apple hardware, hosted by GitHub (macos-15/macos-15-intel runner images
   # are Apple Silicon / Intel respectively) — the only *free*, legal way to
   # actually run a macOS binary end to end: Apple's license only permits
   # virtualizing macOS on Apple hardware, so a local emulator/VM on
@@ -117,7 +117,7 @@ jobs:
   smoke-test-macos-arm64:
     name: Smoke-test macOS binary (Apple Silicon, real hardware)
     needs: [build-macos-arm64]
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/download-artifact@v8
         with:

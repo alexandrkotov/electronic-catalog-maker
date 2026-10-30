@@ -306,7 +306,7 @@ including the Stop button, confirmed working end to end. The macOS build
 uses the identical mechanism and is now smoke-tested automatically on
 every release run (see `.github/workflows/collab-server-release.yml`'s
 `smoke-test-macos-arm64` job) — real Apple Silicon hardware via GitHub's
-hosted `macos-14` runner, starting the actual compiled binary and polling
+hosted `macos-15` runner, starting the actual compiled binary and polling
 its `/status.json` until it answers. The project's own real Mac (a 2012
 MacBook Pro stuck on Catalina) can't run it at all — Bun's compile output
 requires macOS 13+ (confirmed live: `dyld` reported a missing

@@ -112,7 +112,7 @@ jobs:
   smoke-test-macos-arm64:
     name: Smoke-test macOS binary (Apple Silicon, real hardware)
     needs: [build-macos-arm64]
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/download-artifact@v8
         with:
