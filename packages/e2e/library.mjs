@@ -155,6 +155,7 @@ const server = createServer((req, res) => {
   const asked = normalize(decodeURIComponent(new URL(req.url, "http://x").pathname));
   const path = asked === "/" ? "/index.html" : asked;
   if (path === "/furniture.ecatm") return void res.writeHead(200).end(catalog);
+  if (path === "/private.ecatm") return void (req.headers.cookie?.includes("session=ok") ? res.writeHead(200).end(catalog) : res.writeHead(401).end("login first"));
   const file = join(site, path);
   if (!file.startsWith(site) || !existsSync(file) || statSync(file).isDirectory()) return void res.writeHead(404).end();
   requested.push(path);
@@ -224,6 +225,68 @@ try {
   say(`exportPdf: imageId ${onePages}/${wholePages} pages, region ${await pagesOf(part)} page(s), ${part.length} bytes; bad input rejects`);
 
   assert.deepEqual(failedRequests, [], "no failed requests");
+
+  // the example page that ships in the package: a host around the viewer
+  const example = await browser.newPage({ viewport: { width: 1300, height: 800 } });
+  example.on("pageerror", (err) => assert.fail(`example page error: ${err.message}`));
+  const exampleUrl = `${origin}/node_modules/@ecm/viewer-engine/example/index.html`;
+  const shadow = (sel, options) => example.locator(`#viewer ${sel}`, options); // Playwright pierces the open shadow root
+  await example.goto(exampleUrl);
+  await example.waitForFunction(() => window.viewer);
+  assert.equal(await shadow(".toolbar-action").count(), 3, "the host's three buttons are in the viewer's toolbar");
+  assert.equal(await example.locator("#viewer").evaluate((el) => el.shadowRoot.querySelectorAll("#btn-open, #btn-theme, h1").length), 0, "and nothing else of the full viewer's controls");
+
+  // 1. open from memory (a Uint8Array)
+  await example.locator("#file").setInputFiles({ name: "furniture.ecatm", mimeType: "application/octet-stream", buffer: catalog });
+  await shadow("#stage-img").waitFor();
+  assert.notEqual(await example.evaluate(() => window.viewer.getView()), null, "a file chosen on the page opens");
+  await example.locator("#file").setInputFiles({ name: "junk.ecatm", mimeType: "application/octet-stream", buffer: Buffer.from("not a catalog") });
+  await example.waitForFunction(() => document.getElementById("status").textContent !== "");
+  assert.notEqual(await example.evaluate(() => window.viewer.getView()), null, "junk is reported in the host's status line and the open catalog stays");
+  say("example: opens a file from memory, reports junk, keeps what was open");
+
+  // 2. open from a URL, with cookies
+  await example.locator("#url").fill(`${origin}/private.ecatm`);
+  await example.locator("#credentials").check();
+  await example.locator("#open-url").click();
+  await example.waitForFunction(() => document.getElementById("status").textContent.includes("401"));
+  await example.context().addCookies([{ name: "session", value: "ok", url: origin }]);
+  await example.locator("#open-url").click();
+  await example.waitForFunction(() => document.getElementById("status").textContent === "");
+  await shadow("#stage-img").waitFor();
+  assert.ok((await example.evaluate(() => window.viewer.getView())).imageId > 0, "behind a login, with the cookie, it opens");
+  say("example: openUrl with cookies — refused without the cookie, opens with it");
+
+  // 3. the view panel, host search, bookmark, share link, print
+  await example.evaluate(() => window.viewer.setView({ v: 1, imageId: 1, zoom: 2, cx: 0.4, cy: 0.5 }));
+  await example.waitForFunction(() => document.getElementById("view").textContent.includes('"zoom"'));
+  await example.locator("#query").fill("a");
+  assert.equal(await shadow("#search-panel").count(), 1, "the host's search box opens the viewer's search");
+  await example.locator("#query").fill("");
+  assert.equal(await shadow("#search-panel").count(), 0, "and emptying it closes the panel");
+  const onScreen = await example.evaluate(() => window.viewer.getView());
+  await shadow(".toolbar-action", { hasText: "Bookmark" }).click();
+  assert.equal(await example.locator("#bookmarks li").count(), 1, "Bookmark stores the view on screen");
+  await example.evaluate(() => window.viewer.setView({ v: 1, imageId: 1, zoom: 1 }));
+  await example.locator("#bookmarks li button").click();
+  await example.waitForTimeout(400);
+  const reopened = await example.evaluate(() => window.viewer.getView());
+  assert.ok(["zoom", "cx", "cy"].every((k) => Math.abs(reopened[k] - onScreen[k]) < 0.01), `a bookmark reopens exactly where it was: ${JSON.stringify(onScreen)} vs ${JSON.stringify(reopened)}`);
+  await shadow(".toolbar-action", { hasText: "Share view" }).click();
+  const shared = new URL(example.url());
+  assert.equal(JSON.parse(shared.searchParams.get("view")).imageId, 1, "Share view puts the view into the page's link");
+  const [download] = await Promise.all([example.waitForEvent("download"), shadow(".toolbar-action", { hasText: "Print" }).click()]);
+  const printed = readFileSync(await download.path());
+  assert.equal(printed.subarray(0, 5).toString(), "%PDF-", "Print downloads a PDF");
+  say("example: view panel, host search, bookmarks, share link, print");
+
+  // 4. the shared link reopens the same view
+  await example.goto(`${exampleUrl}?src=${encodeURIComponent("/furniture.ecatm")}&view=${encodeURIComponent(JSON.stringify({ v: 1, imageId: 1, zoom: 3, cx: 0.3, cy: 0.6 }))}`);
+  await example.waitForFunction(() => window.viewer?.getView());
+  await example.waitForTimeout(400);
+  const back = await example.evaluate(() => window.viewer.getView());
+  assert.ok(Math.abs(back.zoom - 3) < 0.01 && Math.abs(back.cx - 0.3) < 0.01, `?src=&view= opens the catalog at that view: ${JSON.stringify(back)}`);
+  say("example: a link with ?src= and ?view= opens at that view");
 } catch (err) {
   failed = true;
   console.error(err);

@@ -48,6 +48,14 @@ A host's "Print" does not have to print the whole catalog: `viewer.exportPdf({ i
 
 `mountViewerInShadow` keeps the viewer's stylesheet (it restyles every `button`, `table` and `select`) apart from your page. To share the page's own DOM instead, call `mountViewer` with a `container` and add `viewerCss` or `style.css` yourself.
 
+## Example page
+
+`example/index.html` (in the package, next to `dist/`) is a small host application in plain files, no bundler: it mounts the viewer in `mode: "reader"`, opens a catalog from a file (bytes in memory) or from a URL (optionally with the visitor's cookies), drives the viewer's search from its own box, keeps its own bookmarks, makes a link with the current view and prints the picture or area on screen. Serve the package folder over HTTP and open it:
+
+```
+npx serve node_modules/@ecm/viewer-engine     # then /example/index.html?src=<catalog url>&view=<EcatmView as JSON>
+```
+
 ## On a server: `@ecm/viewer-engine/server`
 
 For indexing and previews, a second entry point reads a catalog without a screen. No DOM, no canvas: it runs in Bun and in Node (and needs `sql.js`, which the package depends on).

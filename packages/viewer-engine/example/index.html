@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>@ecm/viewer-engine example</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px system-ui, sans-serif; color: #222; background: #f4f4f6; height: 100vh; display: flex; flex-direction: column; }
+    header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px; background: #fff; border-bottom: 1px solid #ddd; }
+    header input[type="text"] { padding: 4px 8px; }
+    header .grow { flex: 1 1 220px; min-width: 120px; }
+    main { flex: 1; display: flex; min-height: 0; }
+    #viewer { flex: 1; min-width: 0; }
+    aside { width: 300px; overflow: auto; padding: 12px; background: #fff; border-left: 1px solid #ddd; }
+    aside h2 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; color: #666; }
+    aside section { margin-bottom: 16px; }
+    pre { margin: 0; padding: 8px; background: #f4f4f6; white-space: pre-wrap; word-break: break-all; font-size: 12px; }
+    ul { margin: 0; padding: 0; list-style: none; }
+    li button { width: 100%; text-align: left; margin-bottom: 4px; padding: 4px 8px; }
+    #status { color: #a00; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Host application</strong>
+    <label>Open a file <input id="file" type="file" accept=".ecatm,.sch" /></label>
+    <input id="url" class="grow" type="text" placeholder="https://example.com/catalog.ecatm" aria-label="Catalog URL" />
+    <label><input id="credentials" type="checkbox" /> send cookies</label>
+    <button id="open-url" type="button">Open URL</button>
+    <input id="query" type="text" placeholder="Search in catalog" aria-label="Search in catalog" />
+    <button id="theme" type="button">Theme</button>
+    <span id="status" role="status"></span>
+  </header>
+  <main>
+    <div id="viewer"></div>
+    <aside>
+      <section><h2>Current view (event "view")</h2><pre id="view">—</pre></section>
+      <section><h2>Marked area (event "region")</h2><pre id="region">—</pre></section>
+      <section><h2>Bookmarks (kept by the host)</h2><ul id="bookmarks"></ul></section>
+    </aside>
+  </main>
+  <script type="module" src="./example.js"></script>
+</body>
+</html>
