@@ -38,7 +38,52 @@ const installed = join(work, "site/node_modules/@ecm/viewer-engine");
 mkdirSync(dirname(installed), { recursive: true });
 execFileSync("mv", [join(work, "package"), installed]);
 
-// 2. A consumer compiles against the declarations, library checking on.
+// 2. The server half runs in Bun and in Node, with no DOM, straight from the package.
+// A real install brings the package's dependency (sql.js) next to it.
+symlinkSync(join(pkgDir, "node_modules/sql.js"), join(work, "site/node_modules/sql.js"));
+writeFileSync(
+  join(work, "site/server-check.mjs"),
+  `import { readFileSync } from "node:fs";
+import { extractCover, extractSearchChunks, indexCatalog, openCatalog, searchCatalog, ProtectedCatalogError } from "@ecm/viewer-engine/server";
+const [catalogPath, wasmPath] = process.argv.slice(2);
+const bytes = new Uint8Array(readFileSync(catalogPath));
+const opts = wasmPath ? { wasm: new Uint8Array(readFileSync(wasmPath)) } : {};
+const db = await openCatalog(bytes, opts);
+const chunks = extractSearchChunks(db);
+const item = chunks.find((c) => c.linkId !== undefined);
+const hits = searchCatalog(db, item.text.split(/\\s+/)[0]);
+const digest = await indexCatalog(bytes, opts);
+let lockedCode = null;
+try { await openCatalog(new Uint8Array([69, 67, 77, 80, 82, 79, 84, 0, 1, 0, 0, 0]), opts); } catch (e) { lockedCode = e instanceof ProtectedCatalogError ? e.code : String(e); }
+console.log(JSON.stringify({
+  dom: typeof document + "/" + typeof window,
+  cover: extractCover(db)?.mime,
+  chunks: chunks.length,
+  hit: hits.some((h) => h.imageId === item.imageId && h.linkId === item.linkId),
+  digestName: digest.name,
+  lockedCode,
+}));
+db.close();`,
+);
+const furniture = resolve(here, "../../demo/furniture.ecatm");
+const wasmFile = join(installed, "dist/sql-wasm.wasm");
+const serverBundle = readFileSync(join(installed, "dist/server.js"), "utf8");
+assert.ok(!/\b(document|window|HTMLElement|createImageBitmap)\b/.test(serverBundle), "the server bundle never touches the DOM");
+assert.ok(!serverBundle.includes("mountViewer"), "and carries no viewer");
+for (const [runtime, args] of [
+  ["bun", [furniture, wasmFile]], // a compiled binary hands the WASM over as bytes
+  ["node", [furniture, wasmFile]],
+  ["node", [furniture]], // from node_modules, sql.js finds its own WASM
+]) {
+  const out = JSON.parse(execFileSync(runtime, [join(work, "site/server-check.mjs"), ...args], { cwd: join(work, "site"), encoding: "utf8" }));
+  assert.equal(out.dom, "undefined/undefined", `${runtime}: no DOM`);
+  assert.match(out.cover, /^image\//, `${runtime}: a cover`);
+  assert.ok(out.chunks > 0 && out.hit, `${runtime}: chunks, and a search finds an item's picture and hotspot`);
+  assert.equal(out.lockedCode, "locked", `${runtime}: a protected catalog without a key says so`);
+}
+say("@ecm/viewer-engine/server: runs in Bun and Node from the package, no DOM, search hits carry imageId and linkId");
+
+// 3. A consumer compiles against the declarations, library checking on.
 const consumer = join(work, "consumer");
 mkdirSync(join(consumer, "node_modules/@ecm"), { recursive: true });
 symlinkSync(installed, join(consumer, "node_modules/@ecm/viewer-engine"));
@@ -68,12 +113,19 @@ void [mountViewer, normalizeView(view), viewerCss.length, current];
 // @ts-expect-error  the view has a fixed version
 const bad: EcatmView = { v: 2, imageId: 1 };
 void bad;
+import { openCatalog, searchCatalog, indexCatalog, extractSearchChunks, extractCover, type SearchHit } from "@ecm/viewer-engine/server";
+async function server(bytes: Uint8Array): Promise<SearchHit[]> {
+  const db = await openCatalog(bytes, { wasm: bytes, key: "k" });
+  void [extractCover(db)?.mime, extractSearchChunks(db)[0]?.linkId, (await indexCatalog(bytes)).locked];
+  return searchCatalog(db, "x", "name");
+}
+void server;
 `,
 );
 execFileSync(join(pkgDir, "node_modules/.bin/tsc"), ["-p", join(consumer, "tsconfig.json")], { stdio: "pipe", encoding: "utf8" });
 say("a consumer compiles against the declarations with skipLibCheck off");
 
-// 3. The ES module, served as plain files, in a browser.
+// 4. The ES module, served as plain files, in a browser.
 const site = join(work, "site");
 writeFileSync(
   join(site, "index.html"),

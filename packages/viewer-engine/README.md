@@ -44,6 +44,26 @@ const pdf = await viewer.exportPdf(); // Uint8Array
 
 `mountViewerInShadow` keeps the viewer's stylesheet (it restyles every `button`, `table` and `select`) apart from your page. To share the page's own DOM instead, call `mountViewer` with a `container` and add `viewerCss` or `style.css` yourself.
 
+## On a server: `@ecm/viewer-engine/server`
+
+For indexing and previews, a second entry point reads a catalog without a screen. No DOM, no canvas: it runs in Bun and in Node (and needs `sql.js`, which the package depends on).
+
+```ts
+import { openCatalog, extractCover, extractSearchChunks, searchCatalog, indexCatalog } from "@ecm/viewer-engine/server";
+
+const db = await openCatalog(bytes, { wasm: wasmBytes }); // wasm: bytes, a path/URL or locateFile; optional in node_modules
+const cover = extractCover(db);              // { mime, bytes } — the first picture as stored, or null
+const chunks = extractSearchChunks(db);      // [{ imageId, linkId?, text }] for a full-text index
+const hits = searchCatalog(db, "hinge");     // [{ imageId, linkId?, rowName, snippet }]
+db.close();
+```
+
+`imageId` and `linkId` are the ids of an `EcatmView`: a hit opens the catalog right there with `setView({ v: 1, imageId, linkId })`.
+
+- A protected (`ECMPROT`) catalog needs `key`; without it `openCatalog` throws a `ProtectedCatalogError` with code `"locked"` (`"wrong-password"` for a wrong one). `indexCatalog(bytes, { key? })` never throws for that: with the key it returns the catalog's name, cover and chunks, without it only the name and cover the author made public, and `locked: true`.
+- A quiz catalog yields only its picture names and no search hits — its items are answer options, and its viewer has no search either.
+- `searchCatalog` matches like the viewer's Search box (case-insensitive substring over name, sku, description and extras, or one field), over items; picture names are in the chunks.
+
 ## The view
 
 `EcatmView` (format version `v: 1`) is a plain object you can store, put in a link or turn into a QR code:

@@ -13,6 +13,7 @@ const need = (path) => {
 };
 
 need(resolve(dist, "index.js"));
+need(resolve(dist, "server.js"));
 need(resolve(dist, "style.css"));
 mkdirSync(resolve(dist, "fonts"), { recursive: true });
 const sqlJs = resolve(here, "../node_modules/sql.js"); // the package's own devDependency (pnpm links it here)

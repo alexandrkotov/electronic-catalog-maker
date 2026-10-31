@@ -27,6 +27,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: oven-sh/setup-bun@v2 # library.mjs runs the server half under Bun as well as Node
       - run: pnpm install --frozen-lockfile
 
       - name: Read the version and refuse one that is already released

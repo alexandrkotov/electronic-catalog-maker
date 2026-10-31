@@ -151,13 +151,13 @@ importers:
       '@types/sql.js':
         specifier: ^1.4.9
         version: 1.4.11
+      sql.js:
+        specifier: ^1.11.0
+        version: 1.14.2
     devDependencies:
       '@ecm/shared':
         specifier: workspace:*
         version: link:../shared
-      sql.js:
-        specifier: ^1.11.0
-        version: 1.14.2
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
