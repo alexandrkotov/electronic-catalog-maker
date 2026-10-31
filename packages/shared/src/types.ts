@@ -127,3 +127,9 @@ export interface LinkConflict {
   /** id of the other, already-existing link that shares this name/url */
   conflictingLinkId: number;
 }
+
+/** The two Storage methods the viewer needs: localStorage, or an in-memory stand-in when a host turns persistence off. */
+export interface KeyValueStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}

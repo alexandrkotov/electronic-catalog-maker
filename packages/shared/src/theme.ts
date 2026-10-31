@@ -12,11 +12,11 @@ export type Theme = "light" | "dark";
 
 const STORAGE_KEY = "ecm-theme";
 
-/** An explicit choice from a previous visit wins; otherwise fall back to
+/** An explicit choice from a previous visit wins (unless `useStored` is false); otherwise fall back to
  * the OS/browser preference. */
-export function resolveInitialTheme(): Theme {
+export function resolveInitialTheme(useStored = true): Theme {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = useStored ? localStorage.getItem(STORAGE_KEY) : null;
     if (stored === "light" || stored === "dark") return stored;
   } catch {
     // localStorage unavailable (privacy mode, etc.) — fall through to system preference.
@@ -34,8 +34,9 @@ export function resolveInitialTheme(): Theme {
  * host instead — it must never reach out and set an attribute on the
  * *embedding* page's `<html>`, only on itself.
  */
-export function applyTheme(theme: Theme, target: HTMLElement = document.documentElement) {
+export function applyTheme(theme: Theme, target: HTMLElement = document.documentElement, persist = true) {
   target.dataset.theme = theme;
+  if (!persist) return;
   try {
     localStorage.setItem(STORAGE_KEY, theme);
   } catch {
@@ -47,8 +48,8 @@ export function currentTheme(target: HTMLElement = document.documentElement): Th
   return target.dataset.theme === "dark" ? "dark" : "light";
 }
 
-export function toggleTheme(target: HTMLElement = document.documentElement): Theme {
+export function toggleTheme(target: HTMLElement = document.documentElement, persist = true): Theme {
   const next: Theme = currentTheme(target) === "dark" ? "light" : "dark";
-  applyTheme(next, target);
+  applyTheme(next, target, persist);
   return next;
 }

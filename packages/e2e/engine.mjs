@@ -21,22 +21,37 @@ const vite = await createViteServer({ root: resolve(here, "harness"), configFile
 await vite.listen();
 const harnessUrl = vite.resolvedUrls.local[0];
 const catalogBytes = readFileSync(resolve(here, "../../demo/furniture.ecatm"));
-const catalogServer = createHttpServer((req, res) => res.writeHead(200, { "access-control-allow-origin": "*" }).end(catalogBytes));
+// /private/... answers only to `Authorization: Bearer secret` (what a host passes as fetchInit).
+const catalogRequests = [];
+const catalogServer = createHttpServer((req, res) => {
+  const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization" };
+  if (req.method === "OPTIONS") return void res.writeHead(204, cors).end();
+  catalogRequests.push({ url: req.url, authorization: req.headers.authorization });
+  if (req.url.startsWith("/private/") && req.headers.authorization !== "Bearer secret") return void res.writeHead(401, cors).end("no");
+  res.writeHead(200, cors).end(catalogBytes);
+});
 await new Promise((ok) => catalogServer.listen(0, "127.0.0.1", ok));
-const catalogUrl = `http://127.0.0.1:${catalogServer.address().port}/furniture.ecatm`;
+const catalogOrigin = `http://127.0.0.1:${catalogServer.address().port}`;
+const catalogUrl = `${catalogOrigin}/furniture.ecatm`;
 
 const browser = await chromium.launch();
 let failed = false;
 const say = (msg) => console.log(`  ok  ${msg}`);
 
-async function boot(contextOptions) {
+/** `src: false` mounts an empty viewer (the host opens a catalog itself); `opts` is merged into the mount options. */
+async function boot(contextOptions, { src = true, opts = null } = {}) {
   const context = await browser.newContext(contextOptions);
   const page = await context.newPage();
+  const requests = [];
+  page.on("request", (req) => requests.push(req.url()));
   page.on("pageerror", (err) => assert.fail(`page error: ${err.message}`));
-  await page.goto(`${harnessUrl}?src=${encodeURIComponent(catalogUrl)}`);
-  await page.locator("#stage-img").waitFor();
+  const query = new URLSearchParams();
+  if (src) query.set("src", catalogUrl);
+  if (opts) query.set("opts", JSON.stringify(opts));
+  await page.goto(`${harnessUrl}?${query}`);
+  if (src) await page.locator("#stage-img").waitFor();
   await page.waitForTimeout(500);
-  return { context, page };
+  return { context, page, requests };
 }
 const getView = (page) => page.evaluate(() => window.ctrl.getView());
 const setView = (page, view) => page.evaluate((v) => window.ctrl.setView(v), view);
@@ -186,6 +201,125 @@ try {
   assert.ok(closeBox(regionEvents[0], { x: 0.25, y: 0.3, w: 0.4, h: 0.3 }, 0.04), `the finger's rectangle: ${JSON.stringify(regionEvents[0])}`);
   assert.ok(closeBox(await boxFractions(page), regionEvents[0]), "and it is drawn");
   say("touch: a finger drag draws the area and sends the region event");
+  await context.close();
+
+  // ---- a host application's viewer: "reader" mode, bytes/url opening, actions, theme, no storage, no extra requests
+  const DESKTOP = { viewport: { width: 1400, height: 900 } };
+  const ACTIONS = [
+    { id: "bookmark", label: "Bookmark", icon: "★" },
+    { id: "print", label: "Print" },
+  ];
+  const READER = { mode: "reader", toolbarActions: ACTIONS, persist: false, analytics: false, theme: "dark" };
+  ({ context, page } = await boot(DESKTOP, { src: false, opts: READER }));
+  await page.locator(".toolbar").waitFor();
+  for (const gone of ["h1", "#btn-open", "#btn-open-remote", "#btn-refresh", "#btn-theme", "#lang-select", "#btn-share-view", ".open-demo-link"]) {
+    assert.equal(await page.locator(`.toolbar ${gone}, .panel-images ${gone}`).count(), 0, `reader mode has no ${gone}`);
+  }
+  assert.equal(await page.locator("#btn-search").count(), 1, "reader keeps Search");
+  assert.equal(await page.locator(".toolbar-action").count(), 2, "and the host's buttons");
+  assert.equal(await page.locator(".toolbar-action:disabled").count(), 2, "disabled while nothing is open");
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), "dark", "theme comes from the host");
+  say("reader mode: only Search and the host's buttons in the toolbar; no demo links; theme from the host");
+
+  // open from bytes, with a view
+  await page.evaluate(
+    async ([url]) => {
+      const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
+      await window.ctrl.openBytes(bytes, "furniture", { view: { v: 1, imageId: 1, zoom: 3, cx: 0.3, cy: 0.6 } });
+    },
+    [catalogUrl],
+  );
+  v = await getView(page);
+  assert.ok(near(v.zoom, 3, 0.01) && near(v.cx, 0.3, 0.01) && near(v.cy, 0.6, 0.01), `openBytes shows the view it was given: ${JSON.stringify(v)}`);
+  assert.equal(await page.locator(".toolbar-action:disabled").count(), 0, "buttons enabled once a catalog is open");
+  assert.equal(await page.locator("#btn-region").count(), 1, "the Area tool is on in reader mode by default");
+  say("openBytes: opens from memory and shows the given view");
+
+  // a host button gets the view
+  await page.locator('.toolbar-action[data-action-id="bookmark"]').click();
+  const calls = await page.evaluate(() => window.__actionCalls);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].id, "bookmark");
+  assert.deepEqual(calls[0].view, await getView(page), "onClick gets the current view");
+  say("toolbarActions: onClick receives the view on screen");
+
+  // not a catalog: rejects, viewer survives
+  const failure = await page.evaluate(() => window.ctrl.openBytes(new Uint8Array([1, 2, 3]), "junk").then(() => null, (e) => String(e.message)));
+  assert.ok(failure, "openBytes rejects on bytes that are not a catalog");
+  say(`openBytes: rejects on junk (${failure.slice(0, 40)})`);
+
+  // theme from outside
+  await page.evaluate(() => window.ctrl.setTheme("light"));
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), "light", "setTheme");
+
+  // use it for a while, then look at what was stored and requested
+  await page.evaluate(() => window.ctrl.openBytes(new Uint8Array(0), "x").catch(() => {}));
+  await page.evaluate(async ([url]) => {
+    const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
+    await window.ctrl.openBytes(bytes, "furniture");
+  }, [catalogUrl]);
+  const divider = await page.locator("#divider-images").boundingBox();
+  await page.mouse.move(divider.x + 2, divider.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(divider.x + 60, divider.y + 100, { steps: 4 });
+  await page.mouse.up();
+  await page.locator("#btn-zoom-in").click();
+  await page.locator(".hotspot[data-id]").first().click();
+  await page.locator("#btn-search").click();
+  assert.equal(await page.evaluate(() => localStorage.length), 0, "persist: false — nothing in localStorage after resizing, zooming, selecting, searching");
+  say("persist: false — localStorage stays empty");
+  await context.close();
+
+  // the same session with defaults does write (so the check above can see something)
+  ({ context, page } = await boot(DESKTOP));
+  const dividerDefault = await page.locator("#divider-images").boundingBox();
+  await page.mouse.move(dividerDefault.x + 2, dividerDefault.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(dividerDefault.x + 60, dividerDefault.y + 100, { steps: 4 });
+  await page.mouse.up();
+  assert.ok((await page.evaluate(() => localStorage.length)) > 0, "by default a resized panel is remembered");
+  await context.close();
+
+  // requests: only the catalog and the page's own assets
+  let requests;
+  ({ context, page, requests } = await boot(DESKTOP, { src: false, opts: { mode: "reader", persist: false, analytics: false } }));
+  catalogRequests.length = 0;
+  await page.evaluate(async ([url]) => {
+    await window.ctrl.openUrl(url);
+  }, [catalogUrl]);
+  await page.locator("#btn-search").click();
+  await page.waitForTimeout(300);
+  const outsiders = requests.filter((u) => !u.startsWith(harnessUrl) && !u.startsWith(catalogOrigin) && !u.startsWith("data:") && !u.startsWith("blob:"));
+  assert.deepEqual(outsiders, [], "no requests beyond the page itself and the catalog");
+  assert.deepEqual(
+    catalogRequests.map((r) => r.url),
+    ["/furniture.ecatm"],
+    "the catalog is downloaded once and nothing else is asked of its server",
+  );
+  say(`analytics: false — ${requests.length} requests, none to a third party`);
+  await context.close();
+
+  // openUrl with the host's fetch options
+  ({ context, page } = await boot(DESKTOP, { src: false, opts: { mode: "reader" } }));
+  const privateUrl = `${catalogOrigin}/private/furniture.ecatm`;
+  const refused = await page.evaluate((url) => window.ctrl.openUrl(url).then(() => null, (e) => String(e.message)), privateUrl);
+  assert.match(refused, /401/, `without credentials the server says no and openUrl rejects: ${refused}`);
+  await page.evaluate((url) => window.ctrl.openUrl(url, { fetchInit: { headers: { authorization: "Bearer secret" } }, view: { v: 1, imageId: 1, zoom: 2 } }), privateUrl);
+  assert.equal((await getView(page)).imageId, 1);
+  assert.ok(near((await getView(page)).zoom, 2, 0.01), "the view given to openUrl is shown");
+  say("openUrl: fetchInit reaches the server, failure rejects, view is shown");
+  await context.close();
+
+  // fetchInit is reused by Refresh (full toolbar, where Refresh exists)
+  ({ context, page } = await boot(DESKTOP, { src: false }));
+  catalogRequests.length = 0;
+  await page.evaluate((url) => window.ctrl.openUrl(url, { fetchInit: { headers: { authorization: "Bearer secret" } } }), privateUrl);
+  await page.locator("#btn-refresh:not([disabled])").click();
+  await page.waitForTimeout(500);
+  const withAuth = catalogRequests.filter((r) => r.url.startsWith("/private/"));
+  assert.equal(withAuth.length, 2, "opened, then refreshed");
+  assert.ok(withAuth.every((r) => r.authorization === "Bearer secret"), "Refresh sends the host's headers again");
+  say("openUrl: Refresh reuses the host's fetch options");
   await context.close();
 } catch (err) {
   failed = true;

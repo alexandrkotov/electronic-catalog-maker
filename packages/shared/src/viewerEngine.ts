@@ -46,7 +46,7 @@ import {
   type QuestionState,
   type QuizScore,
 } from "./quiz.js";
-import { isListMode, type CatalogImage, type CatalogLink, type CatalogMode, type CatalogRow } from "./types.js";
+import { isListMode, type CatalogImage, type CatalogLink, type CatalogMode, type CatalogRow, type KeyValueStorage } from "./types.js";
 import { buildViewerTools, createAgentToolsHandle, safeWebUrl, type ViewerAgentHost } from "./webmcp.js";
 import type { Database, SqlJsStatic } from "sql.js";
 
@@ -162,7 +162,44 @@ export interface MountViewerOptions {
    * item is shown as a compact details card next to it (see
    * renderShowcaseDetails). Default "full".
    */
-  mode?: "full" | "lite" | "showcase";
+  mode?: "full" | "lite" | "showcase" | "reader";
+  /**
+   * Which of the "full" toolbar's own controls to show; each defaults to true,
+   * except in "reader" mode, where all default to false (the host application
+   * has its own title, file opening, language and theme controls, and a
+   * catalog it opened itself has nothing to refresh). Search, Export PDF and
+   * the host's `toolbarActions` are not affected.
+   */
+  toolbar?: { title?: boolean; open?: boolean; openRemote?: boolean; refresh?: boolean; language?: boolean; theme?: boolean };
+  /**
+   * Extra buttons in the toolbar, after Search: a host application's own
+   * "Bookmark", "Share view", "Print". `onClick` gets the view on screen
+   * (the same object as `getView()`). `label` is shown as is — the host
+   * translates it; `icon` is a short text or emoji shown before it. The
+   * buttons are disabled while no catalog is open.
+   */
+  toolbarActions?: ViewerToolbarAction[];
+  /**
+   * Light or dark, decided by the host: applied as is, never read from or
+   * saved to localStorage (and change it later with `controller.setTheme`).
+   * Without it the visitor's saved choice, else the system preference.
+   */
+  theme?: "light" | "dark";
+  /**
+   * False: nothing is read from or written to localStorage — panel widths,
+   * column widths, theme, a cart's items, a quiz's picks all live for the
+   * session only. Default true.
+   */
+  persist?: boolean;
+  /**
+   * False: a promise that this viewer sends nothing but the catalog's own
+   * download — which is true of the engine itself anyway (the counter
+   * belongs to the host page, see setUpPwa) — and, to keep the promise, the
+   * two optional outgoing paths are closed: the "Try a demo catalog" links
+   * and "Share view…" (which probes for a local collaboration server).
+   * Default true.
+   */
+  analytics?: boolean;
   /** A catalog URL to fetch and open automatically once mounted. */
   initialSrc?: string;
   /**
@@ -321,9 +358,40 @@ export interface MountViewerOptions {
  * - "checkout": the visitor pressed Checkout — {items: [{url, name, buyUrl}]};
  *   cancelable: the host can show its own ending instead of the store.
  */
+/** A host's own toolbar button — see MountViewerOptions.toolbarActions. */
+export interface ViewerToolbarAction {
+  id: string;
+  label: string;
+  icon?: string;
+  onClick(view: EcatmView): void;
+}
+
 export type ViewerEventType = "load" | "locked" | "image" | "select" | "answer" | "cart" | "checkout" | "view" | "region";
 
 export interface ViewerController {
+  /**
+   * Opens a catalog the host already has in memory (the file's bytes, `.ecatm`
+   * or legacy `.sch`; `name` stands in for the file name). `key` is the
+   * password of a protected catalog — without it, or with a wrong one, the
+   * lock screen asks — and `view` is shown once the catalog is open. Rejects
+   * when the bytes are not a catalog. Forgets where the previous catalog came from.
+   */
+  openBytes(bytes: Uint8Array, name: string, opts?: { key?: string; view?: EcatmView }): Promise<void>;
+  /**
+   * Downloads and opens a catalog. `fetchInit` goes to `fetch` as is — cookies
+   * (`credentials: "include"`), an `Authorization` header — and is reused by
+   * Refresh and by links to other catalogs on the same origin, never sent to
+   * another origin. Rejects with the reason when the download or opening fails.
+   */
+  openUrl(url: string, opts?: { key?: string; view?: EcatmView; fetchInit?: RequestInit }): Promise<void>;
+  /**
+   * The open catalog as a PDF (needs `exportPdf` in the mount options, which
+   * does the work). Unlisted options take the same defaults as the dialog's first
+   * opening. Rejects when no catalog is open.
+   */
+  exportPdf(options?: Partial<PdfExportOptions>): Promise<Uint8Array>;
+  /** Changes the theme the host chose (see MountViewerOptions.theme); not saved anywhere. */
+  setTheme(theme: "light" | "dark"): void;
   /**
    * The view on screen now (see view.ts), or null while no catalog is open.
    * Zoom, cx and cy are only reported on the image stage of the "full" and
@@ -349,11 +417,29 @@ const ADDRESS_BAR_IDLE_MS = 600;
 export function mountViewer(options: MountViewerOptions): ViewerController {
   const container = options.container;
   const root: Document | ShadowRoot = options.root ?? document;
-  const mode = options.mode ?? "full";
+  // "reader" is the "full" viewer without the controls a host application
+  // provides itself (see MountViewerOptions.toolbar); everything below sees "full".
+  const readerMode = options.mode === "reader";
+  const mode = readerMode ? "full" : (options.mode ?? "full");
+  const toolbarShows = (key: "title" | "open" | "openRemote" | "refresh" | "language" | "theme") => options.toolbar?.[key] ?? !readerMode;
+  const toolbarActions = options.toolbarActions ?? [];
+  const persist = options.persist !== false;
+  const outgoingExtras = options.analytics !== false && !readerMode; // demo links, Share view…
+  // Everything the viewer saves goes through here, so `persist: false` can cut it off in one place.
+  const memoryStorage = new Map<string, string>();
+  const storage: KeyValueStorage = persist
+    ? {
+        getItem: (key) => localStorage.getItem(key),
+        setItem: (key, value) => localStorage.setItem(key, value),
+      }
+    : { getItem: (key) => memoryStorage.get(key) ?? null, setItem: (key, value) => void memoryStorage.set(key, value) };
+  // A theme the host chose is not the visitor's saved choice: never stored.
+  const themeStored = persist && options.theme === undefined;
   const updateAddressBar = options.updateAddressBar ?? false;
   const themeTarget = options.themeTarget ?? document.documentElement;
   const exportPdf = options.exportPdf;
   const showcaseCart = mode === "showcase" && options.showcaseCart === true;
+  const regionSelectOn = options.regionSelect ?? readerMode;
 
   /** Reports to the host (options.onEvent); false when it cancelled a cancelable event. A throwing host never breaks the viewer. */
   function emit(type: ViewerEventType, detail: Record<string, unknown>, cancelable = false): boolean {
@@ -365,7 +451,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     }
   }
 
-  applyTheme(resolveInitialTheme(), themeTarget);
+  applyTheme(options.theme ?? resolveInitialTheme(themeStored), themeTarget, themeStored);
 
   let SQL: SqlJsStatic;
   let db: Database | null = null;
@@ -521,6 +607,13 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // source (e.g. a catalog shared via a cloud drive that another editor
   // session just saved a new version of).
   let currentSrcUrl: string | null = options.initialSrc ?? null;
+  // The host's fetch options (cookies, headers) for currentSrcUrl: Refresh and links to
+  // other catalogs on the same origin reuse them; another origin never gets them.
+  let currentFetchInit: RequestInit | null = null;
+  const fetchInitFor = (url: string): RequestInit | undefined => {
+    if (!currentFetchInit || !currentSrcUrl) return undefined;
+    return new URL(url, location.href).origin === new URL(currentSrcUrl, location.href).origin ? currentFetchInit : undefined;
+  };
   // Set instead of currentSrcUrl when the catalog was opened via the local
   // file picker (showOpenFilePicker, not the plain <input> fallback) — lets
   // actionRefresh() re-read the same file from disk, e.g. a catalog synced
@@ -701,7 +794,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       window.removeEventListener("pointercancel", onUp);
       divider.classList.remove("dragging");
       try {
-        localStorage.setItem(SHOWCASE_DETAILS_KEY, String(width));
+        storage.setItem(SHOWCASE_DETAILS_KEY, String(width));
       } catch {
         // Width still applies for this session, just won't persist.
       }
@@ -720,7 +813,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   function loadPanelWidth(key: string, fallback: number): number {
     try {
-      const raw = Number(localStorage.getItem(key));
+      const raw = Number(storage.getItem(key));
       if (Number.isFinite(raw) && raw >= PANEL_WIDTH_LIMITS.min && raw <= PANEL_WIDTH_LIMITS.max) return raw;
     } catch {
       // localStorage unavailable (privacy mode, etc.) — fall back to the default.
@@ -767,7 +860,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       // widened from 64 to 140, and that stale array is exactly the right
       // shape/type to pass every check below despite carrying the outdated
       // value.
-      const raw = localStorage.getItem("ecm-viewer-table-col-widths-v2");
+      const raw = storage.getItem("ecm-viewer-table-col-widths-v2");
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length === DEFAULT_COL_WIDTHS.length && parsed.every((n) => typeof n === "number" && n > 0)) {
@@ -782,7 +875,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   function hasSavedColWidths(): boolean {
     try {
-      return localStorage.getItem("ecm-viewer-table-col-widths-v2") !== null;
+      return storage.getItem("ecm-viewer-table-col-widths-v2") !== null;
     } catch {
       return false;
     }
@@ -796,7 +889,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   function saveColWidths() {
     try {
-      localStorage.setItem("ecm-viewer-table-col-widths-v2", JSON.stringify(colWidths));
+      storage.setItem("ecm-viewer-table-col-widths-v2", JSON.stringify(colWidths));
     } catch {
       // Width still applies for this session, just won't persist.
     }
@@ -840,7 +933,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       divider.classList.remove("dragging");
       if (panelFractions) return; // this widget's proportions are its own, not the shared saved ones
       try {
-        localStorage.setItem(side === "images" ? "ecm-viewer-images-width-v2" : "ecm-viewer-table-width-v2", String(side === "images" ? imagesPanelWidth : tablePanelWidth));
+        storage.setItem(side === "images" ? "ecm-viewer-images-width-v2" : "ecm-viewer-table-width-v2", String(side === "images" ? imagesPanelWidth : tablePanelWidth));
       } catch {
         // Width still applies for this session, just won't persist.
       }
@@ -1132,7 +1225,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   }
 
   /** Never throws — returns an error message on failure, or null on success. */
-  async function loadFromUrl(url: string): Promise<string | null> {
+  async function loadFromUrl(url: string, init?: RequestInit): Promise<string | null> {
     // A plain re-fetch of the *same* address (actionRefresh, including a
     // refresh of this instance's own "Share view…" room) must leave
     // shareRoom* alone — only a genuinely different source below means the
@@ -1147,11 +1240,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       // their CORS request into one they did not expect, and their caching is
       // theirs to decide.
       const sameOrigin = new URL(url, location.href).origin === location.origin;
-      const res = await fetch(url, sameOrigin ? { cache: "no-cache" } : undefined);
+      const res = await fetch(url, sameOrigin ? { cache: "no-cache", ...init } : init);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const bytes = new Uint8Array(await res.arrayBuffer());
       await openBytes(bytes, baseName(new URL(url, location.href).pathname), null);
       currentSrcUrl = url;
+      currentFetchInit = init ?? null;
       openedFileHandle = null;
       if (isNewSource) resetShareViewState();
       syncAddressBar();
@@ -1219,7 +1313,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     refreshing = true;
     render();
     if (currentSrcUrl) {
-      await loadFromUrl(currentSrcUrl);
+      await loadFromUrl(currentSrcUrl, fetchInitFor(currentSrcUrl));
     } else if (openedFileHandle) {
       try {
         const file = await openedFileHandle.getFile();
@@ -1318,9 +1412,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // must have been used to save it, so switching to a genuinely different
     // catalog naturally starts from an empty cart instead.
     cartStorageKeyValue = cartStorageKey(sourceName, loadedMeta.catalogName);
-    cartItems = loadPersistedCart(cartStorageKeyValue);
+    cartItems = loadPersistedCart(cartStorageKeyValue, storage);
     quizStorageKeyValue = quizStorageKey(sourceName, loadedMeta.catalogName);
-    quizPicks = loadQuizPicks(quizStorageKeyValue);
+    quizPicks = loadQuizPicks(quizStorageKeyValue, storage);
     foundUrls = new Map();
     cartOpen = false;
     activeImageId = listImages(db)[0]?.id ?? null;
@@ -1408,6 +1502,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         initialSelectionPending = false;
         applyInitialSelection();
       }
+      flushPendingApiView();
     } catch (err) {
       lockBusy = false;
       lockError = err instanceof ProtectedCatalogError && err.code === "wrong-password" ? t("lock.wrongPassword") : (err as Error).message;
@@ -1476,7 +1571,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   let lastViewKey = "";
   // The Area tool is armed: the next drag on the image draws a rectangle (one-shot).
   let regionMode = false;
-  const regionToolAvailable = () => options.regionSelect === true && mode !== "showcase" && catalogMode !== "quiz";
+  const regionToolAvailable = () => regionSelectOn && mode !== "showcase" && catalogMode !== "quiz";
 
   /** The stage's DOM size and the image's, or null where a view has no zoom/position (showcase, quiz, nothing shown, stage hidden). */
   function measureStage(): { scroll: HTMLElement; image: Size; box: Size } | null {
@@ -1715,7 +1810,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         const resolved = resolveCatalogLink(catalog, new URL(currentSrcUrl ?? location.href, location.href).href);
         if (resolved) {
           nextCatalogBack = currentSrcUrl ? { url: currentSrcUrl, name: readMeta(db).catalogName } : null;
-          void loadFromUrl(resolved).then(() => (nextCatalogBack = null));
+          void loadFromUrl(resolved, fetchInitFor(resolved)).then(() => (nextCatalogBack = null));
         }
         return;
       }
@@ -1806,7 +1901,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function actionToggleCart(rowUrl: string) {
     if (cartItems.has(rowUrl)) cartItems.delete(rowUrl);
     else cartItems.add(rowUrl);
-    if (cartStorageKeyValue) savePersistedCart(cartStorageKeyValue, cartItems);
+    if (cartStorageKeyValue) savePersistedCart(cartStorageKeyValue, cartItems, storage);
     render();
     emit("cart", { items: [...cartItems] });
   }
@@ -1827,7 +1922,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    */
   function actionRemoveFromCart(rowUrl: string) {
     cartItems.delete(rowUrl);
-    if (cartStorageKeyValue) savePersistedCart(cartStorageKeyValue, cartItems);
+    if (cartStorageKeyValue) savePersistedCart(cartStorageKeyValue, cartItems, storage);
     if (cartItems.size === 0) cartOpen = false;
     render();
     emit("cart", { items: [...cartItems] });
@@ -1844,7 +1939,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const picks = quizPicks.get(activeImageId) ?? [];
     if (picks.includes(url)) return;
     quizPicks.set(activeImageId, [...picks, url]);
-    saveQuizPicks(quizStorageKeyValue, quizPicks);
+    saveQuizPicks(quizStorageKeyValue, quizPicks, storage);
     const rows = listRowsForImage(db, activeImageId);
     const row = rows.find((r) => r.url === url);
     if (!row) return;
@@ -1881,7 +1976,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (!db || !quizStorageKeyValue) return;
     if (typeof confirm === "function" && !confirm(t("quiz.resetConfirm"))) return;
     quizPicks = new Map();
-    saveQuizPicks(quizStorageKeyValue, quizPicks);
+    saveQuizPicks(quizStorageKeyValue, quizPicks, storage);
     const first = listImages(db)[0];
     if (first) actionSelectImage(first.id);
     else render();
@@ -2065,7 +2160,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function actionClearCart() {
     if (cartItems.size === 0) return;
     cartItems.clear();
-    if (cartStorageKeyValue) savePersistedCart(cartStorageKeyValue, cartItems);
+    if (cartStorageKeyValue) savePersistedCart(cartStorageKeyValue, cartItems, storage);
     cartOpen = false;
     render();
     emit("cart", { items: [] });
@@ -2572,25 +2667,30 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         ${
           mode === "full"
             ? `<div class="toolbar">
-                 <h1>${te("toolbar.title")}</h1>
-                 <button id="btn-open">${te("toolbar.open")}</button>
-                 <input type="file" id="file-open" accept=".${CATALOG_FILE_EXTENSION},.sch" style="display:none" />
-                 <button id="btn-open-remote" title="${te("toolbar.openRemote.tip")}">${te("toolbar.openRemote")}</button>
-                 <button id="btn-refresh" ${currentSrcUrl || openedFileHandle ? "" : "disabled"} title="${te("toolbar.refresh.tip")}">${refreshing ? te("toolbar.refreshing") : te("toolbar.refresh")}</button>
+                 ${toolbarShows("title") ? `<h1>${te("toolbar.title")}</h1>` : ""}
+                 ${
+                   toolbarShows("open")
+                     ? `<button id="btn-open">${te("toolbar.open")}</button>
+                 <input type="file" id="file-open" accept=".${CATALOG_FILE_EXTENSION},.sch" style="display:none" />`
+                     : ""
+                 }
+                 ${toolbarShows("openRemote") ? `<button id="btn-open-remote" title="${te("toolbar.openRemote.tip")}">${te("toolbar.openRemote")}</button>` : ""}
+                 ${toolbarShows("refresh") ? `<button id="btn-refresh" ${currentSrcUrl || openedFileHandle ? "" : "disabled"} title="${te("toolbar.refresh.tip")}">${refreshing ? te("toolbar.refreshing") : te("toolbar.refresh")}</button>` : ""}
                  ${catalogMode === "quiz" ? "" : `<button id="btn-search" ${db ? "" : "disabled"} title="${te("toolbar.search.tip")}">${te("toolbar.search")}</button>`}
-                 ${updateAddressBar ? `<button id="btn-share-view" ${db && !isLoopbackHostname(location.hostname) ? "" : "disabled"} title="${escapeHtml(locked ? t("lock.exportTip") : shareViewButtonTitle())}">${te("toolbar.share")}</button>` : ""}
+                 ${toolbarActions.map((a) => `<button type="button" class="toolbar-action" data-action-id="${escapeHtml(a.id)}" ${db && !locked ? "" : "disabled"}>${a.icon ? `<span class="toolbar-action-icon" aria-hidden="true">${escapeHtml(a.icon)}</span> ` : ""}${escapeHtml(a.label)}</button>`).join("")}
+                 ${updateAddressBar && outgoingExtras ? `<button id="btn-share-view" ${db && !isLoopbackHostname(location.hostname) ? "" : "disabled"} title="${escapeHtml(locked ? t("lock.exportTip") : shareViewButtonTitle())}">${te("toolbar.share")}</button>` : ""}
                  ${exportPdf && catalogMode !== "quiz" ? `<button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="${locked ? te("lock.exportTip") : te("toolbar.exportPdf.tip")}">${exportPdfBusy ? te("toolbar.exportPdf.busy") : te("toolbar.exportPdf")}</button>` : ""}
                  ${catalogMode === "quiz" ? renderQuizBar() : ""}
                  ${cartMode === "accumulate" && catalogMode !== "quiz" ? `<button id="btn-cart" ${cartItems.size === 0 ? "disabled" : ""} title="${te("cart.tip")}">${cartIcon()} ${cartLabel()} (${cartItems.size})</button>` : ""}
                  <span class="spacer"></span>
                  ${
-                   options.onLocaleChange
+                   options.onLocaleChange && toolbarShows("language")
                      ? `<select id="lang-select" title="${te("toolbar.language.tip")}" aria-label="${te("toolbar.language.tip")}">${VIEWER_LOCALES.map(
                          (l) => `<option value="${l}" ${l === locale ? "selected" : ""}>${escapeHtml(VIEWER_LOCALE_NAMES[l] ?? l)}</option>`,
                        ).join("")}</select>`
                      : ""
                  }
-                 <button id="btn-theme" title="${te("toolbar.theme.tip")}">${currentTheme(themeTarget) === "dark" ? te("theme.light") : te("theme.dark")}</button>
+                 ${toolbarShows("theme") ? `<button id="btn-theme" title="${te("toolbar.theme.tip")}">${currentTheme(themeTarget) === "dark" ? te("theme.light") : te("theme.dark")}</button>` : ""}
                  <span class="hint">${escapeHtml(statusMessage)}</span>
                  ${searchOpen ? renderSearchPanel() : ""}
                  ${cartOpen ? renderCartPanel() : ""}
@@ -2613,7 +2713,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         <div class="panel-images">
           ${
             images.length === 0
-              ? mode === "lite"
+              ? mode === "lite" || !outgoingExtras
                 ? `<p class="hint">${escapeHtml(statusMessage || t("images.loading"))}</p>`
                 : `<p class="hint">${t("images.empty", {
                     ext: CATALOG_FILE_EXTENSION,
@@ -3401,7 +3501,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       options.onLocaleChange?.(chosen);
     });
     root.getElementById("btn-theme")?.addEventListener("click", () => {
-      toggleTheme(themeTarget);
+      toggleTheme(themeTarget, themeStored);
       render();
     });
 
@@ -3446,7 +3546,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       if (lockSubmit) lockSubmit.disabled = !lockPassword;
     });
     root.getElementById("lock-back")?.addEventListener("click", () => {
-      if (catalogBack) void loadFromUrl(catalogBack.url);
+      if (catalogBack) void loadFromUrl(catalogBack.url, fetchInitFor(catalogBack.url));
     });
     lockForm?.addEventListener("submit", (evt) => {
       evt.preventDefault();
@@ -3534,6 +3634,18 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     root.getElementById("btn-zoom-out")?.addEventListener("click", () => actionSetZoom(zoom / 1.25));
     root.getElementById("btn-zoom-reset")?.addEventListener("click", actionResetZoom);
     root.getElementById("btn-zoom-fit")?.addEventListener("click", actionFitZoom);
+    root.querySelectorAll<HTMLButtonElement>(".toolbar-action").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const action = toolbarActions.find((a) => a.id === btn.dataset.actionId);
+        const view = getView();
+        if (!action || !view) return;
+        try {
+          action.onClick(view);
+        } catch (err) {
+          console.error(err); // a host's handler never breaks the viewer
+        }
+      });
+    });
     root.getElementById("btn-region")?.addEventListener("click", actionToggleRegionMode);
     root.getElementById("btn-region-clear")?.addEventListener("click", actionClearRegion);
     if (regionMode) root.getElementById("stage-scroll")?.addEventListener("pointerdown", (evt) => startRegionDraw(evt as PointerEvent));
@@ -3692,17 +3804,88 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     quizObserverDisconnect = () => quizObserver.disconnect();
   }
 
+  // --- Controller API for a host application ---
+  // A view that came with openBytes/openUrl, applied once the catalog is really open
+  // (after the password, for a protected one).
+  let pendingApiView: EcatmView | null = null;
+
+  function flushPendingApiView() {
+    if (!pendingApiView || !db || locked) return;
+    const view = pendingApiView;
+    pendingApiView = null;
+    setView(view);
+  }
+
+  /** What the previous catalog's source left behind must not follow a catalog the host hands over. */
+  function forgetSource() {
+    currentSrcUrl = null;
+    currentFetchInit = null;
+    openedFileHandle = null;
+    resetShareViewState();
+  }
+
+  async function apiOpenBytes(bytes: Uint8Array, name: string, opts: { key?: string; view?: EcatmView } = {}) {
+    await booted;
+    forgetSource();
+    pendingApiView = opts.view ?? null;
+    pendingLinkKey = opts.key ?? null;
+    try {
+      await openBytes(bytes, name, null);
+    } catch (err) {
+      pendingApiView = null;
+      statusMessage = t("status.openFailed", { message: (err as Error).message });
+      render();
+      throw err;
+    } finally {
+      pendingLinkKey = null;
+    }
+    flushPendingApiView();
+  }
+
+  async function apiOpenUrl(url: string, opts: { key?: string; view?: EcatmView; fetchInit?: RequestInit } = {}) {
+    await booted;
+    pendingApiView = opts.view ?? null;
+    pendingLinkKey = opts.key ?? null;
+    let error: string | null;
+    try {
+      error = await loadFromUrl(url, opts.fetchInit);
+    } finally {
+      pendingLinkKey = null;
+    }
+    if (error !== null) {
+      pendingApiView = null;
+      throw new Error(error);
+    }
+    render(); // loadFromUrl sets the source after its own render: Refresh and the address bar need to see it
+    flushPendingApiView();
+  }
+
+  async function apiExportPdf(partial?: Partial<PdfExportOptions>): Promise<Uint8Array> {
+    if (!db) throw new Error("No catalog is open");
+    if (!exportPdf) throw new Error("mountViewer was not given an exportPdf function");
+    return exportPdf(db, { ...DEFAULT_PDF_EXPORT_OPTIONS, qrSize: suggestedQrSize(db), ...partial });
+  }
+
+  function setTheme(theme: "light" | "dark") {
+    applyTheme(theme, themeTarget, false); // the host's choice, not the visitor's: never saved
+    render();
+  }
+
   // Esc disarms the Area tool.
   const onRegionKey = (evt: Event) => {
     if ((evt as KeyboardEvent).key === "Escape" && regionMode) actionToggleRegionMode();
   };
   root.addEventListener("keydown", onRegionKey);
 
-  void boot();
+  const booted = boot();
 
   return {
+    openBytes: apiOpenBytes,
+    openUrl: apiOpenUrl,
     getView,
     setView,
+    exportPdf: apiExportPdf,
+    setTheme,
     destroy() {
       if (viewEventTimer !== null) clearTimeout(viewEventTimer);
       if (addressBarTimer !== null) clearTimeout(addressBarTimer);

@@ -1,4 +1,4 @@
-import type { CatalogMeta, CatalogRow } from "./types.js";
+import type { CatalogMeta, CatalogRow, KeyValueStorage } from "./types.js";
 
 /**
  * Pulls an item id out of a row's buy_url using the catalog's own
@@ -83,9 +83,9 @@ export function cartStorageKey(sourceName: string, catalogName: string): string 
  * unavailable or corrupted localStorage entry just means starting from an
  * empty cart, same as before this feature existed.
  */
-export function loadPersistedCart(key: string): Set<string> {
+export function loadPersistedCart(key: string, storage?: KeyValueStorage): Set<string> {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = (storage ?? localStorage).getItem(key);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.every((v) => typeof v === "string")) return new Set(parsed);
@@ -97,9 +97,9 @@ export function loadPersistedCart(key: string): Set<string> {
 }
 
 /** Saves the current cart for this catalog (see cartStorageKey) — called after every add/remove. */
-export function savePersistedCart(key: string, items: Set<string>): void {
+export function savePersistedCart(key: string, items: Set<string>, storage?: KeyValueStorage): void {
   try {
-    localStorage.setItem(key, JSON.stringify([...items]));
+    (storage ?? localStorage).setItem(key, JSON.stringify([...items]));
   } catch {
     // Cart still works for this session, just won't survive a reload.
   }

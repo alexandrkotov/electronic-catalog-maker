@@ -1,4 +1,4 @@
-import type { CatalogRow } from "./types.js";
+import type { CatalogRow, KeyValueStorage } from "./types.js";
 
 /**
  * The rules of `catalog_mode = quiz`, kept free of DOM/DB so they can be
@@ -107,10 +107,10 @@ export function quizStorageKey(sourceName: string, catalogName: string): string 
 }
 
 /** Saved picks per image id. Never throws: unavailable or corrupted storage just means starting over. */
-export function loadQuizPicks(key: string): Map<number, string[]> {
+export function loadQuizPicks(key: string, storage?: KeyValueStorage): Map<number, string[]> {
   const out = new Map<number, string[]>();
   try {
-    const raw = localStorage.getItem(key);
+    const raw = (storage ?? localStorage).getItem(key);
     if (!raw) return out;
     const parsed: unknown = JSON.parse(raw);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
@@ -124,9 +124,9 @@ export function loadQuizPicks(key: string): Map<number, string[]> {
   return out;
 }
 
-export function saveQuizPicks(key: string, picks: Map<number, string[]>): void {
+export function saveQuizPicks(key: string, picks: Map<number, string[]>, storage?: KeyValueStorage): void {
   try {
-    localStorage.setItem(key, JSON.stringify(Object.fromEntries(picks)));
+    (storage ?? localStorage).setItem(key, JSON.stringify(Object.fromEntries(picks)));
   } catch {
     // Answers still count for this session, just won't survive a reload.
   }
