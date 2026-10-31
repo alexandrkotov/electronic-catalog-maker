@@ -1,0 +1,68 @@
+name: Release viewer-engine (GitHub Release, .tgz)
+
+# Manual only, on purpose — same philosophy as the other release workflows
+# here: publishing is a deliberate, occasional action, not something that
+# fires on every push. Unlike the rolling binary releases, every version of
+# the library is its own immutable release (tag viewer-engine-vX.Y.Z, the
+# version in packages/viewer-engine/package.json): a host application pins
+# one by URL, so a published version must never change underneath it. Bump
+# the version in package.json first; the workflow refuses a version that is
+# already released.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, test and publish the .tgz
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Read the version and refuse one that is already released
+        id: version
+        run: |
+          version=$(node -p "require('./packages/viewer-engine/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/viewer-engine-v$version" >/dev/null; then
+            echo "::error::viewer-engine-v$version is already released — bump the version in packages/viewer-engine/package.json first."
+            exit 1
+          fi
+
+      - run: pnpm --filter @ecm/viewer-engine build
+      # The package as a host gets it: packed, unpacked, its types compiled
+      # against, its ES module loaded from plain files in a browser.
+      - run: pnpm --filter @ecm/e2e exec playwright install --with-deps chromium
+      - run: pnpm --filter @ecm/e2e exec node library.mjs
+
+      - name: Pack
+        working-directory: packages/viewer-engine
+        run: pnpm pack --pack-destination "$GITHUB_WORKSPACE/release"
+
+      - name: Create the GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: viewer-engine-v${{ steps.version.outputs.version }}
+          name: "viewer-engine v${{ steps.version.outputs.version }}"
+          fail_on_unmatched_files: true
+          body: |
+            The Electronic Catalog Maker viewer engine as a library — open a `.ecatm` catalog from bytes or a URL, show it with its hotspots, and drive it from a host application (read and set the view, area selection, toolbar buttons, PDF export).
+
+            Install:
+
+            ```
+            bun add https://github.com/alexandrkotov/electronic-catalog-maker/releases/download/viewer-engine-v${{ steps.version.outputs.version }}/ecm-viewer-engine-${{ steps.version.outputs.version }}.tgz
+            ```
+
+            Serve `dist/sql-wasm.wasm` (and `dist/fonts/DejaVuSans.ttf` for PDF export) from your own server and pass their URLs to `mountViewer` / `createPdfExporter`. See the package's [README](https://github.com/alexandrkotov/electronic-catalog-maker/tree/viewer-engine-v${{ steps.version.outputs.version }}/packages/viewer-engine) for the API.
+          files: release/ecm-viewer-engine-${{ steps.version.outputs.version }}.tgz
