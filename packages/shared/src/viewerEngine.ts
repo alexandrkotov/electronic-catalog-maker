@@ -405,6 +405,17 @@ export interface ViewerController {
    * change — but the "view" event follows like after any other change.
    */
   setView(view: EcatmView): void;
+  /**
+   * Runs a search the way the Search box does (same matching), opening its
+   * panel with the query filled in but leaving the keyboard focus where the
+   * host has it. Clicking a result goes to its picture and hotspot, and the
+   * "view" event follows. `field` narrows it to one column ("name", "sku",
+   * "description" or "extra:<key>"). Returns the number of matches (the panel
+   * lists the first 30); 0 with no catalog open and for a quiz, which has no search.
+   */
+  search(query: string, opts?: { field?: SearchField }): number;
+  /** Closes the search panel and forgets the query. */
+  clearSearch(): void;
   /** Clears everything this instance rendered. Not reusable after this. */
   destroy(): void;
 }
@@ -504,6 +515,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   let searchOpen = false;
   let searchQuery = "";
   let searchField: SearchField = "all";
+  /** The panel was opened by the host's `search()`, so it must not take the keyboard focus. */
+  let searchByHost = false;
   // Multi-item cart for every row with a buy_url, under cart_mode
   // "accumulate" — the Buy/Learn-more button adds to this cart instead of
   // navigating immediately, and a toolbar button reviews/opens everything in
@@ -1136,10 +1149,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     render();
   }
 
-  /** Offers the open catalog's tools to a browser agent, or withdraws them when there is no open catalog. */
+  /**
+   * Offers the open catalog's tools to a browser agent, or withdraws them when
+   * there is no open catalog. A reader-mode viewer belongs to a host that has
+   * its own agent story, so it registers nothing.
+   */
   function syncAgentTools() {
     closeAgentConfirm();
-    if (db) agentTools.set(buildViewerTools(agentHost));
+    if (db && !readerMode) agentTools.set(buildViewerTools(agentHost));
     else agentTools.clear();
   }
 
@@ -2505,10 +2522,30 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   function actionToggleSearch() {
     searchOpen = !searchOpen;
+    searchByHost = false;
     if (searchOpen) {
       searchQuery = "";
       searchField = "all";
     }
+    render();
+  }
+
+  function apiSearch(query: string, opts: { field?: SearchField } = {}): number {
+    if (!db || catalogMode === "quiz") return 0;
+    searchOpen = true;
+    searchByHost = true;
+    searchQuery = query;
+    searchField = opts.field ?? "all";
+    render();
+    return searchRows(listAllRows(db), searchQuery, searchField).length;
+  }
+
+  function apiClearSearch() {
+    if (!searchOpen && !searchQuery) return;
+    searchOpen = false;
+    searchByHost = false;
+    searchQuery = "";
+    searchField = "all";
     render();
   }
 
@@ -3620,7 +3657,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       refreshSearchResults();
     });
     wireSearchResultClicks();
-    if (searchOpen) searchInput?.focus();
+    if (searchOpen && !searchByHost) searchInput?.focus();
 
     root.querySelectorAll<HTMLLIElement>(".panel-images li[data-id]").forEach((li) => {
       li.addEventListener("click", () => actionSelectImage(Number(li.dataset.id)));
@@ -3884,6 +3921,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     openUrl: apiOpenUrl,
     getView,
     setView,
+    search: apiSearch,
+    clearSearch: apiClearSearch,
     exportPdf: apiExportPdf,
     setTheme,
     destroy() {

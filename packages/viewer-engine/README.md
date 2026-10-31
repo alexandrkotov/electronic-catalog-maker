@@ -42,6 +42,8 @@ viewer.setView({ v: 1, imageId: 3, zoom: 2, cx: 0.4, cy: 0.5 });
 const pdf = await viewer.exportPdf(); // Uint8Array
 ```
 
+Your own search box can drive the viewer's: `viewer.search("bolt")` opens the search panel with that query (without taking the keyboard focus) and returns the number of matches, `viewer.search("bolt", { field: "sku" })` narrows it to one column, and `viewer.clearSearch()` closes it. A click on a result opens its picture and hotspot and the `"view"` event follows. In `mode: "reader"` the viewer registers no WebMCP agent tools.
+
 `mountViewerInShadow` keeps the viewer's stylesheet (it restyles every `button`, `table` and `select`) apart from your page. To share the page's own DOM instead, call `mountViewer` with a `container` and add `viewerCss` or `style.css` yourself.
 
 ## On a server: `@ecm/viewer-engine/server`

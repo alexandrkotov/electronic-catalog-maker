@@ -39,8 +39,9 @@ let failed = false;
 const say = (msg) => console.log(`  ok  ${msg}`);
 
 /** `src: false` mounts an empty viewer (the host opens a catalog itself); `opts` is merged into the mount options. */
-async function boot(contextOptions, { src = true, opts = null } = {}) {
+async function boot(contextOptions, { src = true, opts = null, init = null } = {}) {
   const context = await browser.newContext(contextOptions);
+  if (init) await context.addInitScript(init);
   const page = await context.newPage();
   const requests = [];
   page.on("request", (req) => requests.push(req.url()));
@@ -297,6 +298,60 @@ try {
     "the catalog is downloaded once and nothing else is asked of its server",
   );
   say(`analytics: false — ${requests.length} requests, none to a third party`);
+  await context.close();
+
+  // search(query) / clearSearch(): the host's own search box drives the viewer's search
+  ({ context, page } = await boot(DESKTOP, { src: true, opts: { mode: "reader" } }));
+  const resultCount = async () => page.locator("#search-results li[data-url]").count();
+  const word = await page.evaluate(() => {
+    const first = document.querySelector(".data-table tbody tr td, table tbody tr td");
+    return (first?.textContent ?? "").trim().split(/\s+/)[0];
+  });
+  assert.ok(word, "a word to search for");
+  await page.locator("#btn-search").waitFor();
+  await page.evaluate(() => document.body.insertAdjacentHTML("beforeend", '<input id="host-box">'));
+  await page.locator("#host-box").focus();
+  const found = await page.evaluate((q) => window.ctrl.search(q), word);
+  assert.ok(found > 0, `search("${word}") reports its matches: ${found}`);
+  assert.ok((await resultCount()) > 0, "the panel lists the results");
+  assert.equal(await page.evaluate(() => document.activeElement?.id), "host-box", "the host keeps the keyboard focus");
+  assert.equal(await page.evaluate(() => window.ctrl.search("zzzz-no-such-thing")), 0, "a miss reports 0");
+  assert.equal(await resultCount(), 0, "and lists nothing");
+  assert.equal(await page.evaluate((q) => window.ctrl.search(q, { field: "sku" }), word), 0, "the field narrows it");
+  await page.evaluate((q) => window.ctrl.search(q), word);
+  // a result click goes to its picture and hotspot, the view event follows
+  await page.evaluate(() => (window.__events.length = 0));
+  const target = page.locator("#search-results li[data-url]").last();
+  const targetImage = Number(await target.getAttribute("data-image-id"));
+  await target.click();
+  await page.waitForTimeout(500);
+  v = await getView(page);
+  assert.equal(v.imageId, targetImage, "the result's picture is open");
+  const hotspotFollow = await events(page, "view");
+  assert.ok(hotspotFollow.length > 0 && hotspotFollow.at(-1).imageId === targetImage, "the view event follows the jump");
+  assert.equal(await page.locator("#search-panel").count(), 0, "the panel closes after a jump");
+  await page.evaluate((q) => window.ctrl.search(q), word);
+  assert.equal(await page.locator("#search-panel").count(), 1);
+  await page.evaluate(() => window.ctrl.clearSearch());
+  assert.equal(await page.locator("#search-panel").count(), 0, "clearSearch closes the panel");
+  await page.evaluate((q) => window.ctrl.search(q), word);
+  await page.evaluate(() => window.ctrl.clearSearch());
+  await page.evaluate(() => window.ctrl.search(""));
+  assert.equal(await resultCount(), 0, "the query was forgotten");
+  say("search / clearSearch: counts, filled panel, host keeps focus, result jumps with a view event");
+  await context.close();
+
+  // WebMCP: the standard viewer offers its tools to a browser agent, a reader-mode one does not
+  const stubModelContext = () => {
+    window.__agentTools = [];
+    document.modelContext = { registerTool: (tool) => window.__agentTools.push(tool.name) };
+  };
+  ({ context, page } = await boot(DESKTOP, { init: stubModelContext }));
+  assert.ok((await page.evaluate(() => window.__agentTools.length)) > 0, "the standard viewer registers its agent tools");
+  await context.close();
+  ({ context, page } = await boot(DESKTOP, { init: stubModelContext, opts: { mode: "reader" } }));
+  assert.equal(await page.evaluate(() => window.__agentTools.length), 0, "a reader-mode viewer registers no agent tools");
+  say("WebMCP: tools in the standard viewer, none in reader mode");
   await context.close();
 
   // openUrl with the host's fetch options

@@ -25,6 +25,7 @@ export type { EcatmView, Size, ViewGeometry, ViewPlacement, ViewRegion } from ".
 export { VIEWER_LOCALES, VIEWER_LOCALE_NAMES } from "../../shared/src/locales/viewer/index.js";
 export { matchLocale, pickLocale } from "../../shared/src/i18n.js";
 export type { PdfExportOptions } from "../../shared/src/pdfExportOptions.js";
+export type { SearchField } from "../../shared/src/search.js";
 export type { Database } from "sql.js";
 export { createPdfExporter } from "./pdf.js";
 export type { PdfFontSource } from "./pdf.js";
