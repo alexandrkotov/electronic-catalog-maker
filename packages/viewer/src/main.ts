@@ -5,6 +5,7 @@ import {
   VIEWER_LOCALES,
   appLocaleCandidates,
   mountViewer,
+  parseViewGeometry,
   pickLocale,
   saveLocale,
   setUpPwa,
@@ -30,6 +31,9 @@ const params = new URLSearchParams(location.search);
 // sharer was looking at, not just the catalog's cover.
 const initialImageId = params.has("image") ? Number(params.get("image")) : undefined;
 const initialLinkId = params.has("link") ? Number(params.get("link")) : undefined;
+// zoom, cx, cy and rect=x,y,w,h — where the sharer had scrolled and what they
+// had highlighted (see view.ts). Links without them open as before.
+const initialGeometry = parseViewGeometry(params);
 // A protected catalog's password, when the sharer chose to put it into the
 // link ("Share view…" → include the password). It lives in the fragment, so
 // it is never sent to the server that hosts the catalog.
@@ -78,6 +82,7 @@ mountViewer({
   initialSrc: params.get("src") ?? undefined,
   initialImageId: Number.isFinite(initialImageId) ? initialImageId : undefined,
   initialLinkId: Number.isFinite(initialLinkId) ? initialLinkId : undefined,
+  initialGeometry,
   initialKey,
   updateAddressBar: true,
   wasmUrl,

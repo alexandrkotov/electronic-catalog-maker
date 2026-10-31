@@ -28,6 +28,7 @@ import {
   detectLocalCollabServerViaBridge,
 } from "./collabClient.js";
 import { renderQrCodeSvg } from "./qrcode.js";
+import { normalizeRegion, normalizeView, placeView, readView, setViewGeometryParams, viewKey, type EcatmView, type Size, type ViewGeometry, type ViewRegion } from "./view.js";
 import { catalogLinkTarget, isNavLink, navTargetImageId, resolveCatalogLink } from "./navLink.js";
 import { catalogFileStem } from "./fileName.js";
 import { createTranslator, matchLocale, type MessageParams, type Translate } from "./i18n.js";
@@ -174,6 +175,11 @@ export interface MountViewerOptions {
   initialImageId?: number;
   initialLinkId?: number;
   /**
+   * The rest of a view link (zoom, cx, cy, region — see view.ts): applied
+   * after `initialImageId`/`initialLinkId`, once the stage has a size.
+   */
+  initialGeometry?: ViewGeometry;
+  /**
    * The password of a protected catalog (see protect.ts), taken from a share
    * link's `#key=` fragment. Tried once, on `initialSrc` only, so the link's
    * receiver opens the catalog without typing anything; a wrong or outdated
@@ -297,15 +303,36 @@ export interface MountViewerOptions {
  * - "answer": a quiz answer was picked — {imageId, url, name, correct,
  *   status ("open"|"passed"|"failed"), need, found, score {total, answered, correct, percent, finished}}.
  * - "cart": the cart changed — {items: row urls}.
+ * - "view": the picture, selection, zoom or scroll changed — an EcatmView (see
+ *   view.ts), at most once per VIEW_EVENT_INTERVAL_MS and only when it differs
+ *   from the last one sent; enough to hand straight back to setView.
  * - "checkout": the visitor pressed Checkout — {items: [{url, name, buyUrl}]};
  *   cancelable: the host can show its own ending instead of the store.
  */
-export type ViewerEventType = "load" | "locked" | "image" | "select" | "answer" | "cart" | "checkout";
+export type ViewerEventType = "load" | "locked" | "image" | "select" | "answer" | "cart" | "checkout" | "view";
 
 export interface ViewerController {
+  /**
+   * The view on screen now (see view.ts), or null while no catalog is open.
+   * Zoom, cx and cy are only reported on the image stage of the "full" and
+   * "lite" modes — a quiz card and a showcase keep their own fit.
+   */
+  getView(): EcatmView | null;
+  /**
+   * Shows a view: switches to its image, selects its hotspot, zooms and
+   * scrolls to it. A stale id (an edited catalog) is skipped, never an
+   * error. Does not send "image"/"select" events — the caller asked for the
+   * change — but the "view" event follows like after any other change.
+   */
+  setView(view: EcatmView): void;
   /** Clears everything this instance rendered. Not reusable after this. */
   destroy(): void;
 }
+
+/** The "view" event is sent at most this often. */
+export const VIEW_EVENT_INTERVAL_MS = 250;
+/** The address bar follows scrolling and zooming only after the visitor pauses (browsers limit history.replaceState calls). */
+const ADDRESS_BAR_IDLE_MS = 600;
 
 export function mountViewer(options: MountViewerOptions): ViewerController {
   const container = options.container;
@@ -1020,9 +1047,17 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (activeImageId !== null && options.initialLinkId !== undefined && listLinksForImage(db, activeImageId).some((l) => l.id === options.initialLinkId && !isNavLink(l))) {
       selectedLinkId = options.initialLinkId;
     }
+    const geometry = options.initialGeometry;
+    const hasGeometry = !!geometry && (geometry.zoom !== undefined || geometry.cx !== undefined || geometry.cy !== undefined || geometry.region !== undefined);
+    if (hasGeometry && mode !== "showcase" && catalogMode !== "quiz") {
+      viewRegion = normalizeRegion(geometry.region);
+      pendingGeometry = geometry;
+      mobileTab = "stage"; // a view link is about the picture
+    }
     syncAddressBar();
     render();
-    if (selectedLinkId !== null) centerSelection();
+    if (pendingGeometry) applyPendingGeometry();
+    else if (selectedLinkId !== null) centerSelection();
   }
 
   async function boot() {
@@ -1279,6 +1314,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     activeImageId = listImages(db)[0]?.id ?? null;
     selectedLinkId = null;
     resetZoomForImage(activeImageId);
+    lastViewKey = ""; // a new catalog's first view is news even if its ids match the last one's
     // Fresh catalog: start on the catalog's own defaultView (see CatalogMeta
     // — "images" unless the author picked otherwise in Store settings).
     // Only visible below the mobile-tab breakpoint (embeds in a narrow
@@ -1418,6 +1454,116 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     fallbackInput.click();
   }
 
+  // --- Views (see view.ts) ---
+  // The highlighted rectangle of the current view (drawn by the stage; empty until one is set or selected).
+  let viewRegion: ViewRegion | undefined;
+  // A view's zoom/position waiting for a stage that has a size (a hidden mobile tab, a window not laid out yet).
+  let pendingGeometry: ViewGeometry | null = null;
+  let viewEventTimer: ReturnType<typeof setTimeout> | null = null;
+  let addressBarTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastViewKey = "";
+
+  /** The stage's DOM size and the image's, or null where a view has no zoom/position (showcase, quiz, nothing shown, stage hidden). */
+  function measureStage(): { scroll: HTMLElement; image: Size; box: Size } | null {
+    if (mode === "showcase" || catalogMode === "quiz") return null;
+    const scroll = root.getElementById("stage-scroll");
+    const img = root.getElementById("stage-img");
+    if (!scroll || !img) return null;
+    const image = { w: Number(img.getAttribute("width")), h: Number(img.getAttribute("height")) };
+    const box = { w: scroll.clientWidth, h: scroll.clientHeight };
+    if (!image.w || !image.h || !box.w || !box.h) return null;
+    return { scroll, image, box };
+  }
+
+  function getView(): EcatmView | null {
+    if (!db || activeImageId === null) return null;
+    const view: EcatmView = { v: 1, imageId: activeImageId };
+    if (selectedLinkId !== null) view.linkId = selectedLinkId;
+    const stage = measureStage();
+    const geometry = stage
+      ? readView({ left: stage.scroll.scrollLeft, top: stage.scroll.scrollTop }, zoom, stage.image, stage.box)
+      : pendingGeometry;
+    if (geometry?.zoom !== undefined) view.zoom = geometry.zoom;
+    if (geometry?.cx !== undefined) view.cx = geometry.cx;
+    if (geometry?.cy !== undefined) view.cy = geometry.cy;
+    if (viewRegion) view.region = viewRegion;
+    return view;
+  }
+
+  function setView(input: EcatmView) {
+    const view = normalizeView(input);
+    if (!db || !view || !listImages(db).some((i) => i.id === view.imageId)) return;
+    if (view.imageId !== activeImageId) {
+      activeImageId = view.imageId;
+      resetZoomForImage(activeImageId);
+    }
+    selectedLinkId = view.linkId !== undefined && listLinksForImage(db, activeImageId!).some((l) => l.id === view.linkId && !isNavLink(l)) ? view.linkId : null;
+    mobileTab = "stage"; // no-op above the mobile breakpoint — see mobileTab's declaration
+    viewRegion = view.region;
+    const hasGeometry = view.zoom !== undefined || view.cx !== undefined || view.cy !== undefined || view.region !== undefined;
+    pendingGeometry = hasGeometry && mode !== "showcase" && catalogMode !== "quiz" ? { zoom: view.zoom, cx: view.cx, cy: view.cy, region: view.region } : null;
+    syncAddressBar();
+    render();
+    if (pendingGeometry) applyPendingGeometry();
+    else if (selectedLinkId !== null) centerSelection();
+  }
+
+  /**
+   * Zooms and scrolls the stage to the waiting view, once the stage has a
+   * size. True when it re-rendered (render() uses that to stop its own pass).
+   */
+  function applyPendingGeometry(): boolean {
+    const geometry = pendingGeometry;
+    const stage = geometry ? measureStage() : null;
+    const placed = geometry && stage ? placeView(geometry, stage.image, stage.box) : null;
+    if (!placed) return false;
+    pendingGeometry = null;
+    if (placed.fitted) {
+      // The Fit button's state: render() measures and centers it, and keeps it fitted on resize.
+      wholeFit = true;
+      userZoomed = false;
+      fitPending = true;
+      render();
+      return true;
+    }
+    wholeFit = false;
+    userZoomed = true;
+    zoom = placed.scale;
+    render();
+    const scroll = root.getElementById("stage-scroll");
+    if (scroll) {
+      scroll.scrollLeft = placed.scrollLeft;
+      scroll.scrollTop = placed.scrollTop;
+    }
+    return true;
+  }
+
+  /**
+   * Called after every render and scroll: sends the "view" event (at most one
+   * per VIEW_EVENT_INTERVAL_MS, and only when the view really changed) and,
+   * once the visitor pauses, brings the address bar up to date.
+   */
+  function scheduleViewEvent() {
+    if (options.onEvent && viewEventTimer === null) {
+      viewEventTimer = setTimeout(() => {
+        viewEventTimer = null;
+        const view = getView();
+        if (!view) return;
+        const key = viewKey(view);
+        if (key === lastViewKey) return;
+        lastViewKey = key;
+        emit("view", { ...view });
+      }, VIEW_EVENT_INTERVAL_MS);
+    }
+    if (updateAddressBar) {
+      if (addressBarTimer !== null) clearTimeout(addressBarTimer);
+      addressBarTimer = setTimeout(() => {
+        addressBarTimer = null;
+        syncAddressBar();
+      }, ADDRESS_BAR_IDLE_MS);
+    }
+  }
+
   /**
    * The zoom an image starts at when it is opened: showcase fits it (unless
    * options.compactZoom opens a close-up — an image marked `fitOnOpen` stays
@@ -1428,6 +1574,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const fitOnOpen = !!(db && id !== null && listImages(db).find((i) => i.id === id)?.fitOnOpen);
     zoom = 1;
     userZoomed = false;
+    viewRegion = undefined;
+    pendingGeometry = null;
     forceWhole = mode === "showcase" && fitOnOpen;
     wholeFit = mode !== "showcase" && catalogMode !== "quiz" && fitOnOpen;
     fitPending = mode === "showcase" || wholeFit;
@@ -2068,6 +2216,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const linkId = keepInitial ? (options.initialLinkId ?? null) : selectedLinkId;
     if (imageId !== null) params.set("image", String(imageId));
     if (linkId !== null) params.set("link", String(linkId));
+    if (keepInitial) {
+      setViewGeometryParams(params, options.initialGeometry ?? {});
+    } else {
+      const view = getView();
+      setViewGeometryParams(params, { zoom: view?.zoom, cx: view?.cx, cy: view?.cy, region: view?.region });
+    }
     return params;
   }
 
@@ -2540,6 +2694,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       }
     }
 
+    // A view that was set while the stage had no size (hidden tab, not laid out yet).
+    if (pendingGeometry && applyPendingGeometry()) return;
+
     if (showcase) applyShowcaseDetailsMinHeight();
 
     if (focusKey) {
@@ -2572,6 +2729,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     }
 
     wireEvents();
+    scheduleViewEvent();
   }
 
   /** Two-level list: ungrouped images first, then one heading per folder (see images.ts). */
@@ -3327,6 +3485,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       { passive: false },
     );
 
+    root.getElementById("stage-scroll")?.addEventListener("scroll", scheduleViewEvent, { passive: true });
+
     const stageImg = root.getElementById("stage-img") as HTMLImageElement | null;
     const stageScroll = root.getElementById("stage-scroll") as HTMLElement | null;
     if (stageImg && stageScroll) {
@@ -3450,7 +3610,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   void boot();
 
   return {
+    getView,
+    setView,
     destroy() {
+      if (viewEventTimer !== null) clearTimeout(viewEventTimer);
+      if (addressBarTimer !== null) clearTimeout(addressBarTimer);
+      viewEventTimer = addressBarTimer = null;
       closeAgentConfirm();
       agentTools.clear();
       container.innerHTML = "";

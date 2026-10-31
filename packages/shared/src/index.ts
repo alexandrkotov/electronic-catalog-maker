@@ -20,6 +20,7 @@ export * from "./passwordStrength.js";
 export * from "./coverImage.js";
 export * from "./gridCaption.js";
 export * from "./pdfExportOptions.js";
+export * from "./view.js";
 // pdfExport.ts (and its pdf-lib/@pdf-lib/fontkit dependencies, well over a
 // MB combined) is deliberately NOT re-exported here — every consumer of
 // this barrel (editor/viewer/viewer-embed's main bundle) statically
