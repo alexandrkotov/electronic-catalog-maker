@@ -126,6 +126,10 @@
   "zoom.reset.tip": "Reset zoom",
   "zoom.fit": "Fit",
   "zoom.fit.tip": "Fit the whole image",
+  "area.select": "Area",
+  "area.select.tip": "Mark an area: drag a rectangle on the image",
+  "area.clear.tip": "Remove the marked area",
+  "area.hint": "Drag on the image to mark an area. Esc cancels.",
 
   "showcase.region": "Selected item details",
   "showcase.hint": "Select a marker on the image to see its details.",

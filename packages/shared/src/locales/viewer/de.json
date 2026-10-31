@@ -126,6 +126,10 @@
   "zoom.reset.tip": "Zoom zurücksetzen",
   "zoom.fit": "Einpassen",
   "zoom.fit.tip": "Ganzes Bild einpassen",
+  "area.select": "Bereich",
+  "area.select.tip": "Bereich markieren: Rechteck auf dem Bild aufziehen",
+  "area.clear.tip": "Markierten Bereich entfernen",
+  "area.hint": "Zieh ein Rechteck auf dem Bild. Esc bricht ab.",
 
   "showcase.region": "Details zum ausgewählten Artikel",
   "showcase.hint": "Wähle eine Markierung im Bild, um die Details zu sehen.",

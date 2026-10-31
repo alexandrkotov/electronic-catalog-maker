@@ -285,6 +285,15 @@ export interface MountViewerOptions {
    */
   showcaseCart?: boolean;
   /**
+   * Offers the "Area" tool next to the zoom buttons: the visitor drags a
+   * rectangle on the image, it stays highlighted (the rest slightly dimmed)
+   * through zooming and scrolling, becomes part of the view (`region`, see
+   * view.ts) and is reported by the "region" event. Mouse and touch. Off by
+   * default — an existing embed must not grow a new button. Not in showcase
+   * or quiz mode. A region can always be shown with `setView`, tool or not.
+   */
+  regionSelect?: boolean;
+  /**
    * Tells the host what the visitor does — see ViewerEventType for the
    * events and their details. Return false from a cancelable event
    * ("checkout") to stop the viewer's own default action. The embed turns
@@ -306,10 +315,13 @@ export interface MountViewerOptions {
  * - "view": the picture, selection, zoom or scroll changed — an EcatmView (see
  *   view.ts), at most once per VIEW_EVENT_INTERVAL_MS and only when it differs
  *   from the last one sent; enough to hand straight back to setView.
+ * - "region": the visitor finished dragging an area (MountViewerOptions.regionSelect)
+ *   — {imageId, x, y, w, h}, fractions 0..1 of the image. Clearing the area or
+ *   setView() send no "region", only "view".
  * - "checkout": the visitor pressed Checkout — {items: [{url, name, buyUrl}]};
  *   cancelable: the host can show its own ending instead of the store.
  */
-export type ViewerEventType = "load" | "locked" | "image" | "select" | "answer" | "cart" | "checkout" | "view";
+export type ViewerEventType = "load" | "locked" | "image" | "select" | "answer" | "cart" | "checkout" | "view" | "region";
 
 export interface ViewerController {
   /**
@@ -1462,6 +1474,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   let viewEventTimer: ReturnType<typeof setTimeout> | null = null;
   let addressBarTimer: ReturnType<typeof setTimeout> | null = null;
   let lastViewKey = "";
+  // The Area tool is armed: the next drag on the image draws a rectangle (one-shot).
+  let regionMode = false;
+  const regionToolAvailable = () => options.regionSelect === true && mode !== "showcase" && catalogMode !== "quiz";
 
   /** The stage's DOM size and the image's, or null where a view has no zoom/position (showcase, quiz, nothing shown, stage hidden). */
   function measureStage(): { scroll: HTMLElement; image: Size; box: Size } | null {
@@ -1538,6 +1553,63 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     return true;
   }
 
+  function actionToggleRegionMode() {
+    regionMode = !regionMode;
+    render();
+  }
+
+  function actionClearRegion() {
+    viewRegion = undefined;
+    regionMode = false;
+    render();
+  }
+
+  /** Drag on the stage with the Area tool armed: draws the rectangle live, commits it on release. Pointer events, so mouse and finger alike. */
+  function startRegionDraw(evt: PointerEvent) {
+    if (evt.pointerType === "mouse" && evt.button !== 0) return;
+    const scroll = evt.currentTarget as HTMLElement;
+    const inner = root.querySelector<HTMLElement>(".stage-inner");
+    const layer = root.getElementById("region-layer");
+    if (!inner || !layer || activeImageId === null) return;
+    evt.preventDefault();
+    scroll.setPointerCapture(evt.pointerId);
+    const unit = (n: number) => Math.min(1, Math.max(0, n));
+    const at = (e: PointerEvent) => {
+      const r = inner.getBoundingClientRect(); // already scaled by the zoom transform
+      return { x: unit((e.clientX - r.left) / r.width), y: unit((e.clientY - r.top) / r.height), w: r.width, h: r.height };
+    };
+    const from = at(evt);
+    const draft = document.createElement("div");
+    draft.className = "region-box";
+    draft.style.borderWidth = `${(2 / zoom).toFixed(3)}px`;
+    layer.appendChild(draft);
+    let rect = { x: from.x, y: from.y, w: 0, h: 0 };
+
+    function onMove(e: PointerEvent) {
+      const to = at(e);
+      rect = { x: Math.min(from.x, to.x), y: Math.min(from.y, to.y), w: Math.abs(to.x - from.x), h: Math.abs(to.y - from.y) };
+      Object.assign(draft.style, { left: `${rect.x * 100}%`, top: `${rect.y * 100}%`, width: `${rect.w * 100}%`, height: `${rect.h * 100}%` });
+    }
+    function finish(commit: boolean) {
+      scroll.removeEventListener("pointermove", onMove);
+      scroll.removeEventListener("pointerup", onUp);
+      scroll.removeEventListener("pointercancel", onCancel);
+      draft.remove();
+      // A click or a twitch is not an area: keep the tool armed for another try.
+      const area = commit ? normalizeRegion(rect) : undefined;
+      if (!area || area.w * from.w < 6 || area.h * from.h < 6) return;
+      viewRegion = area;
+      regionMode = false;
+      render();
+      emit("region", { imageId: activeImageId, ...area });
+    }
+    const onUp = () => finish(true);
+    const onCancel = () => finish(false);
+    scroll.addEventListener("pointermove", onMove);
+    scroll.addEventListener("pointerup", onUp);
+    scroll.addEventListener("pointercancel", onCancel);
+  }
+
   /**
    * Called after every render and scroll: sends the "view" event (at most one
    * per VIEW_EVENT_INTERVAL_MS, and only when the view really changed) and,
@@ -1576,6 +1648,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     userZoomed = false;
     viewRegion = undefined;
     pendingGeometry = null;
+    regionMode = false;
     forceWhole = mode === "showcase" && fitOnOpen;
     wholeFit = mode !== "showcase" && catalogMode !== "quiz" && fitOnOpen;
     fitPending = mode === "showcase" || wholeFit;
@@ -2568,7 +2641,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
             // there is nothing to pan — and a scrollable box here would (a) show
             // blank scroll room past the scaled image and (b) swallow the page's
             // wheel/touch scrolling while the pointer is over the demo.
-            (showcase || wholeFit) && zoom <= fitZoom + 0.001 ? " fitted" : catalogMode === "quiz" && !showcase && !userZoomed ? " quiz-fit" : ""
+            ((showcase || wholeFit) && zoom <= fitZoom + 0.001 ? " fitted" : catalogMode === "quiz" && !showcase && !userZoomed ? " quiz-fit" : "") + (regionMode ? " region-mode" : "")
           }" id="stage-scroll">
             ${
               activeImage
@@ -2583,6 +2656,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                         : `transform: scale(${zoom})`
                   }">
                      <img id="stage-img" src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
+                     <div class="region-layer" id="region-layer">${
+                       viewRegion
+                         ? `<div class="region-box" style="left:${viewRegion.x * 100}%;top:${viewRegion.y * 100}%;width:${viewRegion.w * 100}%;height:${viewRegion.h * 100}%;border-width:${(2 / zoom).toFixed(3)}px"></div>`
+                         : ""
+                     }</div>
                      ${(() => {
                        // Showcase: an image with a single item (a close-up) — its marker is
                        // already selected and the card already shows it, so it becomes a plain
@@ -2599,6 +2677,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
             }
           </div>
           ${!showcase && activeImage ? renderZoomControls() : ""}
+          ${regionMode && activeImage ? `<div class="region-hint">${te("area.hint")}</div>` : ""}
           ${!showcase && instances.length > 1 ? renderInstanceNav(instanceIndex, instances.length) : ""}
         </div>
 
@@ -2890,6 +2969,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         <button id="btn-zoom-in" title="${te("zoom.in")}" aria-label="${te("zoom.in")}">+</button>
         <button id="btn-zoom-reset" title="${mode === "showcase" ? te("zoom.fit.tip") : te("zoom.reset.tip")}">${mode === "showcase" ? te("zoom.fit") : te("zoom.reset")}</button>
         ${mode !== "showcase" && catalogMode !== "quiz" ? `<button id="btn-zoom-fit" title="${te("zoom.fit.tip")}">${te("zoom.fit")}</button>` : ""}
+        ${regionToolAvailable() ? `<button id="btn-region" class="${regionMode ? "active" : ""}" aria-pressed="${regionMode}" title="${te("area.select.tip")}">${te("area.select")}</button>${viewRegion ? `<button id="btn-region-clear" title="${te("area.clear.tip")}" aria-label="${te("area.clear.tip")}">×</button>` : ""}` : ""}
       </div>
     `;
   }
@@ -3454,6 +3534,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     root.getElementById("btn-zoom-out")?.addEventListener("click", () => actionSetZoom(zoom / 1.25));
     root.getElementById("btn-zoom-reset")?.addEventListener("click", actionResetZoom);
     root.getElementById("btn-zoom-fit")?.addEventListener("click", actionFitZoom);
+    root.getElementById("btn-region")?.addEventListener("click", actionToggleRegionMode);
+    root.getElementById("btn-region-clear")?.addEventListener("click", actionClearRegion);
+    if (regionMode) root.getElementById("stage-scroll")?.addEventListener("pointerdown", (evt) => startRegionDraw(evt as PointerEvent));
     root.getElementById("showcase-image")?.addEventListener("change", (evt) => {
       actionSelectImage(Number((evt.target as HTMLSelectElement).value));
     });
@@ -3490,7 +3573,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const stageImg = root.getElementById("stage-img") as HTMLImageElement | null;
     const stageScroll = root.getElementById("stage-scroll") as HTMLElement | null;
     if (stageImg && stageScroll) {
-      stageImg.addEventListener("mousedown", (evt) => startImagePan(evt, stageScroll));
+      stageImg.addEventListener("mousedown", (evt) => {
+        if (!regionMode) startImagePan(evt, stageScroll);
+      });
     }
 
     root.querySelectorAll<HTMLDivElement>(".hotspot[data-id]:not(.static)").forEach((el) => {
@@ -3607,6 +3692,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     quizObserverDisconnect = () => quizObserver.disconnect();
   }
 
+  // Esc disarms the Area tool.
+  const onRegionKey = (evt: Event) => {
+    if ((evt as KeyboardEvent).key === "Escape" && regionMode) actionToggleRegionMode();
+  };
+  root.addEventListener("keydown", onRegionKey);
+
   void boot();
 
   return {
@@ -3619,6 +3710,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       closeAgentConfirm();
       agentTools.clear();
       container.innerHTML = "";
+      root.removeEventListener("keydown", onRegionKey);
       resizeObserver?.disconnect();
       quizObserverDisconnect?.();
       container.classList.remove("ecm-viewer-app", "mode-full", "mode-lite", "mode-showcase");
