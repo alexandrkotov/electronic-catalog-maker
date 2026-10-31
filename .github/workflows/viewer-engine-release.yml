@@ -57,7 +57,9 @@ jobs:
           name: "viewer-engine v${{ steps.version.outputs.version }}"
           fail_on_unmatched_files: true
           body: |
-            The Electronic Catalog Maker viewer engine as a library — open a `.ecatm` catalog from bytes or a URL, show it with its hotspots, and drive it from a host application (read and set the view, area selection, toolbar buttons, PDF export).
+            The Electronic Catalog Maker viewer engine as a library — open a `.ecatm` catalog from bytes or a URL, show it with its hotspots, and drive it from a host application: read and set the view, area selection, your own toolbar buttons, search from your own box, bookmarks through a store you provide, and PDF export of the whole catalog, one picture or one area.
+
+            Also in the package: `@ecm/viewer-engine/server` reads a catalog without a screen (cover, search index chunks, search; Bun and Node), and `example/` is a small host page in plain files, no bundler.
 
             Install:
 
