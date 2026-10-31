@@ -18,7 +18,8 @@
 import type { Database } from "sql.js";
 import { listImages, listLinksForImage } from "./db.js";
 import { isNavLink } from "./navLink.js";
-import type { CatalogLink } from "./types.js";
+import type { CatalogLink, CatalogRow } from "./types.js";
+import { normalizeRegion, type ViewRegion } from "./view.js";
 
 /** Where a diagram's QR codes render. Default "table" — set by the user after live-testing found the on-image codes, however small, still visually competed with a crowded diagram's own artwork; the table column reads cleanly regardless of how busy the image is. */
 export type QrPlacement = "image" | "table" | "both";
@@ -69,6 +70,18 @@ export interface PdfExportOptions {
   content?: PdfContent;
   /** Default (also when omitted) "a4". "letter" for a printout meant for US Letter paper — an A4 page comes out shrunk or cropped there. Not asked in the dialog. */
   pageSize?: PdfPageSize;
+  /**
+   * Print only this picture (its folder heading and table included) instead
+   * of the whole catalog. A host's "Print" for the page on screen:
+   * `{ imageId: view.imageId }`. Throws when the catalog has no such picture.
+   */
+  imageId?: number;
+  /**
+   * With `imageId`: print only this part of the picture, as fractions of it
+   * (an `EcatmView`'s `region`). The hotspots inside it are drawn and listed;
+   * the rest, and the navigation markers, are left out. Throws without `imageId`.
+   */
+  region?: ViewRegion;
 }
 
 export const DEFAULT_PDF_EXPORT_OPTIONS: PdfExportOptions = {
@@ -124,4 +137,29 @@ export function suggestedQrSize(db: Database): QrSize {
     detectGrid(listLinksForImage(db, image.id).filter((l) => !isNavLink(l))),
   );
   return hasGrid ? "large" : DEFAULT_PDF_EXPORT_OPTIONS.qrSize;
+}
+
+/**
+ * What a region print keeps of one picture: the pixel rectangle to cut out
+ * (rounded outwards, at least 1×1) and the item hotspots whose anchor falls
+ * inside it, moved so the cut-out is their new origin, with the rows they
+ * point at. Null when `region` is empty once clipped into the picture.
+ */
+export function cropToRegion(
+  size: { width: number; height: number },
+  region: ViewRegion,
+  links: CatalogLink[],
+  rows: CatalogRow[],
+): { rect: { x: number; y: number; w: number; h: number }; links: CatalogLink[]; rows: CatalogRow[] } | null {
+  const r = normalizeRegion(region);
+  if (!r) return null;
+  const x = Math.min(size.width - 1, Math.floor(r.x * size.width));
+  const y = Math.min(size.height - 1, Math.floor(r.y * size.height));
+  const w = Math.max(1, Math.min(size.width - x, Math.ceil((r.x + r.w) * size.width) - x));
+  const h = Math.max(1, Math.min(size.height - y, Math.ceil((r.y + r.h) * size.height) - y));
+  const kept = links
+    .filter((l) => !isNavLink(l) && l.left >= x && l.left < x + w && l.top >= y && l.top < y + h)
+    .map((l) => ({ ...l, left: l.left - x, top: l.top - y }));
+  const urls = new Set(kept.map((l) => l.url));
+  return { rect: { x, y, w, h }, links: kept, rows: rows.filter((row) => urls.has(row.url)) };
 }

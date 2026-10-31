@@ -44,6 +44,8 @@ const pdf = await viewer.exportPdf(); // Uint8Array
 
 Your own search box can drive the viewer's: `viewer.search("bolt")` opens the search panel with that query (without taking the keyboard focus) and returns the number of matches, `viewer.search("bolt", { field: "sku" })` narrows it to one column, and `viewer.clearSearch()` closes it. A click on a result opens its picture and hotspot and the `"view"` event follows. In `mode: "reader"` the viewer registers no WebMCP agent tools.
 
+A host's "Print" does not have to print the whole catalog: `viewer.exportPdf({ imageId })` prints that picture with its table, and `viewer.exportPdf({ imageId, region })` only that part of it (an `EcatmView`'s `region`, fractions of the picture) with the hotspots and rows inside it. So the page on screen prints as `exportPdf({ imageId: view.imageId, region: view.region })`. An unknown picture, a region without `imageId` or an empty region rejects.
+
 `mountViewerInShadow` keeps the viewer's stylesheet (it restyles every `button`, `table` and `select`) apart from your page. To share the page's own DOM instead, call `mountViewer` with a `container` and add `viewerCss` or `style.css` yourself.
 
 ## On a server: `@ecm/viewer-engine/server`

@@ -90,7 +90,7 @@ import { forwardNavLinks, isNavLink, navTargetImageId } from "./navLink.js";
 import { groupImagesByFolder } from "./images.js";
 import { buildInstantBuyUrl } from "./cart.js";
 import { buildQrMatrix, type QrMatrix } from "./qrcode.js";
-import { DEFAULT_PDF_EXPORT_OPTIONS, detectGrid, type PdfContent, type PdfExportOptions, type PdfPageSize, type QrSize } from "./pdfExportOptions.js";
+import { DEFAULT_PDF_EXPORT_OPTIONS, cropToRegion, detectGrid, type PdfContent, type PdfExportOptions, type PdfPageSize, type QrSize } from "./pdfExportOptions.js";
 import type { CatalogImage, CatalogLink, CatalogMeta, CatalogRow } from "./types.js";
 
 // Page sizes in PDF points (1pt = 1/72in): A4 is 210mm x 297mm, US Letter 8.5in x 11in.
@@ -280,6 +280,23 @@ async function embedCatalogImage(doc: PDFDocument, image: CatalogImage): Promise
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("canvas.toBlob failed"))), "image/png"),
   );
   return doc.embedPng(new Uint8Array(await pngBlob.arrayBuffer()));
+}
+
+/** The part of a picture inside `rect` (pixels), as a picture of its own: JPEG stays JPEG, anything else becomes PNG. */
+async function cropCatalogImage(image: CatalogImage, rect: { x: number; y: number; w: number; h: number }): Promise<CatalogImage> {
+  const bitmap = await createImageBitmap(new Blob([base64ToBytes(image.imageData) as BlobPart], { type: image.mimeType }));
+  const canvas = document.createElement("canvas");
+  canvas.width = rect.w;
+  canvas.height = rect.h;
+  canvas.getContext("2d")!.drawImage(bitmap, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+  const jpeg = image.mimeType === "image/jpeg" || image.mimeType === "image/jpg";
+  const blob: Blob = await new Promise((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("canvas.toBlob failed"))), jpeg ? "image/jpeg" : "image/png", jpeg ? 0.92 : undefined),
+  );
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return { ...image, mimeType: jpeg ? "image/jpeg" : "image/png", imageData: btoa(bin), width: rect.w, height: rect.h };
 }
 
 /**
@@ -1110,7 +1127,10 @@ export async function exportCatalogPdf(
       navHeadings.set(target, !label || label === name ? name : name ? `${label} — ${name}` : label);
     }
   }
-  const groups = groupImagesByFolder(allImages);
+  if (options.region && options.imageId === undefined) throw new Error("A region to print needs the imageId it belongs to");
+  const printed = options.imageId === undefined ? allImages : allImages.filter((i) => i.id === options.imageId);
+  if (printed.length === 0) throw new Error(`This catalog has no picture ${options.imageId}`);
+  const groups = groupImagesByFolder(printed);
   let isFirstGroup = true;
   for (const group of groups) {
     if (group.folder) {
@@ -1141,13 +1161,23 @@ export async function exportCatalogPdf(
       tileSeenUrls = new Set();
     };
 
-    for (const image of group.images) {
+    for (const whole of group.images) {
+      let image = whole;
       // Navigation hotspots (#image=<id>) aren't items: they never make an image a
       // tile, and only the forward ones are printed (see this file's own doc).
       const imageLinks = listLinksForImage(db, image.id);
-      const links = imageLinks.filter((l) => !isNavLink(l));
-      const navLinks = forwardNavLinks(imageLinks, image.id, imageIds);
-      const rows = listRowsForImage(db, image.id);
+      let links = imageLinks.filter((l) => !isNavLink(l));
+      let navLinks = forwardNavLinks(imageLinks, image.id, imageIds);
+      let rows = listRowsForImage(db, image.id);
+      if (options.region) {
+        // Only the cut-out is printed: its own hotspots and rows, no markers leading elsewhere.
+        const crop = cropToRegion(image, options.region, links, rows);
+        if (!crop) throw new Error("The region to print is empty");
+        image = await cropCatalogImage(image, crop.rect);
+        links = crop.links;
+        rows = crop.rows;
+        navLinks = [];
+      }
 
       if (links.length === 1) {
         const link = links[0]!;

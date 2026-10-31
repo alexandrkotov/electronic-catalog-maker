@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -202,6 +203,25 @@ try {
   assert.ok(requested.some((p) => /pdfExport-.*\.js$/.test(p)), "the PDF chunk was fetched for the export");
   assert.ok(requested.some((p) => p.endsWith("DejaVuSans.ttf")), "and the font");
   say(`exportPdf: ${pdf.size} bytes, the PDF chunk and font loaded only then`);
+
+  // printing one picture, or part of one
+  const { PDFDocument } = createRequire(resolve(here, "../shared/package.json"))("pdf-lib");
+  const exportBytes = async (options) => new Uint8Array(await page.evaluate(async (o) => Array.from(await window.ctrl.exportPdf(o)), options));
+  const pagesOf = async (bytes) => (await PDFDocument.load(bytes)).getPageCount();
+  const whole = await exportBytes({});
+  const onePicture = await exportBytes({ imageId: 1 });
+  const wholePages = await pagesOf(whole);
+  const onePages = await pagesOf(onePicture);
+  assert.ok(onePages >= 1 && onePages < wholePages, `imageId prints that picture only: ${onePages} page(s) of ${wholePages}`);
+  const part = await exportBytes({ imageId: 1, region: { x: 0.1, y: 0.1, w: 0.4, h: 0.4 } });
+  assert.equal(String.fromCharCode(...part.slice(0, 5)), "%PDF-", "a region print is a PDF");
+  assert.ok((await pagesOf(part)) <= onePages, "an area is no longer than its picture");
+  assert.ok(part.length < onePicture.length, `and smaller than the whole picture: ${part.length} < ${onePicture.length}`);
+  const reject = (options) => page.evaluate((o) => window.ctrl.exportPdf(o).then(() => null, (e) => String(e.message)), options);
+  assert.match(await reject({ imageId: 99999 }), /no picture/, "an unknown picture is an error");
+  assert.match(await reject({ region: { x: 0, y: 0, w: 0.5, h: 0.5 } }), /imageId/, "a region without its picture is an error");
+  assert.match(await reject({ imageId: 1, region: { x: 2, y: 0, w: 0.5, h: 0.5 } }), /empty/, "an empty region is an error");
+  say(`exportPdf: imageId ${onePages}/${wholePages} pages, region ${await pagesOf(part)} page(s), ${part.length} bytes; bad input rejects`);
 
   assert.deepEqual(failedRequests, [], "no failed requests");
 } catch (err) {
