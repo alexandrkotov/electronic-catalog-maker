@@ -46,11 +46,24 @@ Your own search box can drive the viewer's: `viewer.search("bolt")` opens the se
 
 A host's "Print" does not have to print the whole catalog: `viewer.exportPdf({ imageId })` prints that picture with its table, and `viewer.exportPdf({ imageId, region })` only that part of it (an `EcatmView`'s `region`, fractions of the picture) with the hotspots and rows inside it. So the page on screen prints as `exportPdf({ imageId: view.imageId, region: view.region })`. An unknown picture, a region without `imageId` or an empty region rejects.
 
+Bookmarks: give the viewer a store and it draws a "Bookmarks" button and panel (save the view on screen under a name, return to one with a click, remove it):
+
+```ts
+const bookmarks: BookmarkStore = {
+  list: () => api.get(`/books/${id}/bookmarks`), // Bookmark[]: { id, label, view }
+  add: (view, label) => api.post(`/books/${id}/bookmarks`, { view, label }), // returns the new Bookmark
+  remove: (bookmarkId) => api.delete(`/books/${id}/bookmarks/${bookmarkId}`),
+};
+mountViewerInShadow(host, { mode: "reader", bookmarks, /* … */ });
+```
+
+Each method may answer at once or return a promise; `list()` is asked every time the panel opens. Without `bookmarks`, the standard viewer keeps each catalog's bookmarks in the browser (`localBookmarkStore`, which a host can also use itself; with `persist: false` they live in memory) and a reader-mode viewer has none; `bookmarks: false` turns them off.
+
 `mountViewerInShadow` keeps the viewer's stylesheet (it restyles every `button`, `table` and `select`) apart from your page. To share the page's own DOM instead, call `mountViewer` with a `container` and add `viewerCss` or `style.css` yourself.
 
 ## Example page
 
-`example/index.html` (in the package, next to `dist/`) is a small host application in plain files, no bundler: it mounts the viewer in `mode: "reader"`, opens a catalog from a file (bytes in memory) or from a URL (optionally with the visitor's cookies), drives the viewer's search from its own box, keeps its own bookmarks, makes a link with the current view and prints the picture or area on screen. Serve the package folder over HTTP and open it:
+`example/index.html` (in the package, next to `dist/`) is a small host application in plain files, no bundler: it mounts the viewer in `mode: "reader"`, opens a catalog from a file (bytes in memory) or from a URL (optionally with the visitor's cookies), drives the viewer's search from its own box, keeps its bookmarks in its own store (the `bookmarks` adapter), makes a link with the current view and prints the picture or area on screen. Serve the package folder over HTTP and open it:
 
 ```
 npx serve node_modules/@ecm/viewer-engine     # then /example/index.html?src=<catalog url>&view=<EcatmView as JSON>

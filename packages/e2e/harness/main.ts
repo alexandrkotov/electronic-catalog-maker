@@ -14,6 +14,28 @@ w.__actionCalls = [];
 const query = new URLSearchParams(location.search);
 const extra = JSON.parse(query.get("opts") ?? "{}");
 const toolbarActions = (extra.toolbarActions ?? []).map((a: any) => ({ ...a, onClick: (view: unknown) => w.__actionCalls.push({ id: a.id, view }) }));
+// `hostBookmarks` stands for a host's own store: asynchronous, and every call is recorded in `window.__bookmarkCalls`.
+w.__bookmarkCalls = [];
+let hostBookmarks: any;
+if (extra.hostBookmarks) {
+  const saved: any[] = [];
+  const later = <T>(value: T) => new Promise<T>((done) => setTimeout(() => done(value), 40));
+  hostBookmarks = {
+    list: () => (w.__bookmarkCalls.push("list"), later([...saved])),
+    add: (view: unknown, label: string) => {
+      w.__bookmarkCalls.push(`add:${label}`);
+      const bookmark = { id: `host-${saved.length + 1}`, label, view };
+      saved.push(bookmark);
+      return later(bookmark);
+    },
+    remove: (id: string) => {
+      w.__bookmarkCalls.push(`remove:${id}`);
+      saved.splice(0, saved.length, ...saved.filter((b) => b.id !== id));
+      return later(undefined);
+    },
+  };
+  delete extra.hostBookmarks;
+}
 w.ctrl = mountViewer({
   container: document.getElementById("app")!,
   mode: "full",
@@ -24,5 +46,6 @@ w.ctrl = mountViewer({
     w.__events.push({ at: performance.now(), type, detail });
   },
   ...extra,
+  ...(hostBookmarks ? { bookmarks: hostBookmarks } : {}),
   toolbarActions,
 });

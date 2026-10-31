@@ -33,6 +33,7 @@ import { catalogLinkTarget, isNavLink, navTargetImageId, resolveCatalogLink } fr
 import { catalogFileStem } from "./fileName.js";
 import { createTranslator, matchLocale, type MessageParams, type Translate } from "./i18n.js";
 import { VIEWER_LOCALES, VIEWER_LOCALE_NAMES, viewerMessages } from "./locales/viewer/index.js";
+import { bookmarksStorageKey, localBookmarkStore, type Bookmark, type BookmarkStore } from "./bookmarks.js";
 import { buildCartCheckoutUrl, cartStorageKey, catalogHasAnyBuyUrl, loadPersistedCart, parseCartItemId, savePersistedCart } from "./cart.js";
 import { DEFAULT_PDF_EXPORT_OPTIONS, suggestedQrSize, type DiagramPageMode, type PdfContent, type PdfExportOptions, type QrPlacement, type QrSize } from "./pdfExportOptions.js";
 import {
@@ -179,6 +180,15 @@ export interface MountViewerOptions {
    * buttons are disabled while no catalog is open.
    */
   toolbarActions?: ViewerToolbarAction[];
+  /**
+   * Where bookmarks live. A store (see BookmarkStore) adds a "Bookmarks" button
+   * and panel to the toolbar: save the view on screen under a name, return to
+   * one with a click, remove it. Left out, the standard viewer keeps each
+   * catalog's bookmarks in the browser (localStorage, or memory with
+   * `persist: false`) and a reader-mode viewer has none; `false` turns them
+   * off everywhere.
+   */
+  bookmarks?: BookmarkStore | false;
   /**
    * Light or dark, decided by the host: applied as is, never read from or
    * saved to localStorage (and change it later with `controller.setTheme`).
@@ -515,6 +525,16 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   let searchOpen = false;
   let searchQuery = "";
   let searchField: SearchField = "all";
+  // Bookmarks panel (renderBookmarksPanel). The list is read from the store each time the panel opens.
+  let bookmarksOpen = false;
+  let bookmarkList: Bookmark[] = [];
+  let bookmarksLoading = false;
+  let bookmarksError = false;
+  /** What was typed in the name field, kept across the panel's re-renders (null: nothing typed, the picture's name shows). */
+  let bookmarkLabelDraft: string | null = null;
+  let bookmarksKey: string | null = null;
+  const builtInBookmarks = localBookmarkStore(storage, () => bookmarksKey);
+  const bookmarkStore = (): BookmarkStore | null => (options.bookmarks === false ? null : (options.bookmarks ?? (readerMode ? null : builtInBookmarks)));
   /** The panel was opened by the host's `search()`, so it must not take the keyboard focus. */
   let searchByHost = false;
   // Multi-item cart for every row with a buy_url, under cart_mode
@@ -1434,6 +1454,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     quizPicks = loadQuizPicks(quizStorageKeyValue, storage);
     foundUrls = new Map();
     cartOpen = false;
+    bookmarksOpen = false;
+    bookmarkList = [];
+    bookmarksKey = bookmarksStorageKey(sourceName, loadedMeta.catalogName);
     activeImageId = listImages(db)[0]?.id ?? null;
     selectedLinkId = null;
     resetZoomForImage(activeImageId);
@@ -1485,6 +1508,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     selectedLinkId = null;
     searchOpen = false;
     cartOpen = false;
+    bookmarksOpen = false;
+    bookmarksKey = null;
     cartItems = new Set();
     catalogMode = "commercial";
     locked = { bytes, sourceName, info };
@@ -1926,6 +1951,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   /** Toggles the toolbar's cart review panel (renderCartPanel) open/closed. */
   function actionToggleCartPanel() {
     cartOpen = !cartOpen;
+    if (cartOpen) bookmarksOpen = false;
     render();
   }
 
@@ -2524,10 +2550,71 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     searchOpen = !searchOpen;
     searchByHost = false;
     if (searchOpen) {
+      bookmarksOpen = false;
       searchQuery = "";
       searchField = "all";
     }
     render();
+  }
+
+  async function loadBookmarks() {
+    const store = bookmarkStore();
+    try {
+      bookmarkList = store ? await store.list() : [];
+      bookmarksError = false;
+    } catch {
+      bookmarkList = [];
+      bookmarksError = true;
+    }
+  }
+
+  async function actionToggleBookmarks() {
+    bookmarksOpen = !bookmarksOpen;
+    if (!bookmarksOpen) return render();
+    searchOpen = false;
+    cartOpen = false;
+    bookmarkList = [];
+    bookmarkLabelDraft = null;
+    bookmarksLoading = true;
+    render();
+    await loadBookmarks();
+    bookmarksLoading = false;
+    render();
+  }
+
+  async function actionAddBookmark() {
+    const store = bookmarkStore();
+    const view = getView();
+    if (!store || !view || !db) return;
+    const typed = (root.getElementById("bookmark-label") as HTMLInputElement | null)?.value.trim();
+    const label = typed || (listImages(db).find((i) => i.id === view.imageId)?.name ?? "");
+    bookmarkLabelDraft = null;
+    try {
+      await store.add(view, label);
+      bookmarksError = false;
+    } catch {
+      bookmarksError = true;
+    }
+    await loadBookmarks();
+    render();
+  }
+
+  async function actionRemoveBookmark(id: string) {
+    try {
+      await bookmarkStore()?.remove(id);
+      bookmarksError = false;
+    } catch {
+      bookmarksError = true;
+    }
+    await loadBookmarks();
+    render();
+  }
+
+  function actionGoToBookmark(id: string) {
+    const bookmark = bookmarkList.find((b) => b.id === id);
+    if (!bookmark) return;
+    bookmarksOpen = false;
+    setView(bookmark.view);
   }
 
   function apiSearch(query: string, opts: { field?: SearchField } = {}): number {
@@ -2714,6 +2801,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                  ${toolbarShows("openRemote") ? `<button id="btn-open-remote" title="${te("toolbar.openRemote.tip")}">${te("toolbar.openRemote")}</button>` : ""}
                  ${toolbarShows("refresh") ? `<button id="btn-refresh" ${currentSrcUrl || openedFileHandle ? "" : "disabled"} title="${te("toolbar.refresh.tip")}">${refreshing ? te("toolbar.refreshing") : te("toolbar.refresh")}</button>` : ""}
                  ${catalogMode === "quiz" ? "" : `<button id="btn-search" ${db ? "" : "disabled"} title="${te("toolbar.search.tip")}">${te("toolbar.search")}</button>`}
+                 ${bookmarkStore() && catalogMode !== "quiz" ? `<button id="btn-bookmarks" ${db && !locked ? "" : "disabled"} title="${te("toolbar.bookmarks.tip")}" aria-label="${te("toolbar.bookmarks")}">🔖</button>` : ""}
                  ${toolbarActions.map((a) => `<button type="button" class="toolbar-action" data-action-id="${escapeHtml(a.id)}" ${db && !locked ? "" : "disabled"}>${a.icon ? `<span class="toolbar-action-icon" aria-hidden="true">${escapeHtml(a.icon)}</span> ` : ""}${escapeHtml(a.label)}</button>`).join("")}
                  ${updateAddressBar && outgoingExtras ? `<button id="btn-share-view" ${db && !isLoopbackHostname(location.hostname) ? "" : "disabled"} title="${escapeHtml(locked ? t("lock.exportTip") : shareViewButtonTitle())}">${te("toolbar.share")}</button>` : ""}
                  ${exportPdf && catalogMode !== "quiz" ? `<button id="btn-export-pdf" ${db && !exportPdfBusy ? "" : "disabled"} title="${locked ? te("lock.exportTip") : te("toolbar.exportPdf.tip")}">${exportPdfBusy ? te("toolbar.exportPdf.busy") : te("toolbar.exportPdf")}</button>` : ""}
@@ -2731,6 +2819,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                  <span class="hint">${escapeHtml(statusMessage)}</span>
                  ${searchOpen ? renderSearchPanel() : ""}
                  ${cartOpen ? renderCartPanel() : ""}
+                 ${bookmarksOpen && bookmarkStore() ? renderBookmarksPanel() : ""}
                </div>`
             : ""
         }
@@ -3396,6 +3485,42 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     `;
   }
 
+  /** The Bookmarks button's dropdown: a name field and "Add" for the view on screen, then every bookmark with a "✕". Same shell as the cart panel. */
+  function renderBookmarksPanel(): string {
+    if (!db) return "";
+    const imageNameById = new Map(listImages(db).map((i) => [i.id, i.name]));
+    const current = getView();
+    return `
+      <div class="cart-panel bookmarks-panel" id="bookmarks-panel">
+        <div class="search-controls">
+          <input type="text" id="bookmark-label" value="${escapeHtml(bookmarkLabelDraft ?? (current ? (imageNameById.get(current.imageId) ?? "") : ""))}" placeholder="${te("bookmarks.name")}" aria-label="${te("bookmarks.name")}" />
+          <button type="button" id="bookmark-add" ${current ? "" : "disabled"}>${te("bookmarks.add")}</button>
+        </div>
+        ${bookmarksError ? `<p class="hint">${te("bookmarks.error")}</p>` : ""}
+        <div class="cart-items">
+          ${
+            bookmarkList.length === 0
+              ? bookmarksLoading || bookmarksError
+                ? ""
+                : `<p class="hint">${te("bookmarks.empty")}</p>`
+              : `<ul>${bookmarkList
+                  .map(
+                    (b) => `
+                <li data-bookmark-id="${escapeHtml(b.id)}">
+                  <span class="cart-item-info">
+                    <strong>${escapeHtml(b.label || imageNameById.get(b.view.imageId) || "")}</strong><br>
+                    <span class="hint">${escapeHtml(imageNameById.get(b.view.imageId) ?? "")}</span>
+                  </span>
+                  <button type="button" class="cart-remove-btn" data-remove-bookmark="${escapeHtml(b.id)}" title="${te("bookmarks.remove.tip")}">✕</button>
+                </li>`,
+                  )
+                  .join("")}</ul>`
+          }
+        </div>
+      </div>
+    `;
+  }
+
   function hotspotHtml(l: CatalogLink, selectedUrl: string | null, selectedLinkId: number | null, tabStop = false, isStatic = false): string {
     // .selected: this hotspot's part is the one showing in the table (may be several).
     // .current: this is the *specific* instance centering targets — distinct so
@@ -3655,6 +3780,27 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     root.getElementById("search-field")?.addEventListener("change", (evt) => {
       searchField = (evt.target as HTMLSelectElement).value as SearchField;
       refreshSearchResults();
+    });
+    root.getElementById("btn-bookmarks")?.addEventListener("click", () => void actionToggleBookmarks());
+    root.getElementById("bookmark-add")?.addEventListener("click", () => void actionAddBookmark());
+    root.getElementById("bookmark-label")?.addEventListener("input", (evt) => {
+      bookmarkLabelDraft = (evt.target as HTMLInputElement).value;
+    });
+    root.getElementById("bookmark-label")?.addEventListener("keydown", (evt) => {
+      if ((evt as KeyboardEvent).key === "Enter") void actionAddBookmark();
+      if ((evt as KeyboardEvent).key === "Escape") {
+        bookmarksOpen = false;
+        render();
+      }
+    });
+    root.querySelectorAll<HTMLLIElement>("#bookmarks-panel li[data-bookmark-id]").forEach((li) => {
+      li.addEventListener("click", () => actionGoToBookmark(li.dataset.bookmarkId!));
+    });
+    root.querySelectorAll<HTMLButtonElement>("#bookmarks-panel [data-remove-bookmark]").forEach((btn) => {
+      btn.addEventListener("click", (evt) => {
+        evt.stopPropagation();
+        void actionRemoveBookmark(btn.dataset.removeBookmark!);
+      });
     });
     wireSearchResultClicks();
     if (searchOpen && !searchByHost) searchInput?.focus();

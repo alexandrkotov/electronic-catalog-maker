@@ -10,37 +10,27 @@ import { createPdfExporter, mountViewerInShadow, normalizeView } from "../dist/i
 const $ = (id) => document.getElementById(id);
 const status = (text) => ($("status").textContent = text);
 
-// The host owns bookmarks: where they are kept and what they are called.
+// The host owns bookmarks: where they are kept and what they are called. The viewer draws the
+// "Bookmarks" button and panel; this object is the whole contract. Every method may be
+// asynchronous — here a server call is imitated by the localStorage read.
 const BOOKMARKS_KEY = "example-bookmarks";
-let bookmarks = [];
-try {
-  bookmarks = JSON.parse(localStorage.getItem(BOOKMARKS_KEY) ?? "[]");
-} catch {
-  // storage may be blocked; bookmarks then last until the page closes
-}
-function renderBookmarks() {
-  const list = $("bookmarks");
-  list.replaceChildren(
-    ...bookmarks.map((view, i) => {
-      const li = document.createElement("li");
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = `#${i + 1}: picture ${view.imageId}${view.region ? ", area" : view.zoom ? `, zoom ${view.zoom.toFixed(1)}` : ""}`;
-      button.addEventListener("click", () => viewer.setView(view)); // a stored view reopens exactly there
-      li.append(button);
-      return li;
-    }),
-  );
-}
-function saveBookmark(view) {
-  bookmarks.push(view);
+const readBookmarks = () => {
   try {
-    localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(bookmarks));
+    return JSON.parse(localStorage.getItem(BOOKMARKS_KEY) ?? "[]");
   } catch {
-    // see above
+    return []; // storage may be blocked or damaged
   }
-  renderBookmarks();
-}
+};
+const writeBookmarks = (list) => localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(list));
+const bookmarks = {
+  list: async () => readBookmarks(),
+  add: async (view, label) => {
+    const bookmark = { id: crypto.randomUUID(), label, view };
+    writeBookmarks([...readBookmarks(), bookmark]);
+    return bookmark;
+  },
+  remove: async (id) => writeBookmarks(readBookmarks().filter((b) => b.id !== id)),
+};
 
 function download(bytes, name, type) {
   const url = URL.createObjectURL(new Blob([bytes], { type }));
@@ -55,8 +45,8 @@ const viewer = mountViewerInShadow($("viewer"), {
   exportPdf: createPdfExporter(new URL("../dist/fonts/DejaVuSans.ttf", import.meta.url).href), // the PDF code loads on first use
   persist: false, // the viewer writes nothing to localStorage
   analytics: false, // and links to nothing outside the catalog's own
+  bookmarks, // adds the "Bookmarks" button and panel to the toolbar
   toolbarActions: [
-    { id: "bookmark", label: "Bookmark", icon: "★", onClick: saveBookmark },
     {
       id: "share",
       label: "Share view",
@@ -123,7 +113,6 @@ $("query").addEventListener("input", (evt) => (evt.target.value.trim() ? viewer.
 let dark = false;
 $("theme").addEventListener("click", () => viewer.setTheme((dark = !dark) ? "dark" : "light"));
 
-renderBookmarks();
 const src = new URLSearchParams(location.search).get("src");
 if (src) {
   $("url").value = src;

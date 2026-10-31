@@ -341,6 +341,84 @@ try {
   say("search / clearSearch: counts, filled panel, host keeps focus, result jumps with a view event");
   await context.close();
 
+  // Bookmarks: the standard viewer keeps them in the browser, per catalog; a host can bring its own store
+  ({ context, page } = await boot(DESKTOP));
+  const bookmarkLis = () => page.locator("#bookmarks-panel li[data-bookmark-id]");
+  assert.equal(await page.locator("#btn-bookmarks").count(), 1, "the standard viewer has a Bookmarks button");
+  await page.locator("#btn-bookmarks").click();
+  assert.match(await page.locator("#bookmarks-panel .hint").first().textContent(), /No bookmarks yet/, "an empty list says so");
+  assert.ok((await page.locator("#bookmark-label").inputValue()).length > 0, "the name starts as the picture's name");
+  await page.locator("#btn-bookmarks").click();
+  assert.equal(await page.locator("#bookmarks-panel").count(), 0, "the button closes the panel");
+  await setView(page, { v: 1, imageId: 1, zoom: 2, cx: 0.4, cy: 0.5 });
+  await page.waitForTimeout(300);
+  const bookmarkedView = await getView(page);
+  await page.locator("#btn-bookmarks").click();
+  await page.locator("#bookmark-label").fill("Corner of the sofa");
+  await page.locator("#bookmark-add").click();
+  assert.equal(await bookmarkLis().count(), 1, "Add puts the view into the list");
+  assert.match(await bookmarkLis().first().textContent(), /Corner of the sofa/);
+  await setView(page, { v: 1, imageId: 1, zoom: 1 });
+  await page.waitForTimeout(300);
+  await bookmarkLis().first().click();
+  await page.waitForTimeout(400);
+  v = await getView(page);
+  assert.ok(["zoom", "cx", "cy"].every((k) => near(v[k], bookmarkedView[k], 0.01)) && v.imageId === bookmarkedView.imageId, `a click on a bookmark returns to it: ${JSON.stringify(bookmarkedView)} vs ${JSON.stringify(v)}`);
+  assert.equal(await page.locator("#bookmarks-panel").count(), 0, "and closes the panel");
+  assert.equal(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("ecm-viewer-bookmarks:")).length), 1, "it is saved in the browser");
+  await page.reload();
+  await page.locator("#stage-img").waitFor();
+  await page.locator("#btn-bookmarks").click();
+  assert.equal(await bookmarkLis().count(), 1, "and survives a reload");
+  await page.locator("#bookmarks-panel [data-remove-bookmark]").click();
+  assert.equal(await bookmarkLis().count(), 0, "✕ removes it");
+  await page.locator("#bookmark-label").fill("Enter adds");
+  await page.locator("#bookmark-label").press("Enter");
+  assert.equal(await bookmarkLis().count(), 1, "Enter in the name field adds too");
+  await page.locator("#btn-search").click();
+  assert.equal(await page.locator("#bookmarks-panel").count(), 0, "opening Search closes the bookmarks panel");
+  say("bookmarks (standard viewer): add by name, return with a click, saved per catalog, remove, Enter, one panel at a time");
+  await context.close();
+
+  // persist: false keeps them in memory only; bookmarks: false has no button; reader has none unless given a store
+  ({ context, page } = await boot(DESKTOP, { opts: { persist: false } }));
+  await page.locator("#btn-bookmarks").click();
+  await page.locator("#bookmark-add").click();
+  assert.equal(await bookmarkLis().count(), 1, "with persist: false they still work");
+  assert.equal(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("ecm-viewer-bookmarks:")).length), 0, "but nothing is written to localStorage");
+  await context.close();
+  ({ context, page } = await boot(DESKTOP, { opts: { bookmarks: false } }));
+  assert.equal(await page.locator("#btn-bookmarks").count(), 0, "bookmarks: false: no button");
+  await context.close();
+  ({ context, page } = await boot(DESKTOP, { opts: { mode: "reader" } }));
+  assert.equal(await page.locator("#btn-bookmarks").count(), 0, "reader mode has no bookmarks of its own");
+  await context.close();
+  say("bookmarks: persist: false stays in memory, bookmarks: false and reader mode have no button");
+
+  // a host's store: asynchronous, asked each time the panel opens, receives the view and the name
+  ({ context, page } = await boot(DESKTOP, { opts: { mode: "reader", persist: false, hostBookmarks: true } }));
+  assert.equal(await page.locator("#btn-bookmarks").count(), 1, "a reader-mode viewer given a store has the button");
+  await setView(page, { v: 1, imageId: 1, zoom: 3, cx: 0.3, cy: 0.6 });
+  await page.waitForTimeout(300);
+  const hostMarked = await getView(page);
+  await page.locator("#btn-bookmarks").click();
+  await page.locator("#bookmark-label").fill("From the host"); // typed while the list is still loading: must survive its arrival
+  await page.locator("#bookmark-add").click();
+  await bookmarkLis().first().waitFor();
+  assert.deepEqual(await page.evaluate(() => window.__bookmarkCalls), ["list", "add:From the host", "list"], "list on open, add with the name, list again");
+  await setView(page, { v: 1, imageId: 1, zoom: 1 });
+  await bookmarkLis().first().click();
+  await page.waitForTimeout(400);
+  v = await getView(page);
+  assert.ok(near(v.zoom, hostMarked.zoom, 0.01) && near(v.cx, hostMarked.cx, 0.01), "the host's bookmark returns to its view");
+  await page.locator("#btn-bookmarks").click();
+  await bookmarkLis().first().waitFor();
+  await page.locator("#bookmarks-panel [data-remove-bookmark]").click();
+  await page.waitForFunction(() => window.__bookmarkCalls.includes("remove:host-1"));
+  await page.waitForFunction(() => document.querySelectorAll("#bookmarks-panel li[data-bookmark-id]").length === 0);
+  say("bookmarks: a host's own asynchronous store is used for list, add and remove");
+  await context.close();
+
   // WebMCP: the standard viewer offers its tools to a browser agent, a reader-mode one does not
   const stubModelContext = () => {
     window.__agentTools = [];

@@ -97,12 +97,19 @@ writeFileSync(
 );
 writeFileSync(
   join(consumer, "main.ts"),
-  `import { mountViewer, mountViewerInShadow, createPdfExporter, normalizeView, viewerCss, type EcatmView, type ViewerController } from "@ecm/viewer-engine";
+  `import { mountViewer, mountViewerInShadow, createPdfExporter, localBookmarkStore, normalizeView, viewerCss, type Bookmark, type BookmarkStore, type EcatmView, type ViewerController } from "@ecm/viewer-engine";
 const view: EcatmView = { v: 1, imageId: 1, zoom: 2, region: { x: 0, y: 0, w: 0.5, h: 0.5 } };
+const hostStore: BookmarkStore = {
+  list: async (): Promise<Bookmark[]> => [],
+  add: async (v, label) => ({ id: "1", label, view: v }),
+  remove: (id) => void id,
+};
+const builtIn: BookmarkStore = localBookmarkStore(localStorage, "key");
 const viewer: ViewerController = mountViewerInShadow(document.body, {
   mode: "reader",
   wasmUrl: "/sql-wasm.wasm",
   exportPdf: createPdfExporter("/DejaVuSans.ttf"),
+  bookmarks: hostStore,
   toolbarActions: [{ id: "a", label: "A", onClick: (v) => void v.imageId }],
   onEvent: (type, detail) => void [type, detail],
 });
@@ -110,7 +117,7 @@ void viewer.openBytes(new Uint8Array(), "x", { view });
 void viewer.openUrl("/x.ecatm", { fetchInit: { credentials: "include" } });
 const current: EcatmView | null = viewer.getView();
 void viewer.exportPdf({ showTitle: false });
-void [mountViewer, normalizeView(view), viewerCss.length, current];
+void [mountViewer, normalizeView(view), viewerCss.length, current, builtIn];
 // @ts-expect-error  the view has a fixed version
 const bad: EcatmView = { v: 2, imageId: 1 };
 void bad;
@@ -233,7 +240,8 @@ try {
   const shadow = (sel, options) => example.locator(`#viewer ${sel}`, options); // Playwright pierces the open shadow root
   await example.goto(exampleUrl);
   await example.waitForFunction(() => window.viewer);
-  assert.equal(await shadow(".toolbar-action").count(), 3, "the host's three buttons are in the viewer's toolbar");
+  assert.equal(await shadow(".toolbar-action").count(), 2, "the host's two buttons are in the viewer's toolbar");
+  assert.equal(await shadow("#btn-bookmarks").count(), 1, "and the Bookmarks button, because the host gave it a store");
   assert.equal(await example.locator("#viewer").evaluate((el) => el.shadowRoot.querySelectorAll("#btn-open, #btn-theme, h1").length), 0, "and nothing else of the full viewer's controls");
 
   // 1. open from memory (a Uint8Array)
@@ -265,10 +273,13 @@ try {
   await example.locator("#query").fill("");
   assert.equal(await shadow("#search-panel").count(), 0, "and emptying it closes the panel");
   const onScreen = await example.evaluate(() => window.viewer.getView());
-  await shadow(".toolbar-action", { hasText: "Bookmark" }).click();
-  assert.equal(await example.locator("#bookmarks li").count(), 1, "Bookmark stores the view on screen");
+  await shadow("#btn-bookmarks").click();
+  await shadow("#bookmark-label").fill("Sofa corner");
+  await shadow("#bookmark-add").click();
+  await shadow("#bookmarks-panel li[data-bookmark-id]").waitFor();
+  assert.equal(await example.evaluate(() => JSON.parse(localStorage.getItem("example-bookmarks")).length), 1, "the viewer's panel saved it through the host's store");
   await example.evaluate(() => window.viewer.setView({ v: 1, imageId: 1, zoom: 1 }));
-  await example.locator("#bookmarks li button").click();
+  await shadow("#bookmarks-panel li[data-bookmark-id]").click();
   await example.waitForTimeout(400);
   const reopened = await example.evaluate(() => window.viewer.getView());
   assert.ok(["zoom", "cx", "cy"].every((k) => Math.abs(reopened[k] - onScreen[k]) < 0.01), `a bookmark reopens exactly where it was: ${JSON.stringify(onScreen)} vs ${JSON.stringify(reopened)}`);
@@ -278,7 +289,7 @@ try {
   const [download] = await Promise.all([example.waitForEvent("download"), shadow(".toolbar-action", { hasText: "Print" }).click()]);
   const printed = readFileSync(await download.path());
   assert.equal(printed.subarray(0, 5).toString(), "%PDF-", "Print downloads a PDF");
-  say("example: view panel, host search, bookmarks, share link, print");
+  say("example: view panel, host search, host bookmark store, share link, print");
 
   // 4. the shared link reopens the same view
   await example.goto(`${exampleUrl}?src=${encodeURIComponent("/furniture.ecatm")}&view=${encodeURIComponent(JSON.stringify({ v: 1, imageId: 1, zoom: 3, cx: 0.3, cy: 0.6 }))}`);

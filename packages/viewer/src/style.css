@@ -1174,6 +1174,11 @@ button:disabled {
   flex: 1 1 auto;
 }
 
+/* Bookmarks panel — the cart panel's shell; a row is a link back to the saved view. */
+.bookmarks-panel li {
+  cursor: pointer;
+}
+
 /* Mobile layout — below this width the desktop three-column grid (fixed-px
    side panels + a flexible stage, see .ecm-viewer-app above) no longer
    fits: --images-w/--table-w alone already exceed a phone's viewport, which

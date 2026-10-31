@@ -24,6 +24,8 @@ export {
 export type { EcatmView, Size, ViewGeometry, ViewPlacement, ViewRegion } from "../../shared/src/view.js";
 export { VIEWER_LOCALES, VIEWER_LOCALE_NAMES } from "../../shared/src/locales/viewer/index.js";
 export { matchLocale, pickLocale } from "../../shared/src/i18n.js";
+export { localBookmarkStore } from "../../shared/src/bookmarks.js";
+export type { Bookmark, BookmarkStore } from "../../shared/src/bookmarks.js";
 export type { PdfExportOptions } from "../../shared/src/pdfExportOptions.js";
 export type { SearchField } from "../../shared/src/search.js";
 export type { Database } from "sql.js";

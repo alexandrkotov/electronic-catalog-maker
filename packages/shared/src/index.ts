@@ -8,6 +8,7 @@ export * from "./i18n.js";
 export { EDITOR_LOCALES, EDITOR_LOCALE_NAMES, editorMessages } from "./locales/editor/index.js";
 export { VIEWER_LOCALES, VIEWER_LOCALE_NAMES, viewerTranslator } from "./locales/viewer/index.js";
 export * from "./search.js";
+export * from "./bookmarks.js";
 export * from "./images.js";
 export * from "./legacySch.js";
 export * from "./qrcode.js";
