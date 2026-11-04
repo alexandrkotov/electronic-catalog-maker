@@ -3788,10 +3788,6 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     });
     root.getElementById("bookmark-label")?.addEventListener("keydown", (evt) => {
       if ((evt as KeyboardEvent).key === "Enter") void actionAddBookmark();
-      if ((evt as KeyboardEvent).key === "Escape") {
-        bookmarksOpen = false;
-        render();
-      }
     });
     root.querySelectorAll<HTMLLIElement>("#bookmarks-panel li[data-bookmark-id]").forEach((li) => {
       li.addEventListener("click", () => actionGoToBookmark(li.dataset.bookmarkId!));
@@ -3804,6 +3800,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     });
     wireSearchResultClicks();
     if (searchOpen && !searchByHost) searchInput?.focus();
+    // Focus inside the panel so Esc works from the keyboard right away (render() rebuilt the button that had it).
+    if (bookmarksOpen && bookmarkStore()) root.getElementById("bookmark-label")?.focus();
 
     root.querySelectorAll<HTMLLIElement>(".panel-images li[data-id]").forEach((li) => {
       li.addEventListener("click", () => actionSelectImage(Number(li.dataset.id)));
@@ -4060,6 +4058,24 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   };
   root.addEventListener("keydown", onRegionKey);
 
+  // The Bookmarks panel has no close button of its own: Esc or a click anywhere outside it closes it
+  // (its 🔖 button still toggles it, so that button's own press must not count as "outside").
+  // Listens for "click" in the bubbling phase, not "pointerdown": render() rebuilds the DOM, which would swallow the very click
+  // that was pressed outside (a hotspot, the Search button) if the panel were closed before it landed.
+  const ownerDocument = container.ownerDocument;
+  const onBookmarksDismiss = (evt: Event) => {
+    if (!bookmarksOpen) return;
+    if (evt.type === "keydown") {
+      if ((evt as KeyboardEvent).key !== "Escape") return;
+    } else if (evt.composedPath().some((n) => n instanceof Element && (n.id === "bookmarks-panel" || n.id === "btn-bookmarks"))) {
+      return;
+    }
+    bookmarksOpen = false;
+    render();
+  };
+  root.addEventListener("keydown", onBookmarksDismiss);
+  ownerDocument.addEventListener("click", onBookmarksDismiss);
+
   const booted = boot();
 
   return {
@@ -4079,6 +4095,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       agentTools.clear();
       container.innerHTML = "";
       root.removeEventListener("keydown", onRegionKey);
+      root.removeEventListener("keydown", onBookmarksDismiss);
+      ownerDocument.removeEventListener("click", onBookmarksDismiss);
       resizeObserver?.disconnect();
       quizObserverDisconnect?.();
       container.classList.remove("ecm-viewer-app", "mode-full", "mode-lite", "mode-showcase");

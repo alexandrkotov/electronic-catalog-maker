@@ -350,6 +350,19 @@ try {
   assert.ok((await page.locator("#bookmark-label").inputValue()).length > 0, "the name starts as the picture's name");
   await page.locator("#btn-bookmarks").click();
   assert.equal(await page.locator("#bookmarks-panel").count(), 0, "the button closes the panel");
+  // The panel has no close button: Esc and a click anywhere outside it close it too
+  await page.locator("#btn-bookmarks").click();
+  assert.equal(await page.evaluate(() => document.activeElement?.id), "bookmark-label", "opening it puts the cursor in the name field");
+  await page.keyboard.press("Escape");
+  assert.equal(await page.locator("#bookmarks-panel").count(), 0, "Esc closes the panel");
+  await page.locator("#btn-bookmarks").click();
+  await page.locator("#bookmark-label").click();
+  assert.equal(await page.locator("#bookmarks-panel").count(), 1, "a click inside the panel keeps it open");
+  await page.locator(".panel-images li").first().click();
+  assert.equal(await page.locator("#bookmarks-panel").count(), 0, "a click outside the panel closes it");
+  await page.locator("#btn-bookmarks").click();
+  await page.mouse.click(2, 2);
+  assert.equal(await page.locator("#bookmarks-panel").count(), 0, "a click outside the viewer closes it too");
   await setView(page, { v: 1, imageId: 1, zoom: 2, cx: 0.4, cy: 0.5 });
   await page.waitForTimeout(300);
   const bookmarkedView = await getView(page);
