@@ -16,7 +16,7 @@
  */
 
 import type { Database } from "sql.js";
-import { listImages, listLinksForImage } from "./db.js";
+import { listImageInfos, listLinksForImage } from "./db.js";
 import { isNavLink } from "./navLink.js";
 import type { CatalogLink, CatalogRow } from "./types.js";
 import { normalizeRegion, type ViewRegion } from "./view.js";
@@ -133,7 +133,7 @@ export function detectGrid(links: CatalogLink[]): { cellW: number; cellH: number
  * of neighbouring tiles), otherwise the default "small".
  */
 export function suggestedQrSize(db: Database): QrSize {
-  const hasGrid = listImages(db).some((image) =>
+  const hasGrid = listImageInfos(db).some((image) =>
     detectGrid(listLinksForImage(db, image.id).filter((l) => !isNavLink(l))),
   );
   return hasGrid ? "large" : DEFAULT_PDF_EXPORT_OPTIONS.qrSize;

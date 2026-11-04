@@ -23,10 +23,10 @@
  *   exactly as it could press the Buy button itself (seen with ChatGPT's
  *   built-in browser); such an agent's own permission prompts are the gate.
  */
-import { listAllRows, listImages, listLinksForImage, listRowsForImage, readMeta } from "./db.js";
+import { listAllRows, listImageInfos, listLinksForImage, listRowsForImage, readMeta } from "./db.js";
 import { isNavLink, navTargetImageId } from "./navLink.js";
 import { searchRows } from "./search.js";
-import type { CatalogImage, CatalogMode, CatalogRow } from "./types.js";
+import type { CatalogImageInfo, CatalogMode, CatalogRow } from "./types.js";
 import type { Database } from "sql.js";
 
 export interface AgentTool {
@@ -95,7 +95,7 @@ export function buildViewerTools(host: ViewerAgentHost): AgentTool[] {
   const NO_CATALOG = "No catalog is open.";
 
   /** hotspot labels per rows.url, in hotspot order — "14" on the diagram is a label, not a row field. */
-  const labelsByUrl = (db: Database, images: CatalogImage[]): Map<string, string[]> => {
+  const labelsByUrl = (db: Database, images: CatalogImageInfo[]): Map<string, string[]> => {
     const out = new Map<string, string[]>();
     for (const image of images) {
       for (const l of listLinksForImage(db, image.id)) {
@@ -136,7 +136,7 @@ export function buildViewerTools(host: ViewerAgentHost): AgentTool[] {
       const db = host.db();
       if (!db) return fail(NO_CATALOG);
       const state = host.state();
-      const images = listImages(db);
+      const images = listImageInfos(db);
       const quiz = state.catalogMode === "quiz";
       return Promise.resolve({
         name: readMeta(db).catalogName,
@@ -170,7 +170,7 @@ export function buildViewerTools(host: ViewerAgentHost): AgentTool[] {
       execute(input) {
         const db = host.db();
         if (!db) return fail(NO_CATALOG);
-        const images = listImages(db);
+        const images = listImageInfos(db);
         const screenId = input.screen === undefined || input.screen === null ? host.state().activeImageId : Number(input.screen);
         const image = images.find((i) => i.id === screenId);
         if (!image) return fail(`No screen with id ${String(input.screen ?? screenId)}.`);
@@ -213,7 +213,7 @@ export function buildViewerTools(host: ViewerAgentHost): AgentTool[] {
         if (!db) return fail(NO_CATALOG);
         const query = typeof input.query === "string" || typeof input.query === "number" ? String(input.query).trim() : "";
         if (!query) return fail("query is required.");
-        const images = listImages(db);
+        const images = listImageInfos(db);
         const names = new Map(images.map((i) => [i.id, i.name]));
         const labels = labelsByUrl(db, images);
         const all = listAllRows(db);
@@ -238,7 +238,7 @@ export function buildViewerTools(host: ViewerAgentHost): AgentTool[] {
         if (!db) return fail(NO_CATALOG);
         const row = findRow(db, input.id);
         if (!row) return fail(`No item with id ${JSON.stringify(input.id)}.`);
-        const images = listImages(db);
+        const images = listImageInfos(db);
         const image = images.find((i) => i.id === row.imageId);
         const buyUrl = buyUrlOf(row);
         const state = host.state();
@@ -283,7 +283,7 @@ export function buildViewerTools(host: ViewerAgentHost): AgentTool[] {
       execute(input) {
         const db = host.db();
         if (!db) return fail(NO_CATALOG);
-        const image = listImages(db).find((i) => i.id === Number(input.screen));
+        const image = listImageInfos(db).find((i) => i.id === Number(input.screen));
         if (!image) return fail(`No screen with id ${String(input.screen)}.`);
         host.openScreen(image.id);
         return Promise.resolve({ ok: true, screen: image.id });
@@ -297,7 +297,7 @@ export function buildViewerTools(host: ViewerAgentHost): AgentTool[] {
       execute() {
         const db = host.db();
         if (!db) return fail(NO_CATALOG);
-        const first = listImages(db)[0];
+        const first = listImageInfos(db)[0];
         if (!first) return fail("The catalog has no screens.");
         host.openScreen(first.id);
         return Promise.resolve({ ok: true, screen: first.id });
@@ -350,7 +350,7 @@ export function buildViewerTools(host: ViewerAgentHost): AgentTool[] {
           const db = host.db();
           if (!db) return fail(NO_CATALOG);
           const inList = new Set(host.state().list);
-          const images = listImages(db);
+          const images = listImageInfos(db);
           const names = new Map(images.map((i) => [i.id, i.name]));
           const labels = labelsByUrl(db, images);
           const rows = listAllRows(db).filter((r) => inList.has(r.url));

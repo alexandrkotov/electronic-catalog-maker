@@ -22,6 +22,9 @@ export interface CatalogImage {
   hideMarkers: boolean;
 }
 
+/** An image's details without its picture data — see listImageInfos. */
+export type CatalogImageInfo = Omit<CatalogImage, "imageData">;
+
 export interface CatalogLink {
   /** the hotspot's own identity — always unique, this is what a click centers on */
   id: number;

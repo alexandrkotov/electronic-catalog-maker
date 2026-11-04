@@ -9,7 +9,7 @@ import {
   findRowByUrl,
   initSqlite,
   listAllRows,
-  listImages,
+  listImageInfos,
   listLinksForImage,
   listRowsForImage,
   openCatalog,
@@ -17,7 +17,7 @@ import {
 } from "./db.js";
 import { detectFileKind, importSchCatalog } from "./legacySch.js";
 import { ProtectedCatalogError, isProtectedCatalog, readProtectedInfo, unlockCatalog, type ProtectedCatalogInfo } from "./protect.js";
-import { groupImagesByFolder } from "./images.js";
+import { groupImagesByFolder, ImageSrcCache } from "./images.js";
 import { collectExtraKeys, searchRows, type SearchField } from "./search.js";
 import { applyTheme, currentTheme, resolveInitialTheme, toggleTheme } from "./theme.js";
 import {
@@ -47,7 +47,7 @@ import {
   type QuestionState,
   type QuizScore,
 } from "./quiz.js";
-import { isListMode, type CatalogImage, type CatalogLink, type CatalogMode, type CatalogRow, type KeyValueStorage } from "./types.js";
+import { isListMode, type CatalogImageInfo, type CatalogLink, type CatalogMode, type CatalogRow, type KeyValueStorage } from "./types.js";
 import { buildViewerTools, createAgentToolsHandle, safeWebUrl, type ViewerAgentHost } from "./webmcp.js";
 import {
   DEFAULT_WHERE_TO_BUY,
@@ -486,6 +486,24 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   let SQL: SqlJsStatic;
   let db: Database | null = null;
+  // The viewer never changes its database, so the image list and the full row
+  // list are read once per catalog: a redraw asks for them many times (once
+  // per marker, in places), which on a catalog with hundreds of pictures and
+  // thousands of rows made every click take seconds. Read-only — never mutate.
+  const listCache: { db: Database | null; images: CatalogImageInfo[] | null; rows: CatalogRow[] | null } = { db: null, images: null, rows: null };
+  function cacheFor(database: Database) {
+    if (listCache.db !== database) Object.assign(listCache, { db: database, images: null, rows: null });
+    return listCache;
+  }
+  function catalogImages(database: Database): CatalogImageInfo[] {
+    const c = cacheFor(database);
+    return (c.images ??= listImageInfos(database));
+  }
+  function catalogRows(database: Database): CatalogRow[] {
+    const c = cacheFor(database);
+    return (c.rows ??= listAllRows(database));
+  }
+  const imageSrcs = new ImageSrcCache();
   let activeImageId: number | null = null;
   // The hotspot's own id, not its url — several hotspots can share one url
   // (the same part drawn at multiple positions on one diagram), so centering
@@ -1088,7 +1106,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const width = container.clientWidth;
     if (!width || width > 640) return;
     const onImage = new Set(listLinksForImage(db, activeImageId).map((l) => l.url));
-    const rows = listAllRows(db).filter((r) => onImage.has(r.url));
+    const rows = catalogRows(db).filter((r) => onImage.has(r.url));
     const key = `${Math.round(width)}:${activeImageId}:${rows.length}:${rows[0]?.url ?? ""}`;
     if (key === detailsMinKey) return;
     detailsMinKey = key;
@@ -1198,7 +1216,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   function applyInitialSelection() {
     if (!db) return;
-    if (options.initialImageId !== undefined && listImages(db).some((i) => i.id === options.initialImageId)) {
+    if (options.initialImageId !== undefined && catalogImages(db).some((i) => i.id === options.initialImageId)) {
       activeImageId = options.initialImageId;
       resetZoomForImage(activeImageId);
     }
@@ -1377,7 +1395,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       }
     }
     refreshing = false;
-    if (db && savedImageId !== null && listImages(db).some((i) => i.id === savedImageId)) {
+    if (db && savedImageId !== null && catalogImages(db).some((i) => i.id === savedImageId)) {
       activeImageId = savedImageId;
       if (savedLinkId !== null && listLinksForImage(db, savedImageId).some((l) => l.id === savedLinkId)) {
         selectedLinkId = savedLinkId;
@@ -1475,7 +1493,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     bookmarksOpen = false;
     bookmarkList = [];
     bookmarksKey = bookmarksStorageKey(sourceName, loadedMeta.catalogName);
-    activeImageId = listImages(db)[0]?.id ?? null;
+    activeImageId = catalogImages(db)[0]?.id ?? null;
     selectedLinkId = null;
     resetZoomForImage(activeImageId);
     lastViewKey = ""; // a new catalog's first view is news even if its ids match the last one's
@@ -1507,7 +1525,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       catalog: loadedMeta.catalogName,
       file: sourceName,
       protected: protectedSource !== null,
-      images: listImages(db).length,
+      images: catalogImages(db).length,
       imageId: activeImageId,
     });
   }
@@ -1662,7 +1680,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   function setView(input: EcatmView) {
     const view = normalizeView(input);
-    if (!db || !view || !listImages(db).some((i) => i.id === view.imageId)) return;
+    if (!db || !view || !catalogImages(db).some((i) => i.id === view.imageId)) return;
     if (view.imageId !== activeImageId) {
       activeImageId = view.imageId;
       resetZoomForImage(activeImageId);
@@ -1798,7 +1816,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    * is marked `fitOnOpen`. Quiz mode keeps its own fit-to-width.
    */
   function resetZoomForImage(id: number | null) {
-    const fitOnOpen = !!(db && id !== null && listImages(db).find((i) => i.id === id)?.fitOnOpen);
+    const fitOnOpen = !!(db && id !== null && catalogImages(db).find((i) => i.id === id)?.fitOnOpen);
     zoom = 1;
     userZoomed = false;
     viewRegion = undefined;
@@ -1823,12 +1841,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     mobileTab = "stage"; // no-op above the mobile breakpoint — see mobileTab's declaration
     syncAddressBar();
     render();
-    emit("image", { imageId: id, name: db ? (listImages(db).find((i) => i.id === id)?.name ?? "") : "" });
+    emit("image", { imageId: id, name: db ? (catalogImages(db).find((i) => i.id === id)?.name ?? "") : "" });
   }
 
   /** Whether this image draws its item markers hidden until found (see CatalogImage.hideMarkers). */
   function hidesMarkers(imageId: number | null): boolean {
-    return !!(db && imageId !== null && listImages(db).find((i) => i.id === imageId)?.hideMarkers);
+    return !!(db && imageId !== null && catalogImages(db).find((i) => i.id === imageId)?.hideMarkers);
   }
 
   /** A hidden marker's item has been found: tapped on this visit, or a saved quiz pick. */
@@ -1862,7 +1880,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (db && link) {
       const target = navTargetImageId(link.url);
       if (target !== null) {
-        if (listImages(db).some((i) => i.id === target)) actionSelectImage(target);
+        if (catalogImages(db).some((i) => i.id === target)) actionSelectImage(target);
         return;
       }
       const catalog = catalogLinkTarget(link.url);
@@ -2005,7 +2023,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const row = rows.find((r) => r.url === url);
     if (!row) return;
     const state = evaluateQuestion(rows, quizPicks.get(activeImageId)!);
-    const score = scoreQuiz(listImages(db).map((img) => evaluateQuestion(listRowsForImage(db!, img.id), quizPicks.get(img.id) ?? [])));
+    const score = scoreQuiz(catalogImages(db).map((img) => evaluateQuestion(listRowsForImage(db!, img.id), quizPicks.get(img.id) ?? [])));
     emit("answer", {
       imageId: activeImageId,
       url,
@@ -2021,7 +2039,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   /** Jumps to the next question (in list order, wrapping) that has not been answered yet. */
   function actionQuizNext() {
     if (!db) return;
-    const order = listImages(db).filter((i) => quizStates.get(i.id)?.isQuestion);
+    const order = catalogImages(db).filter((i) => quizStates.get(i.id)?.isQuestion);
     const from = order.findIndex((i) => i.id === activeImageId);
     for (let step = 1; step <= order.length; step++) {
       const next = order[(from + step) % order.length];
@@ -2038,7 +2056,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (typeof confirm === "function" && !confirm(t("quiz.resetConfirm"))) return;
     quizPicks = new Map();
     saveQuizPicks(quizStorageKeyValue, quizPicks, storage);
-    const first = listImages(db)[0];
+    const first = catalogImages(db)[0];
     if (first) actionSelectImage(first.id);
     else render();
   }
@@ -2059,7 +2077,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       const wanted = new Set(urls);
       return rows.filter((r) => wanted.has(r.url)).map((r) => r.name || r.url).join(" · ");
     };
-    const section = groupImagesByFolder(listImages(database))
+    const section = groupImagesByFolder(catalogImages(database))
       .map((group) => {
         const items = group.images
           .filter((img) => quizStates.get(img.id)?.isQuestion)
@@ -2136,7 +2154,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   }
 
   /** Evaluates the open image (quizNow) and every image (quizStates, quizTotals); all null/empty outside catalog_mode "quiz". */
-  function computeQuizState(images: CatalogImage[], activeId: number | null, activeRows: CatalogRow[]) {
+  function computeQuizState(images: CatalogImageInfo[], activeId: number | null, activeRows: CatalogRow[]) {
     quizNow = null;
     quizStates = new Map();
     quizTotals = null;
@@ -2207,7 +2225,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (!quizTotals || quizTotals.total === 0) return "";
     const done = quizTotals.finished;
     // Nothing to jump to when the only unanswered question is the one on screen.
-    const nextDisabled = !listImages(db!).some((i) => i.id !== activeImageId && quizStates.get(i.id)?.status === "open");
+    const nextDisabled = !catalogImages(db!).some((i) => i.id !== activeImageId && quizStates.get(i.id)?.status === "open");
     const score = done
       ? te("quiz.final", { correct: quizTotals.correct, total: quizTotals.total, percent: quizTotals.percent })
       : te("quiz.score", { correct: quizTotals.correct, answered: quizTotals.answered, total: quizTotals.total });
@@ -2262,7 +2280,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const combinableIds: string[] = [];
     const directUrls: string[] = [];
     const items: { url: string; name: string; buyUrl: string }[] = [];
-    for (const r of listAllRows(db)) {
+    for (const r of catalogRows(db)) {
       if (!cartItems.has(r.url)) continue;
       const buyUrl = typeof r.extra.buy_url === "string" ? r.extra.buy_url : "";
       if (!buyUrl) continue;
@@ -2306,7 +2324,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; }
     };
     if (!db || cartItems.size === 0) return;
-    const rows = listAllRows(db).filter((r) => cartItems.has(r.url));
+    const rows = catalogRows(db).filter((r) => cartItems.has(r.url));
     const catalogTitle = readMeta(db).catalogName || t("catalog.untitled");
     const items = rows
       .map((r) => {
@@ -2605,7 +2623,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const view = getView();
     if (!store || !view || !db) return;
     const typed = (root.getElementById("bookmark-label") as HTMLInputElement | null)?.value.trim();
-    const label = typed || (listImages(db).find((i) => i.id === view.imageId)?.name ?? "");
+    const label = typed || (catalogImages(db).find((i) => i.id === view.imageId)?.name ?? "");
     bookmarkLabelDraft = null;
     try {
       await store.add(view, label);
@@ -2642,7 +2660,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     searchQuery = query;
     searchField = opts.field ?? "all";
     render();
-    return searchRows(listAllRows(db), searchQuery, searchField).length;
+    return searchRows(catalogRows(db), searchQuery, searchField).length;
   }
 
   function apiClearSearch() {
@@ -2727,7 +2745,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   }
 
   function render() {
-    const images = db ? listImages(db) : [];
+    const images = db ? catalogImages(db) : [];
     imageNamesById = new Map(images.map((i) => [i.id, i.name]));
     const activeImage = images.find((i) => i.id === activeImageId) ?? null;
     const links = db && activeImage ? listLinksForImage(db, activeImage.id) : [];
@@ -2899,7 +2917,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                           `transform: scale(${zoom}); --marker-scale: ${Math.max(1, Math.min(1 / zoom, 1.8))}`
                         : `transform: scale(${zoom})`
                   }">
-                     <img id="stage-img" src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
+                     <img id="stage-img" src="${db ? imageSrcs.get(db, activeImage.id) : ""}" width="${activeImage.width}" height="${activeImage.height}" />
                      <div class="region-layer" id="region-layer">${
                        viewRegion
                          ? `<div class="region-box" style="left:${viewRegion.x * 100}%;top:${viewRegion.y * 100}%;width:${viewRegion.w * 100}%;height:${viewRegion.h * 100}%;border-width:${(2 / zoom).toFixed(3)}px"></div>`
@@ -3043,7 +3061,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         // column (always the table's last column) is visible immediately,
         // without the visitor needing to notice/discover the panel's own
         // horizontal scrollbar.
-        if (activeImage && db && catalogHasAnyBuyUrl(listAllRows(db))) {
+        if (activeImage && db && catalogHasAnyBuyUrl(catalogRows(db))) {
           tablePanel.scrollLeft = tablePanel.scrollWidth;
         }
         if (activeImage) tableAutoScrolledForBuy = true;
@@ -3057,7 +3075,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   }
 
   /** Two-level list: ungrouped images first, then one heading per folder (see images.ts). */
-  function renderImageList(images: CatalogImage[]): string {
+  function renderImageList(images: CatalogImageInfo[]): string {
     return groupImagesByFolder(images)
       .map((group) => {
         const items = group.images
@@ -3094,9 +3112,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   }
 
   /** Showcase mode: a picker for switching diagrams when the catalog has several — one <optgroup> per folder, same grouping as the image list. */
-  function renderShowcaseImagePicker(images: CatalogImage[]): string {
+  function renderShowcaseImagePicker(images: CatalogImageInfo[]): string {
     if (images.length < 2) return "";
-    const option = (img: CatalogImage) => `<option value="${img.id}" ${img.id === activeImageId ? "selected" : ""}>${escapeHtml(img.name)}</option>`;
+    const option = (img: CatalogImageInfo) => `<option value="${img.id}" ${img.id === activeImageId ? "selected" : ""}>${escapeHtml(img.name)}</option>`;
     return `<select id="showcase-image" aria-label="${te("picker.image")}">
       ${groupImagesByFolder(images)
         .map((group) => {
@@ -3196,7 +3214,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   /** Showcase mode with options.showcaseCart: the cart's checkout (or print, for a list), once the catalog has anything to add. */
   function renderShowcaseCheckout(): string {
-    if (!showcaseCart || cartMode !== "accumulate" || !db || !catalogHasAnyBuyUrl(listAllRows(db))) return "";
+    if (!showcaseCart || cartMode !== "accumulate" || !db || !catalogHasAnyBuyUrl(catalogRows(db))) return "";
     return `<button type="button" id="cart-checkout" class="showcase-checkout" ${cartItems.size === 0 ? "disabled" : ""}>${cartIcon()} ${te("cart.checkout")} (${cartItems.size})</button>`;
   }
 
@@ -3329,7 +3347,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   /** "Export PDF…" options — see pdfOptionsDialogOpen's own doc; asked every time so a per-export choice (e.g. "real-size" for one especially dense diagram) doesn't linger unnoticed into the next, ordinary export. The QR placement question is grayed out entirely when the open catalog has no buy_url anywhere — there's nothing for any of the three choices to affect. */
   function renderPdfOptionsDialog(): string {
     if (!pdfOptionsDialogOpen || !db) return "";
-    const hasBuyUrl = catalogHasAnyBuyUrl(listAllRows(db));
+    const hasBuyUrl = catalogHasAnyBuyUrl(catalogRows(db));
     // With pictures or tables left out the codes go where the other one is (see PdfContent).
     const qrPlacementShown: QrPlacement = pdfContent === "images" ? "image" : pdfContent === "table" ? "table" : pdfQrPlacement;
     return `
@@ -3409,7 +3427,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   function renderSearchPanel(): string {
     if (!db) return "";
-    const extraKeys = collectExtraKeys(listAllRows(db));
+    const extraKeys = collectExtraKeys(catalogRows(db));
     return `
       <div class="search-panel" id="search-panel">
         <div class="search-controls">
@@ -3435,9 +3453,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   function renderSearchResultsList(): string {
     if (!db) return "";
     if (!searchQuery.trim()) return `<p class="hint">${te("search.hint")}</p>`;
-    const results = searchRows(listAllRows(db), searchQuery, searchField).slice(0, 30);
+    const results = searchRows(catalogRows(db), searchQuery, searchField).slice(0, 30);
     if (results.length === 0) return `<p class="hint">${te("search.none")}</p>`;
-    const imageNameById = new Map(listImages(db).map((i) => [i.id, i.name]));
+    const imageNameById = new Map(catalogImages(db).map((i) => [i.id, i.name]));
     return `<ul>${results
       .map(
         (r) =>
@@ -3473,8 +3491,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    */
   function renderCartPanel(): string {
     if (!db) return "";
-    const rows = listAllRows(db).filter((r) => cartItems.has(r.url));
-    const imageNameById = new Map(listImages(db).map((i) => [i.id, i.name]));
+    const rows = catalogRows(db).filter((r) => cartItems.has(r.url));
+    const imageNameById = new Map(catalogImages(db).map((i) => [i.id, i.name]));
     return `
       <div class="cart-panel" id="cart-panel">
         <div class="cart-items">
@@ -3508,7 +3526,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   /** The Bookmarks button's dropdown: a name field and "Add" for the view on screen, then every bookmark with a "✕". Same shell as the cart panel. */
   function renderBookmarksPanel(): string {
     if (!db) return "";
-    const imageNameById = new Map(listImages(db).map((i) => [i.id, i.name]));
+    const imageNameById = new Map(catalogImages(db).map((i) => [i.id, i.name]));
     const current = getView();
     return `
       <div class="cart-panel bookmarks-panel" id="bookmarks-panel">
@@ -4282,6 +4300,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       root.removeEventListener("keydown", onBookmarksDismiss);
       ownerDocument.removeEventListener("click", onBookmarksDismiss);
       ownerDocument.removeEventListener("keydown", onWhereToBuyKey);
+      imageSrcs.clear();
+      Object.assign(listCache, { db: null, images: null, rows: null });
       resizeObserver?.disconnect();
       quizObserverDisconnect?.();
       container.classList.remove("ecm-viewer-app", "mode-full", "mode-lite", "mode-showcase");

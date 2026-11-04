@@ -9,7 +9,7 @@ import {
 import { ProtectedCatalogError, isProtectedCatalog } from "./protect.js";
 import { readCatalogMode } from "./types.js";
 import { WHERE_TO_BUY_META_KEY, parseWhereToBuy, serializeWhereToBuy, type WhereToBuySettings } from "./whereToBuy.js";
-import type { CatalogImage, CatalogLink, CatalogMeta, CatalogMode, CatalogRow, LinkConflict } from "./types.js";
+import type { CatalogImage, CatalogImageInfo, CatalogLink, CatalogMeta, CatalogMode, CatalogRow, LinkConflict } from "./types.js";
 
 let sqlJsPromise: Promise<SqlJsStatic> | null = null;
 
@@ -195,6 +195,37 @@ export function updateWhereToBuy(db: Database, settings: WhereToBuySettings): vo
   ]);
 }
 
+/**
+ * Every image's details without the picture itself, in list order. This is
+ * what anything listing, naming or checking images should use: listImages
+ * copies every picture out of the database (tens of MB on a big catalog),
+ * which made each redraw of a 184-image catalog take seconds. Fetch the one
+ * picture on screen with getImage.
+ */
+export function listImageInfos(db: Database): CatalogImageInfo[] {
+  const stmt = db.prepare(
+    "SELECT id, name, mime_type, width, height, sort_order, folder, fit_on_open, hide_markers FROM images ORDER BY sort_order, id",
+  );
+  const out: CatalogImageInfo[] = [];
+  while (stmt.step()) {
+    const r = stmt.getAsObject();
+    out.push({
+      id: Number(r.id),
+      name: String(r.name),
+      mimeType: String(r.mime_type),
+      width: Number(r.width),
+      height: Number(r.height),
+      sortOrder: Number(r.sort_order),
+      folder: String(r.folder ?? ""),
+      fitOnOpen: Number(r.fit_on_open ?? 0) === 1,
+      hideMarkers: Number(r.hide_markers ?? 0) === 1,
+    });
+  }
+  stmt.free();
+  return out;
+}
+
+/** Every image including its picture data — only for what really needs all pictures at once (PDF export). */
 export function listImages(db: Database): CatalogImage[] {
   const stmt = db.prepare(
     "SELECT id, name, mime_type, image_data, width, height, sort_order, folder, fit_on_open, hide_markers FROM images ORDER BY sort_order, id",
@@ -214,6 +245,20 @@ export function listImages(db: Database): CatalogImage[] {
       fitOnOpen: Number(r.fit_on_open ?? 0) === 1,
       hideMarkers: Number(r.hide_markers ?? 0) === 1,
     });
+  }
+  stmt.free();
+  return out;
+}
+
+/** Every image's hotspot names in one query (by image id, in hotspot order) — for lists that say something about each image. */
+export function linkNamesByImage(db: Database): Map<number, string[]> {
+  const out = new Map<number, string[]>();
+  const stmt = db.prepare("SELECT image_id, name FROM links ORDER BY id");
+  while (stmt.step()) {
+    const [imageId, name] = stmt.get() as [number, string];
+    const list = out.get(Number(imageId));
+    if (list) list.push(String(name));
+    else out.set(Number(imageId), [String(name)]);
   }
   stmt.free();
   return out;

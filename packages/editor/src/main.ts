@@ -46,7 +46,7 @@ import {
   importSchCatalog,
   initSqlite,
   listAllRows,
-  listImages,
+  listImageInfos,
   listLinksForImage,
   listRowsForImage,
   openCatalog,
@@ -91,7 +91,10 @@ import {
   siteHomeUrl,
   type WhereToBuySettings,
   type WhereToBuySite,
-  type CatalogImage,
+  type CatalogImageInfo,
+  ImageSrcCache,
+  getImage,
+  linkNamesByImage,
   type CatalogLink,
   type CatalogRow,
   type Database,
@@ -775,9 +778,12 @@ async function loadInitialFromUrl(url: string) {
   await openCatalogFromBytes(bytes, null, baseName(new URL(url, location.href).pathname));
 }
 
-function currentImages(): CatalogImage[] {
-  return db ? listImages(db) : [];
+/** Every image's details, without picture data (see listImageInfos); the stage gets its picture from imageSrcs. */
+function currentImages(): CatalogImageInfo[] {
+  return db ? listImageInfos(db) : [];
 }
+// The stage picture's data: URL, read once per image rather than on every redraw.
+const imageSrcs = new ImageSrcCache();
 
 function setStatus(message: string) {
   statusMessage = message;
@@ -1154,7 +1160,7 @@ async function refreshProtectCover() {
   protectCoverError = null;
   let source: Blob | null = null;
   if (protectCoverChoice.startsWith("image:") && db) {
-    const img = currentImages().find((i) => i.id === Number(protectCoverChoice.slice("image:".length)));
+    const img = getImage(db, Number(protectCoverChoice.slice("image:".length)));
     if (img) source = await (await fetch(`data:${img.mimeType};base64,${img.imageData}`)).blob();
   } else if (protectCoverChoice === "file") {
     source = protectCustomFile;
@@ -3090,7 +3096,7 @@ function render() {
         ${
           activeImage
             ? `<div class="stage-sizer" style="width:${activeImage.width * zoom}px;height:${activeImage.height * zoom}px"><div class="stage-inner" id="stage-inner" style="width:${activeImage.width}px;height:${activeImage.height}px;transform: scale(${zoom})">
-                 <img id="stage-img" src="data:${activeImage.mimeType};base64,${activeImage.imageData}" width="${activeImage.width}" height="${activeImage.height}" />
+                 <img id="stage-img" src="${db ? imageSrcs.get(db, activeImage.id) : ""}" width="${activeImage.width}" height="${activeImage.height}" />
                  <div class="crosshair-box" id="crosshair-box"></div>
                  <div class="crosshair-h" id="crosshair-h"></div>
                  <div class="crosshair-v" id="crosshair-v"></div>
@@ -3149,10 +3155,12 @@ function render() {
 }
 
 /** Two-level list: ungrouped images first, then one heading per folder (see shared/images.ts). */
-function renderImageList(images: CatalogImage[]): string {
+function renderImageList(images: CatalogImageInfo[]): string {
+  // One query for all images' hotspots, not one per image (184 of those cost ~60 ms a redraw).
+  const linkNames = db ? linkNamesByImage(db) : new Map<number, string[]>();
   return groupImagesByFolder(images)
     .map((group) => {
-      const items = group.images.map((img) => renderImageListItem(img)).join("");
+      const items = group.images.map((img) => renderImageListItem(img, linkNames.get(img.id) ?? [])).join("");
       if (group.folder === "") return `<ul class="image-list">${items}</ul>`;
       return `<div class="image-folder"><div class="image-folder-name">${escapeHtml(group.folder)}</div><ul class="image-list">${items}</ul></div>`;
     })
@@ -3165,11 +3173,10 @@ function renderImageList(images: CatalogImage[]): string {
  * always somewhere else to look before deleting an image out from under
  * live data (see deleteImage()'s doc comment for why that matters).
  */
-function renderImageListItem(img: CatalogImage): string {
-  const links = db ? listLinksForImage(db, img.id) : [];
-  const blocked = links.length > 0;
+function renderImageListItem(img: CatalogImageInfo, linkNames: string[]): string {
+  const blocked = linkNames.length > 0;
   const title = blocked
-    ? t("image.delete.blocked", { count: links.length, names: links.map((l) => l.name).join(", ") })
+    ? t("image.delete.blocked", { count: linkNames.length, names: linkNames.join(", ") })
     : t("image.delete.tip", { name: img.name });
   return `
     <li data-id="${img.id}" class="${img.id === activeImageId ? "active" : ""}">
@@ -3185,7 +3192,7 @@ function renderImageListItem(img: CatalogImage): string {
   `;
 }
 
-function renderImageForm(image: CatalogImage, allImages: CatalogImage[]): string {
+function renderImageForm(image: CatalogImageInfo, allImages: CatalogImageInfo[]): string {
   const folders = collectFolders(allImages);
   return `
     <section>
@@ -4110,7 +4117,7 @@ function renderSearchResultsList(): string {
   if (!searchQuery.trim()) return `<p class="hint">${te("search.hint")}</p>`;
   const results = searchRows(listAllRows(db), searchQuery, searchField).slice(0, 30);
   if (results.length === 0) return `<p class="hint">${te("search.none")}</p>`;
-  const imageNameById = new Map(listImages(db).map((i) => [i.id, i.name]));
+  const imageNameById = new Map(listImageInfos(db).map((i) => [i.id, i.name]));
   return `<ul>${results
     .map(
       (r) =>
@@ -4148,7 +4155,7 @@ function hotspotHtml(l: CatalogLink, highlightUrl: string | null): string {
  * navigation link (address `#image=<id>`, no table row) — room overview →
  * close-up → ⌂ back. The first option keeps it an ordinary item hotspot.
  */
-function renderNavTargetField(images: CatalogImage[], currentUrl: string): string {
+function renderNavTargetField(images: CatalogImageInfo[], currentUrl: string): string {
   const target = navTargetImageId(currentUrl);
   const others = images.filter((img) => img.id !== activeImageId || img.id === target);
   if (others.length === 0) return "";
@@ -4160,7 +4167,7 @@ function renderNavTargetField(images: CatalogImage[], currentUrl: string): strin
     </div>`;
 }
 
-function renderLinkForm(links: CatalogLink[], images: CatalogImage[]): string {
+function renderLinkForm(links: CatalogLink[], images: CatalogImageInfo[]): string {
   // One option per distinct url already on this image — for pointing a new
   // hotspot at a part that's already drawn elsewhere (same bolt, another spot).
   const reusable = Array.from(new Map(links.filter((l) => !isNavLink(l)).map((l) => [l.url, l])).values());
@@ -4193,7 +4200,7 @@ function renderLinkForm(links: CatalogLink[], images: CatalogImage[]): string {
   `;
 }
 
-function renderEditLinkForm(link: CatalogLink | null, images: CatalogImage[]): string {
+function renderEditLinkForm(link: CatalogLink | null, images: CatalogImageInfo[]): string {
   if (!link) return "";
   return `
     <section>
@@ -4213,7 +4220,7 @@ function renderEditLinkForm(link: CatalogLink | null, images: CatalogImage[]): s
   `;
 }
 
-function renderLinksSection(links: CatalogLink[], editingLinkId: number | null, images: CatalogImage[]): string {
+function renderLinksSection(links: CatalogLink[], editingLinkId: number | null, images: CatalogImageInfo[]): string {
   const imageName = (url: string) => {
     const target = navTargetImageId(url);
     if (target === null) return "";
