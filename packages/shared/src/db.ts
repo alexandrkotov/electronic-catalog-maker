@@ -8,6 +8,7 @@ import {
 } from "./schema.js";
 import { ProtectedCatalogError, isProtectedCatalog } from "./protect.js";
 import { readCatalogMode } from "./types.js";
+import { WHERE_TO_BUY_META_KEY, parseWhereToBuy, serializeWhereToBuy, type WhereToBuySettings } from "./whereToBuy.js";
 import type { CatalogImage, CatalogLink, CatalogMeta, CatalogMode, CatalogRow, LinkConflict } from "./types.js";
 
 let sqlJsPromise: Promise<SqlJsStatic> | null = null;
@@ -153,6 +154,7 @@ export function readMeta(db: Database): CatalogMeta {
     cartItemParam: kv.get("cart_item_param") ?? DEFAULT_CART_ITEM_PARAM,
     cartCheckoutBaseUrl: kv.get("cart_checkout_base_url") ?? DEFAULT_CART_CHECKOUT_BASE_URL,
     defaultView: readDefaultView(kv.get("default_view")),
+    whereToBuy: parseWhereToBuy(kv.get(WHERE_TO_BUY_META_KEY)),
   };
 }
 
@@ -183,6 +185,14 @@ export function updateStoreSettings(db: Database, input: StoreSettingsInput): vo
   stmt.run(["cart_checkout_base_url", input.cartCheckoutBaseUrl]);
   stmt.run(["default_view", input.defaultView]);
   stmt.free();
+}
+
+/** Writes the "Where to buy" settings (button, part-number column, sites) into the meta table. */
+export function updateWhereToBuy(db: Database, settings: WhereToBuySettings): void {
+  db.run("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", [
+    WHERE_TO_BUY_META_KEY,
+    serializeWhereToBuy(settings),
+  ]);
 }
 
 export function listImages(db: Database): CatalogImage[] {

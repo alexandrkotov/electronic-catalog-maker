@@ -829,6 +829,191 @@ td {
   background: #16a34a;
 }
 
+/* "Where to buy" (whereToBuy.ts): an outlined pill with a magnifier, so it
+   reads as "find" rather than "buy" next to (or instead of) .buy-btn. The
+   :hover/:focus-visible overrides repeat .buy-btn's specificity fix above. */
+.find-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  position: relative;
+  z-index: 21;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: pointer;
+}
+.find-btn svg {
+  width: 0.75rem;
+  height: 0.75rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.find-btn:hover:not(:disabled),
+.find-btn:focus-visible:not(:disabled) {
+  background: var(--bg-panel);
+  color: var(--accent);
+}
+
+.wtb-box {
+  width: 28rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  gap: 0.6rem;
+}
+.wtb-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.wtb-head h2 {
+  margin: 0;
+}
+.wtb-pn {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.wtb-copy {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+}
+.wtb-copy.done {
+  color: #16a34a;
+}
+.wtb-close {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--muted);
+  padding: 0 0.25rem;
+}
+.wtb-desc {
+  margin: -0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.wtb-alts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.wtb-chip {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.75rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+}
+.wtb-chip.on,
+.wtb-chip.on:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.wtb-warn {
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #fdba74;
+  border-radius: 6px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+:root[data-theme="dark"] .wtb-warn {
+  border-color: #9a3412;
+  background: #3b1d0a;
+  color: #fdba74;
+}
+.wtb-sites {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.wtb-site {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem;
+  border-radius: 6px;
+}
+.wtb-site:hover {
+  background: var(--bg-panel);
+}
+.wtb-logo {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: #64748b;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.wtb-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.wtb-kind {
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.wtb-kind kbd {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.66rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 0.25rem;
+}
+.wtb-go {
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.8rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.wtb-go:hover:not(:disabled),
+.wtb-go:focus-visible:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+  filter: brightness(1.1);
+}
+.wtb-go.done,
+.wtb-go.done:hover:not(:disabled) {
+  background: #16a34a;
+}
+.wtb-foot {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 tbody tr {
   cursor: pointer;
   user-select: none;

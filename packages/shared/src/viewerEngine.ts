@@ -49,6 +49,16 @@ import {
 } from "./quiz.js";
 import { isListMode, type CatalogImage, type CatalogLink, type CatalogMode, type CatalogRow, type KeyValueStorage } from "./types.js";
 import { buildViewerTools, createAgentToolsHandle, safeWebUrl, type ViewerAgentHost } from "./webmcp.js";
+import {
+  DEFAULT_WHERE_TO_BUY,
+  activeSites,
+  fillSearchUrl,
+  isDigitsOnlyPartNumber,
+  partNumbersForRow,
+  siteHomeUrl,
+  whereToBuyEnabled,
+  type WhereToBuySettings,
+} from "./whereToBuy.js";
 import type { Database, SqlJsStatic } from "sql.js";
 
 /**
@@ -706,6 +716,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // whole table on every state change — the DOM node the click happened on
   // won't exist anymore by the time the timeout fires.
   let copiedCell: { url: string; column: string } | null = null;
+  // "Where to buy" (see whereToBuy.ts): the catalog's settings, and the open
+  // popup — the row it was opened for and which of its numbers is searched.
+  // `copied` flashes "copied" on the number button (-1) or on a site's button
+  // (its index) after a click.
+  let whereToBuy: WhereToBuySettings = DEFAULT_WHERE_TO_BUY;
+  let whereToBuyOpen: { rowUrl: string; pn: string; copied: number | null } | null = null;
   // "Export PDF…" — see the `exportPdf` option's own doc for why this file
   // doesn't reach for pdfExport.ts directly. The options dialog asks the
   // two questions in PdfExportOptions before the actual export runs;
@@ -1444,6 +1460,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     cartIdPattern = loadedMeta.cartIdPattern;
     cartItemParam = loadedMeta.cartItemParam;
     cartCheckoutBaseUrl = loadedMeta.cartCheckoutBaseUrl;
+    whereToBuy = loadedMeta.whereToBuy;
+    whereToBuyOpen = null;
     // Resume a cart saved before the tab/app was closed (see actionToggleCart)
     // rather than always starting fresh — same sourceName+catalogName pair
     // must have been used to save it, so switching to a genuinely different
@@ -2961,6 +2979,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         ${mode === "full" && updateAddressBar ? renderShareViewDialog() : ""}
         ${renderPdfOptionsDialog()}
         ${renderAgentConfirmDialog()}
+        ${renderWhereToBuyDialog()}
     `;
 
     // catalog_mode "quiz": the question card is shrunk to the stage's width
@@ -3149,11 +3168,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         ? `<div class="showcase-nav"><button type="button" id="btn-showcase-prev" aria-label="${te("showcase.prev")}">‹</button><span>${te("nav.position", { index: at + 1, total: items.length })}</span><button type="button" id="btn-showcase-next" aria-label="${te("showcase.next")}">›</button></div>`
         : "";
     const inCart = cartItems.has(row.url);
-    const buyControl = !buyUrl
+    const buyOnly = !buyUrl
       ? ""
       : showcaseCart && cartMode === "accumulate"
         ? `<button type="button" class="buy-btn showcase-buy ${inCart ? "in-cart" : ""}" data-cart-url="${escapeHtml(row.url)}">${addLabel(inCart)}</button>`
         : `<a class="buy-btn showcase-buy" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer">${directOpenLabel()}</a>`;
+    const buyControl = withWhereToBuy(row, buyOnly);
     return `<section class="showcase-details" role="region" aria-label="${te("showcase.region")}" aria-live="polite">
       ${nav}
       ${renderShowcaseVerdict()}
@@ -3610,6 +3630,137 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     return `<button type="button" class="copy-cell-btn ${copied ? "copied" : ""}" data-copy-url="${escapeHtml(url)}" data-copy-column="${escapeHtml(column)}" aria-label="${copied ? te("copy.done") : te("copy.value")}"></button>`;
   }
 
+  /** The row's Buy control with the "Where to buy" button added next to it or in its place (see WhereToBuySettings.button). */
+  function withWhereToBuy(row: CatalogRow, buyControl: string): string {
+    if (!whereToBuyEnabled(whereToBuy) || partNumbersForRow(row, whereToBuy).length === 0) return buyControl;
+    const label = whereToBuy.label ? escapeHtml(whereToBuy.label) : te("wtb.button");
+    const find = `<button type="button" class="find-btn" data-wtb-url="${escapeHtml(row.url)}"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>${label}</button>`;
+    return whereToBuy.button === "both" && buyControl ? `${buyControl} ${find}` : find;
+  }
+
+  /** "Opens the site. Then press Ctrl+V and Enter" — the keys (or "paste" on a touch screen) the visitor needs on a site without a search link. */
+  function pasteHint(): string {
+    const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+    if (touch) return te("wtb.pasteHintTouch");
+    const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+    return te("wtb.pasteHint", { keys: mac ? "⌘V" : "Ctrl+V" })
+      .replace(/(⌘V|Ctrl\+V|Enter)/g, '<kbd>$1</kbd>');
+  }
+
+  function renderWhereToBuyDialog(): string {
+    if (!whereToBuyOpen || !db) return "";
+    const row = findRowByUrl(db, whereToBuyOpen.rowUrl);
+    if (!row) return "";
+    const numbers = partNumbersForRow(row, whereToBuy);
+    const pn = whereToBuyOpen.pn;
+    const mfr = whereToBuy.manufacturer;
+    const sites = activeSites(whereToBuy);
+    const chips =
+      numbers.length > 1
+        ? `<div class="wtb-alts"><span>${te("wtb.searchBy")}</span>${numbers
+            .map(
+              (n, i) =>
+                `<button type="button" class="wtb-chip ${n === pn ? "on" : ""}" data-wtb-pn="${escapeHtml(n)}" aria-pressed="${n === pn}">${escapeHtml(n)}${i === 0 ? "" : ` <small>${te("wtb.alt")}</small>`}</button>`,
+            )
+            .join("")}</div>`
+        : "";
+    const warning = isDigitsOnlyPartNumber(pn)
+      ? `<p class="wtb-warn">${mfr ? te("wtb.warnDigits", { mfr }) : te("wtb.warnDigitsNoMfr")}</p>`
+      : "";
+    const items = sites
+      .map((site, i) => {
+        const link = fillSearchUrl(site.searchUrl, pn, mfr);
+        const home = link ? null : siteHomeUrl(site);
+        if (!link && !home) return "";
+        const badge = `<span class="wtb-logo" ${site.color ? `style="background:${escapeHtml(site.color)}"` : ""} aria-hidden="true">${escapeHtml(site.name.slice(0, 2))}</span>`;
+        const sub = link ? escapeHtml(site.kind) : pasteHint();
+        const action = link
+          ? `<a class="wtb-go" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">${te("wtb.search")} ↗</a>`
+          : `<button type="button" class="wtb-go ${whereToBuyOpen!.copied === i ? "done" : ""}" data-wtb-site="${i}">${whereToBuyOpen!.copied === i ? te("wtb.numberCopied") : `${te("wtb.search")} ↗`}</button>`;
+        return `<li class="wtb-site">${badge}<div class="wtb-site-text"><div class="wtb-name">${escapeHtml(site.name)}</div>${sub ? `<div class="wtb-kind">${sub}</div>` : ""}</div>${action}</li>`;
+      })
+      .join("");
+    return `
+      <div class="open-overlay" id="wtb-overlay">
+        <div class="open-box wtb-box" role="dialog" aria-modal="true" aria-labelledby="wtb-title">
+          <div class="wtb-head">
+            <h2 id="wtb-title"><span class="wtb-pn">${escapeHtml(pn)}</span></h2>
+            <button type="button" class="wtb-copy ${whereToBuyOpen.copied === -1 ? "done" : ""}" id="wtb-copy">${whereToBuyOpen.copied === -1 ? te("copy.done") : te("wtb.copy")}</button>
+            <button type="button" class="wtb-close" id="wtb-close" aria-label="${te("wtb.close")}">×</button>
+          </div>
+          ${row.name || mfr ? `<p class="wtb-desc">${escapeHtml([row.name, mfr].filter(Boolean).join(" · "))}</p>` : ""}
+          ${chips}
+          ${warning}
+          <ul class="wtb-sites">${items}</ul>
+          <p class="wtb-foot">${te("wtb.disclaimer")}</p>
+        </div>
+      </div>`;
+  }
+
+  function actionOpenWhereToBuy(rowUrl: string) {
+    if (!db) return;
+    const row = findRowByUrl(db, rowUrl);
+    const numbers = row ? partNumbersForRow(row, whereToBuy) : [];
+    if (!numbers.length) return;
+    whereToBuyOpen = { rowUrl, pn: numbers[0]!, copied: null };
+    render();
+    (root.getElementById("wtb-close") as HTMLButtonElement | null)?.focus();
+  }
+
+  function actionCloseWhereToBuy() {
+    if (!whereToBuyOpen) return;
+    whereToBuyOpen = null;
+    render();
+  }
+
+  /** Copies synchronously-started (still inside the click), so a site opened right after doesn't take focus first. */
+  function copyNow(text: string): Promise<boolean> {
+    try {
+      if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text).then(() => true, () => false);
+    } catch {
+      // fall through to the selection fallback
+    }
+    const area = container.ownerDocument.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+    container.ownerDocument.body.appendChild(area);
+    area.select();
+    let ok = false;
+    try {
+      ok = container.ownerDocument.execCommand("copy");
+    } catch {
+      ok = false;
+    }
+    area.remove();
+    return Promise.resolve(ok);
+  }
+
+  function flashWhereToBuyCopied(which: number) {
+    if (!whereToBuyOpen) return;
+    whereToBuyOpen.copied = which;
+    render();
+    const opened = whereToBuyOpen;
+    setTimeout(() => {
+      if (whereToBuyOpen === opened && opened.copied === which) {
+        opened.copied = null;
+        render();
+      }
+    }, 2500);
+  }
+
+  function actionCopyAndOpenSite(index: number) {
+    if (!whereToBuyOpen) return;
+    const site = activeSites(whereToBuy)[index];
+    const home = site ? siteHomeUrl(site) : null;
+    if (!home) return;
+    const copying = copyNow(whereToBuyOpen.pn);
+    window.open(home, "_blank", "noopener,noreferrer");
+    void copying.then((ok) => {
+      if (ok) flashWhereToBuyCopied(index);
+    });
+  }
+
   function rowHtml(r: CatalogRow, selectedUrl: string | null): string {
     const selected = [r.url === selectedUrl ? "selected" : "", ...quizClasses(r.url)].filter(Boolean).join(" ");
     // A quiz hides everything but the option's own text until the question is
@@ -3641,6 +3792,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       // "instant" mode: no cart/collection at all — every link opens straight away.
       buyControl = `<a class="buy-btn" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer" title="${directOpenLabel()}">${directOpenLabel()}</a>`;
     }
+    buyControl = withWhereToBuy(r, buyControl);
     // Buy gets its own column (not appended after Extra's text) — sitting
     // right after variable-length extra text made its on-screen position
     // jump around row to row, and Extra's hover-expand tooltip would flash
@@ -3919,6 +4071,32 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         actionToggleCart(btn.dataset.cartUrl!);
       });
     });
+    root.querySelectorAll<HTMLButtonElement>(".find-btn[data-wtb-url]").forEach((btn) => {
+      btn.addEventListener("click", (evt) => {
+        evt.stopPropagation(); // don't also select the row/hotspot underneath
+        actionOpenWhereToBuy(btn.dataset.wtbUrl!);
+      });
+    });
+    root.getElementById("wtb-close")?.addEventListener("click", actionCloseWhereToBuy);
+    root.getElementById("wtb-overlay")?.addEventListener("click", (evt) => {
+      if ((evt.target as HTMLElement).id === "wtb-overlay") actionCloseWhereToBuy();
+    });
+    root.getElementById("wtb-copy")?.addEventListener("click", () => {
+      if (!whereToBuyOpen) return;
+      void copyNow(whereToBuyOpen.pn).then((ok) => {
+        if (ok) flashWhereToBuyCopied(-1);
+      });
+    });
+    root.querySelectorAll<HTMLButtonElement>(".wtb-chip[data-wtb-pn]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!whereToBuyOpen) return;
+        whereToBuyOpen = { ...whereToBuyOpen, pn: btn.dataset.wtbPn!, copied: null };
+        render();
+      });
+    });
+    root.querySelectorAll<HTMLButtonElement>(".wtb-go[data-wtb-site]").forEach((btn) => {
+      btn.addEventListener("click", () => actionCopyAndOpenSite(Number(btn.dataset.wtbSite)));
+    });
     root.getElementById("btn-cart")?.addEventListener("click", actionToggleCartPanel);
     root.querySelectorAll<HTMLButtonElement>(".cart-remove-btn[data-remove-url]").forEach((btn) => {
       btn.addEventListener("click", (evt) => {
@@ -4075,6 +4253,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   };
   root.addEventListener("keydown", onBookmarksDismiss);
   ownerDocument.addEventListener("click", onBookmarksDismiss);
+  // Esc closes the "Where to buy" popup wherever focus is (a re-render after
+  // picking another number drops focus out of the dialog).
+  const onWhereToBuyKey = (evt: KeyboardEvent) => {
+    if (evt.key === "Escape" && whereToBuyOpen) actionCloseWhereToBuy();
+  };
+  ownerDocument.addEventListener("keydown", onWhereToBuyKey);
 
   const booted = boot();
 
@@ -4097,6 +4281,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       root.removeEventListener("keydown", onRegionKey);
       root.removeEventListener("keydown", onBookmarksDismiss);
       ownerDocument.removeEventListener("click", onBookmarksDismiss);
+      ownerDocument.removeEventListener("keydown", onWhereToBuyKey);
       resizeObserver?.disconnect();
       quizObserverDisconnect?.();
       container.classList.remove("ecm-viewer-app", "mode-full", "mode-lite", "mode-showcase");

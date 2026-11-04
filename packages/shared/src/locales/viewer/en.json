@@ -151,6 +151,18 @@
 
   "copy.value": "Copy value",
   "copy.done": "Copied",
+  "wtb.button": "Where to buy",
+  "wtb.copy": "Copy number",
+  "wtb.close": "Close",
+  "wtb.searchBy": "Search by:",
+  "wtb.alt": "alt",
+  "wtb.warnDigits": "Number without a letter prefix. Other manufacturers use the same digits — on each site, check that the listing says {mfr}.",
+  "wtb.warnDigitsNoMfr": "Number without a letter prefix. Other manufacturers use the same digits — on each site, check the manufacturer.",
+  "wtb.search": "Search",
+  "wtb.pasteHint": "Opens the site. Then press {keys} and Enter",
+  "wtb.pasteHintTouch": "Opens the site. Then paste the number into its search box",
+  "wtb.numberCopied": "Number copied ✓",
+  "wtb.disclaimer": "Availability and prices are on each site. Make sure the part fits before you buy.",
 
   "remote.title": "Open remote catalog",
   "remote.urlLabel": "URL to a .{ext} file",

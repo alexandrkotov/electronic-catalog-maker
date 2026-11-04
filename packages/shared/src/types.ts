@@ -1,3 +1,5 @@
+import type { WhereToBuySettings } from "./whereToBuy.js";
+
 export interface CatalogImage {
   id: number;
   name: string;
@@ -114,6 +116,8 @@ export interface CatalogMeta {
    * (see viewerEngine.ts openBytes' mobileTab reset).
    */
   defaultView: "images" | "diagram" | "table";
+  /** The "Where to buy" row button and its list of sites — see whereToBuy.ts. Off unless the catalog sets it. */
+  whereToBuy: WhereToBuySettings;
 }
 
 /**

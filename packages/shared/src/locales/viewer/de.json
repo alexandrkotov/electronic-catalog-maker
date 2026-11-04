@@ -151,6 +151,18 @@
 
   "copy.value": "Wert kopieren",
   "copy.done": "Kopiert",
+  "wtb.button": "Wo kaufen",
+  "wtb.copy": "Nummer kopieren",
+  "wtb.close": "Schließen",
+  "wtb.searchBy": "Suchen nach:",
+  "wtb.alt": "alt.",
+  "wtb.warnDigits": "Nummer ohne Buchstaben-Präfix. Andere Hersteller nutzen dieselben Ziffern – prüf auf jeder Seite, dass {mfr} angegeben ist.",
+  "wtb.warnDigitsNoMfr": "Nummer ohne Buchstaben-Präfix. Andere Hersteller nutzen dieselben Ziffern – prüf auf jeder Seite den Hersteller.",
+  "wtb.search": "Suchen",
+  "wtb.pasteHint": "Öffnet die Seite. Dann {keys} und Enter drücken",
+  "wtb.pasteHintTouch": "Öffnet die Seite. Dann die Nummer in ihre Suche einfügen",
+  "wtb.numberCopied": "Nummer kopiert ✓",
+  "wtb.disclaimer": "Verfügbarkeit und Preise stehen auf den Seiten. Prüf vor dem Kauf, ob das Teil passt.",
 
   "remote.title": "Katalog von URL öffnen",
   "remote.urlLabel": "URL einer .{ext}-Datei",

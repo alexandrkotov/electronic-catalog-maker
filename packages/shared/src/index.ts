@@ -13,6 +13,7 @@ export * from "./images.js";
 export * from "./legacySch.js";
 export * from "./qrcode.js";
 export * from "./cart.js";
+export * from "./whereToBuy.js";
 export * from "./quiz.js";
 export * from "./navLink.js";
 export * from "./fileName.js";
