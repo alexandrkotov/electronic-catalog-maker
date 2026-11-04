@@ -279,11 +279,23 @@ interface UndoEntry {
   ops: UndoOp[];
   /** Records this entry must find untouched to be replayed safely; only tracked in a shared session. */
   needs: string[];
+  /**
+   * Which state of the catalog this entry stands for: on the undo stack, the
+   * state while it is on top; on the redo stack, the state redoing it brings
+   * back. An undo/redo hands it on to the mirrored entry, so returning to the
+   * state that was saved can clear the "●" on Save again (see markSaved).
+   */
+  point: number;
 }
 const UNDO_LIMIT = 100;
 let undoStack: UndoEntry[] = [];
 let redoStack: UndoEntry[] = [];
 let undoHistoryDb: Database | null = null;
+let lastHistoryPoint = 0;
+// The state when the undo stack is empty — moves up when the oldest entry falls off past UNDO_LIMIT.
+let basePoint = 0;
+// The state last written to (or read from) a file; null once that state can't be told apart any more.
+let savedPoint: number | null = 0;
 // The entry being built while an undo/redo replays — see recordUndo.
 let replayingEntry: UndoEntry | null = null;
 // ---------- live collaboration (Phase 2) ----------
@@ -841,7 +853,7 @@ function createNewCatalog() {
   if (name === null) return;
   db = createEmptyCatalog(SQL, name || t("catalog.untitled"));
   trackEvent("editor-new-catalog");
-  hasUnsavedChanges = false;
+  markSaved();
   activeImageId = null;
   openedFileHandle = null;
   resetTransientEditState();
@@ -891,7 +903,7 @@ async function openCatalogFromBytes(
       await new Promise((resolve) => setTimeout(resolve, 0));
       const result = await importSchCatalog(SQL, bytes, sourceName);
       db = result.db;
-      hasUnsavedChanges = false;
+      markSaved();
       activeImageId = currentImages()[0]?.id ?? null;
       openedFileHandle = null;
       openedFileStamp = null;
@@ -907,7 +919,7 @@ async function openCatalogFromBytes(
       );
     } else {
       db = openCatalog(SQL, bytes);
-      hasUnsavedChanges = false;
+      markSaved();
       const meta = readMeta(db);
       activeImageId = currentImages()[0]?.id ?? null;
       openedFileHandle = handle;
@@ -1302,7 +1314,7 @@ async function actionSave() {
 
   downloadBytes(bytes);
   trackEvent("editor-save");
-  hasUnsavedChanges = false;
+  markSaved();
   setStatus(t("status.downloadedCopy"));
 }
 
@@ -1335,7 +1347,7 @@ async function writeToOpenedHandle(bytes: Uint8Array) {
     const saved = await openedFileHandle.getFile();
     openedFileStamp = { size: saved.size, lastModified: saved.lastModified };
     trackEvent("editor-save");
-    hasUnsavedChanges = false;
+    markSaved();
     setStatus(t("status.saved", { name: openedFileHandle.name }));
   } catch (err) {
     setStatus(t("status.saveFailed", { message: (err as Error).message }));
@@ -1444,15 +1456,36 @@ function recordUndo(fnName: string, inverse: UndoOp[] | null, imageId: number | 
     replayingEntry.needs.push(...needs);
     return;
   }
-  undoStack.push({ label: fnName, imageId, ops: inverse, needs });
-  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+  undoStack.push({ label: fnName, imageId, ops: inverse, needs, point: ++lastHistoryPoint });
+  dropOldestUndoPastLimit();
   redoStack = [];
+}
+
+function dropOldestUndoPastLimit() {
+  if (undoStack.length > UNDO_LIMIT) basePoint = undoStack.shift()!.point;
 }
 
 function clearUndoHistory() {
   undoStack = [];
   redoStack = [];
   undoHistoryDb = null;
+  basePoint = ++lastHistoryPoint; // unknown from here on, so never equal to the saved state
+}
+
+/** The catalog's current state in history terms; null when the history belongs to another database. */
+function currentHistoryPoint(): number | null {
+  if (undoHistoryDb !== db) return null;
+  return undoStack[undoStack.length - 1]?.point ?? basePoint;
+}
+
+/** The catalog in memory now matches a file (just saved, opened or created empty). */
+function markSaved() {
+  hasUnsavedChanges = false;
+  if (undoHistoryDb !== db) {
+    clearUndoHistory(); // a different database: start its history here
+    undoHistoryDb = db;
+  }
+  savedPoint = currentHistoryPoint();
 }
 
 /**
@@ -1528,7 +1561,7 @@ function replayHistory(direction: "undo" | "redo") {
   if (!db) return;
   const entry = (direction === "undo" ? undoStack : redoStack).pop();
   if (!entry) return;
-  const mirrored: UndoEntry = { label: entry.label, imageId: entry.imageId, ops: [], needs: [] };
+  const mirrored: UndoEntry = { label: entry.label, imageId: entry.imageId, ops: [], needs: [], point: entry.point };
   replayingEntry = mirrored;
   try {
     for (const op of entry.ops) {
@@ -1543,14 +1576,21 @@ function replayHistory(direction: "undo" | "redo") {
   } catch (err) {
     // Halfway through: neither stack describes the database any more.
     clearUndoHistory();
+    savedPoint = null;
     setStatus(t("undo.failed", { message: (err as Error).message }));
     return;
   } finally {
     replayingEntry = null;
   }
-  const target = direction === "undo" ? redoStack : undoStack;
-  target.push(mirrored);
-  if (target.length > UNDO_LIMIT) target.shift();
+  if (direction === "undo") {
+    redoStack.push(mirrored);
+    if (redoStack.length > UNDO_LIMIT) redoStack.shift();
+  } else {
+    undoStack.push(mirrored);
+    dropOldestUndoPastLimit();
+  }
+  // Undoing back to what was saved leaves nothing unsaved (shareOp marked every replayed edit).
+  hasUnsavedChanges = savedPoint === null || currentHistoryPoint() !== savedPoint;
 
   pendingHotspot = null;
   editingLinkId = null;
@@ -1684,6 +1724,7 @@ function applyRemoteOp(op: Op) {
   }
   lastAppliedSeq = op.seq;
   hasUnsavedChanges = true; // this copy now differs from any file it was opened from — matters once the session is left
+  savedPoint = null; // someone else's edit: undoing ours no longer gets back to the saved state
   render();
 }
 
@@ -2015,7 +2056,7 @@ async function actionJoinCollaboration(roomId: string) {
   try {
     const bytes = await downloadSnapshot(collabServerUrl, roomId);
     db = openCatalog(SQL, bytes);
-    hasUnsavedChanges = false;
+    markSaved();
     activeImageId = currentImages()[0]?.id ?? null;
     openedFileHandle = null;
     openedFileStamp = null;
