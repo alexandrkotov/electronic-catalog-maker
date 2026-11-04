@@ -9,8 +9,10 @@ import {
   fillSearchUrl,
   isDigitsOnlyPartNumber,
   parseWhereToBuy,
+  parseWhereToBuySites,
   partNumbersForRow,
   serializeWhereToBuy,
+  serializeWhereToBuySites,
   siteHomeUrl,
   whereToBuyEnabled,
   type WhereToBuySettings,
@@ -117,6 +119,19 @@ describe("digits-only warning", () => {
     expect(isDigitsOnlyPartNumber("74-349")).toBe(true);
     expect(isDigitsOnlyPartNumber("AX-12441")).toBe(false);
     expect(isDigitsOnlyPartNumber("STD-1732")).toBe(false);
+  });
+});
+
+describe("sites file", () => {
+  test("round-trips the list", () => {
+    expect(parseWhereToBuySites(serializeWhereToBuySites(settings.sites))).toEqual(settings.sites);
+  });
+
+  test("accepts a bare array and rejects files without a usable site", () => {
+    expect(parseWhereToBuySites(JSON.stringify([{ name: "Shop" }]))?.map((s) => s.name)).toEqual(["Shop"]);
+    expect(parseWhereToBuySites("not json")).toBeNull();
+    expect(parseWhereToBuySites(JSON.stringify({ sites: [{ name: "" }] }))).toBeNull();
+    expect(parseWhereToBuySites(JSON.stringify({ format: "other" }))).toBeNull();
   });
 });
 

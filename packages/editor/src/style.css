@@ -941,6 +941,154 @@ td.extra-cell {
   gap: 0.5rem;
 }
 
+/* Store settings dialog tabs: "Store" and "Where to buy". */
+.settings-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  margin: 0 0 0.75rem;
+}
+
+.settings-tabs button,
+.settings-tabs button:hover:not(:disabled),
+.settings-tabs button:focus-visible:not(:disabled) {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.35rem 0.75rem;
+  margin-bottom: -1px;
+}
+
+.settings-tabs button:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.settings-tabs button.on,
+.settings-tabs button.on:hover:not(:disabled) {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.wtb-intro {
+  margin: 0 0 0.75rem;
+  max-width: 22rem;
+}
+
+.wtb-site-list {
+  list-style: none;
+  margin: 0.2rem 0 0.4rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.wtb-site-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.45rem;
+  border-top: 1px solid var(--border);
+}
+
+.wtb-site-row:first-child {
+  border-top: 0;
+}
+
+.wtb-site-row.off .wtb-site-text {
+  opacity: 0.45;
+}
+
+.wtb-swatch {
+  flex: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 3px;
+}
+
+.wtb-site-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.wtb-site-name {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.wtb-site-url {
+  font-size: 0.7rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wtb-site-btns {
+  flex: none;
+  display: flex;
+  gap: 0.2rem;
+}
+
+.wtb-site-btns button {
+  padding: 0.1rem 0.4rem;
+  font-size: 0.75rem;
+}
+
+.wtb-site-edit {
+  padding: 0.5rem 0.6rem 0.6rem;
+  border-top: 1px dashed var(--border);
+  background: var(--bg-elevated);
+}
+
+.confirm-box .wtb-site-edit .field {
+  width: auto;
+}
+
+.wtb-site-edit input[type="color"] {
+  width: 3rem;
+  height: 1.8rem;
+  padding: 0.1rem;
+}
+
+.wtb-list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.3rem;
+}
+
+.wtb-hint-warn {
+  color: #b45309;
+}
+
+:root[data-theme="dark"] .wtb-hint-warn {
+  color: #fbbf24;
+}
+
+.wtb-try-list {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  max-width: 22rem;
+}
+
+.wtb-try-list li {
+  padding: 0.15rem 0;
+  overflow-wrap: anywhere;
+}
+
+.wtb-try-list b {
+  color: var(--text);
+  font-weight: 600;
+}
+
 /* "Share this session" dialog (item 6 of the backlog) — the QR's own SVG
    already paints its white background/quiet zone (see renderQrCodeSvg),
    this just centers it and gives it breathing room against the card

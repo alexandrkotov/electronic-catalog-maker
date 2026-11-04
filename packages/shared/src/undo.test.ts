@@ -24,6 +24,7 @@ import {
   updateLinkPosition,
   updateRow,
   updateStoreSettings,
+  updateWhereToBuy,
   type UndoOp,
 } from "./index.js";
 
@@ -41,6 +42,7 @@ const HANDLERS: Record<string, (db: Database, ...args: never[]) => unknown> = {
   updateRow,
   deleteRow,
   updateStoreSettings,
+  updateWhereToBuy,
 };
 
 /** Applies an op and returns the ops that undo it, the way the editor does. */
@@ -85,6 +87,7 @@ function seeded() {
 describe("undo capture round-trips through the db functions", () => {
   test.each([
     ["updateStoreSettings", (s: ReturnType<typeof seeded>) => ["updateStoreSettings", { catalogMode: "shop", storeUrl: "https://x.test", cartMode: "instant", cartIdPattern: "a", cartItemParam: "b", cartCheckoutBaseUrl: "c", defaultView: "table" }]],
+    ["updateWhereToBuy", () => ["updateWhereToBuy", { button: "replace", partNumber: "sku", altKey: "alt", manufacturer: "Acme", label: "Find", sites: [{ name: "Shop", kind: "", color: "", home: "https://shop.example.com/", searchUrl: "", enabled: true }] }]],
     ["updateImage", (s: ReturnType<typeof seeded>) => ["updateImage", s.img, { name: "Renamed", folder: "", fitOnOpen: true }]],
     ["updateLink name", (s: ReturnType<typeof seeded>) => ["updateLink", s.l1, { name: "renamed", url: "p-1" }]],
     ["updateLink url, row follows", (s: ReturnType<typeof seeded>) => ["updateLink", s.l3, { name: "nut", url: "p-9" }]],

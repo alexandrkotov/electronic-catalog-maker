@@ -79,6 +79,18 @@ import {
   updateLinkPosition,
   updateRow,
   updateStoreSettings,
+  updateWhereToBuy,
+  DEFAULT_WHERE_TO_BUY,
+  activeSites,
+  fillSearchUrl,
+  isDigitsOnlyPartNumber,
+  parseWhereToBuy,
+  parseWhereToBuySites,
+  serializeWhereToBuy,
+  serializeWhereToBuySites,
+  siteHomeUrl,
+  type WhereToBuySettings,
+  type WhereToBuySite,
   type CatalogImage,
   type CatalogLink,
   type CatalogRow,
@@ -350,6 +362,15 @@ let storeSettingsCartCheckoutBaseUrl = DEFAULT_CART_CHECKOUT_BASE_URL;
 // Which single panel a fresh open of this catalog starts on, below the
 // mobile-tab breakpoint — see CatalogMeta.defaultView.
 let storeSettingsDefaultView: "images" | "diagram" | "table" = "images";
+// The same dialog's second tab, "Where to buy" — edits the where_to_buy meta
+// (see shared whereToBuy.ts): a row button that opens a list of sites to
+// search the part number on. The editor ships no site list of its own; sites
+// are typed in or loaded from a file with "Import list…", and "Export
+// list…" saves them for the next catalog.
+let storeSettingsTab: "store" | "wtb" = "store";
+let wtbDraft: WhereToBuySettings = structuredClone(DEFAULT_WHERE_TO_BUY);
+let wtbEditingSite: number | null = null;
+let wtbTryNumber = "";
 
 // "Can't find a collaboration server" dialog — shown when
 // actionStartCollaboration()'s auto-detect (see detectLocalCollabServer)
@@ -993,6 +1014,10 @@ function actionOpenStoreSettings() {
   storeSettingsCartItemParam = meta.cartItemParam;
   storeSettingsCartCheckoutBaseUrl = meta.cartCheckoutBaseUrl;
   storeSettingsDefaultView = meta.defaultView;
+  storeSettingsTab = "store";
+  wtbDraft = structuredClone(meta.whereToBuy);
+  wtbEditingSite = null;
+  wtbTryNumber = "";
   storeSettingsOpen = true;
   render();
 }
@@ -1004,7 +1029,8 @@ function actionCancelStoreSettings() {
 
 function actionSubmitStoreSettings() {
   if (!db) return;
-  applyAndBroadcast("updateStoreSettings", updateStoreSettings, {
+  const meta = readMeta(db);
+  const store = {
     catalogMode: storeSettingsCatalogMode,
     storeUrl: storeSettingsUrlValue.trim(),
     cartMode: storeSettingsCartMode,
@@ -1012,7 +1038,17 @@ function actionSubmitStoreSettings() {
     cartItemParam: storeSettingsCartItemParam.trim() || DEFAULT_CART_ITEM_PARAM,
     cartCheckoutBaseUrl: storeSettingsCartCheckoutBaseUrl.trim() || DEFAULT_CART_CHECKOUT_BASE_URL,
     defaultView: storeSettingsDefaultView,
-  });
+  };
+  // Each tab is its own edit, saved only when it changed — so one Ctrl+Z
+  // undoes what was actually changed, not an empty step for the other tab.
+  if ((Object.keys(store) as (keyof typeof store)[]).some((k) => store[k] !== meta[k])) {
+    applyAndBroadcast("updateStoreSettings", updateStoreSettings, store);
+  }
+  // Round-tripped through the parser: trims fields and drops sites left without a name.
+  const wtb = parseWhereToBuy(serializeWhereToBuy(wtbDraft));
+  if (serializeWhereToBuy(wtb) !== serializeWhereToBuy(meta.whereToBuy)) {
+    applyAndBroadcast("updateWhereToBuy", updateWhereToBuy, wtb);
+  }
   storeSettingsOpen = false;
   setStatus(t("store.updated"));
 }
@@ -1328,6 +1364,7 @@ const OP_HANDLERS: Record<string, (db: Database, ...args: never[]) => unknown> =
   updateRow,
   deleteRow,
   updateStoreSettings,
+  updateWhereToBuy,
 };
 
 /**
@@ -1573,6 +1610,8 @@ function opTarget(fn: string, args: unknown[]): string | null {
       return `images:${args[0]}`;
     case "updateStoreSettings":
       return "storeSettings"; // catalog-wide, not keyed by id
+    case "updateWhereToBuy":
+      return "whereToBuy";
     case "addRow":
       return `rows:url:${(args[0] as { url: string }).url}`;
     default:
@@ -1709,6 +1748,8 @@ function describeOp(fn: string, args: unknown[]): string {
       const input = args[0] as { storeUrl: string };
       return t("op.storeSettings", { url: input.storeUrl });
     }
+    case "updateWhereToBuy":
+      return t("op.whereToBuy");
     default:
       return fn;
   }
@@ -3379,10 +3420,17 @@ function renderStoreSettingsDialog(): string {
   // (see actionPrintCollection/actionOpenCart in viewerEngine.ts: every
   // Education-mode link opens/prints on its own regardless of this recipe).
   return `
-    <div class="confirm-overlay">
+    <div class="confirm-overlay" id="store-settings-overlay">
       <div class="confirm-box">
         <h2>${te("store.title")}</h2>
-        <div class="field">
+        <div class="settings-tabs" role="tablist">
+          <button type="button" role="tab" data-settings-tab="store" aria-selected="${storeSettingsTab === "store"}" class="${storeSettingsTab === "store" ? "on" : ""}">${te("store.tab.store")}</button>
+          <button type="button" role="tab" data-settings-tab="wtb" aria-selected="${storeSettingsTab === "wtb"}" class="${storeSettingsTab === "wtb" ? "on" : ""}">${te("store.tab.wtb")}</button>
+        </div>
+        ${
+          storeSettingsTab === "wtb"
+            ? renderWhereToBuyPane()
+            : `<div class="field">
           <label>${te("store.type.legend")}</label>
           <label class="radio-option">
             <input type="radio" name="catalog-mode" value="commercial" ${!isEducation && !isFitness && !isBooking && !isQuiz ? "checked" : ""} />
@@ -3460,7 +3508,8 @@ function renderStoreSettingsDialog(): string {
             ${te("store.view.table")}
           </label>
           <p class="hint">${te("store.view.hint")}</p>
-        </div>
+        </div>`
+        }
         <div class="confirm-actions">
           <button id="store-settings-cancel">${te("action.cancel")}</button>
           <button id="store-settings-submit">${te("action.save")}</button>
@@ -3468,6 +3517,250 @@ function renderStoreSettingsDialog(): string {
       </div>
     </div>
   `;
+}
+
+/** The "Where to buy" tab of the store settings dialog — see wtbDraft. */
+function renderWhereToBuyPane(): string {
+  const d = wtbDraft;
+  const extraKeys = db ? collectExtraKeys(listAllRows(db)) : [];
+  const sources: [string, string][] = [
+    ["sku", skuLabel()],
+    ["name", t("column.name")],
+    ["url", t("column.address")],
+    ...extraKeys.map((k): [string, string] => [`extra:${k}`, t("wtb.pn.extra", { key: k })]),
+  ];
+  if (!sources.some(([v]) => v === d.partNumber)) sources.push([d.partNumber, t("wtb.pn.extra", { key: d.partNumber.slice("extra:".length) })]);
+  const radio = (value: WhereToBuySettings["button"], key: string) =>
+    `<label class="radio-option"><input type="radio" name="wtb-button" value="${value}" ${d.button === value ? "checked" : ""} /> ${te(key)}</label>`;
+  const sites = d.sites.map((site, i) => renderWhereToBuySiteRow(site, i, d.sites.length)).join("");
+  return `
+    <p class="hint wtb-intro">${te("wtb.intro")}</p>
+    <div class="field">
+      <label>${te("wtb.button.legend")}</label>
+      ${radio("replace", "wtb.button.replace")}
+      ${radio("both", "wtb.button.both")}
+      ${radio("off", "wtb.button.off")}
+    </div>
+    <div class="field">
+      <label for="wtb-pn">${te("wtb.pn.label")}</label>
+      <select id="wtb-pn">${sources.map(([v, label]) => `<option value="${escapeHtml(v)}" ${v === d.partNumber ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}</select>
+    </div>
+    <div class="field">
+      <label for="wtb-alt">${te("wtb.alt.label")}</label>
+      <input type="text" id="wtb-alt" list="wtb-extra-keys" value="${escapeHtml(d.altKey)}" />
+      <datalist id="wtb-extra-keys">${extraKeys.map((k) => `<option value="${escapeHtml(k)}"></option>`).join("")}</datalist>
+    </div>
+    <div class="field">
+      <label for="wtb-mfr">${te("wtb.mfr.label", { mfr: "{mfr}" })}</label>
+      <input type="text" id="wtb-mfr" value="${escapeHtml(d.manufacturer)}" />
+    </div>
+    <div class="field">
+      <label for="wtb-label">${te("wtb.label.label")}</label>
+      <input type="text" id="wtb-label" value="${escapeHtml(d.label)}" placeholder="${te("wtb.label.placeholder")}" />
+    </div>
+    <div class="field">
+      <label>${te("wtb.sites.legend")}</label>
+      ${sites ? `<ul class="wtb-site-list">${sites}</ul>` : `<p class="hint">${te("wtb.sites.empty")}</p>`}
+      <div class="wtb-list-actions">
+        <button type="button" id="wtb-add">${te("wtb.add")}</button>
+        <button type="button" id="wtb-import">${te("wtb.import")}</button>
+        <button type="button" id="wtb-export" ${d.sites.length ? "" : "disabled"}>${te("wtb.export")}</button>
+        <input type="file" id="wtb-import-file" accept=".json,application/json" hidden />
+      </div>
+      <p class="hint">${te("wtb.placeholders", { pn: "{pn}", nodash: "{pn_nodash}", lower: "{pn_lower}", mfr: "{mfr}" })}</p>
+      ${d.button !== "off" && activeSites(d).length === 0 ? `<p class="hint wtb-hint-warn">${te("wtb.noSites")}</p>` : ""}
+    </div>
+    <div class="field">
+      <label for="wtb-try">${te("wtb.try.label")}</label>
+      <input type="text" id="wtb-try" value="${escapeHtml(wtbTryNumber)}" placeholder="${escapeHtml(sampleWhereToBuyNumber())}" />
+      <div id="wtb-try-out">${renderWhereToBuyTryOut()}</div>
+    </div>
+  `;
+}
+
+function renderWhereToBuySiteRow(site: WhereToBuySite, i: number, count: number): string {
+  const editing = wtbEditingSite === i;
+  const summary = site.searchUrl ? escapeHtml(site.searchUrl) : te("wtb.site.noSearch", { home: site.home || "—" });
+  const row = `
+    <li class="wtb-site-row ${site.enabled ? "" : "off"}">
+      <input type="checkbox" data-wtb-on="${i}" ${site.enabled ? "checked" : ""} aria-label="${te("wtb.site.enabled")}" />
+      <span class="wtb-swatch" style="background:${escapeHtml(site.color || "var(--muted)")}"></span>
+      <span class="wtb-site-text">
+        <span class="wtb-site-name">${site.name.trim() ? escapeHtml(site.name) : te("wtb.site.unnamed")}</span>
+        <span class="wtb-site-url">${summary}</span>
+      </span>
+      <span class="wtb-site-btns">
+        <button type="button" data-wtb-move="${i}" data-dir="-1" aria-label="${te("wtb.site.up")}" ${i === 0 ? "disabled" : ""}>↑</button>
+        <button type="button" data-wtb-move="${i}" data-dir="1" aria-label="${te("wtb.site.down")}" ${i === count - 1 ? "disabled" : ""}>↓</button>
+        <button type="button" data-wtb-edit="${i}">${te(editing ? "wtb.site.done" : "wtb.site.edit")}</button>
+      </span>
+    </li>`;
+  if (!editing) return row;
+  const field = (key: keyof WhereToBuySite, labelKey: string, placeholder = "") =>
+    `<div class="field"><label>${te(labelKey)}</label><input type="text" data-wtb-field="${key}" data-wtb-i="${i}" value="${escapeHtml(String(site[key]))}" ${placeholder ? `placeholder="${escapeHtml(placeholder)}"` : ""} /></div>`;
+  return `${row}
+    <li class="wtb-site-edit">
+      ${field("name", "wtb.site.name")}
+      ${field("kind", "wtb.site.kind")}
+      <div class="field"><label>${te("wtb.site.color")}</label><input type="color" data-wtb-field="color" data-wtb-i="${i}" value="${escapeHtml(site.color || "#64748b")}" /></div>
+      ${field("searchUrl", "wtb.site.searchUrl", "https://example.com/search?q={pn}")}
+      ${field("home", "wtb.site.home", "https://example.com/")}
+      <button type="button" data-wtb-remove="${i}">${te("wtb.site.remove")}</button>
+    </li>`;
+}
+
+/** The first part number in the catalog under the chosen column — the "Try a number" placeholder. */
+function sampleWhereToBuyNumber(): string {
+  if (!db) return "";
+  const src = wtbDraft.partNumber;
+  for (const row of listAllRows(db)) {
+    const v = (src.startsWith("extra:") ? row.extra[src.slice("extra:".length)] : row[src as "sku" | "name" | "url"]) ?? "";
+    if (v.trim()) return v.trim();
+  }
+  return "";
+}
+
+/** What the viewer's popup would offer for the number typed in "Try a number" (or the sample one). */
+function renderWhereToBuyTryOut(): string {
+  const pn = wtbTryNumber.trim() || sampleWhereToBuyNumber();
+  const sites = activeSites(wtbDraft);
+  if (!pn || sites.length === 0) return "";
+  const items = sites
+    .map((site) => {
+      const link = fillSearchUrl(site.searchUrl, pn, wtbDraft.manufacturer.trim());
+      const home = siteHomeUrl(site);
+      const what = link
+        ? `<a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(link)}</a>`
+        : home
+          ? te("wtb.site.noSearch", { home })
+          : `<span class="wtb-hint-warn">${te("wtb.try.noLink")}</span>`;
+      return `<li><b>${escapeHtml(site.name)}</b> ${what}</li>`;
+    })
+    .join("");
+  const warn = isDigitsOnlyPartNumber(pn) ? `<p class="hint wtb-hint-warn">${te("wtb.try.digits")}</p>` : "";
+  return `${warn}<ul class="wtb-try-list">${items}</ul>`;
+}
+
+/** Re-renders after a list change without jumping the dialog back to its top. */
+function renderKeepingSettingsScroll() {
+  const top = document.getElementById("store-settings-overlay")?.scrollTop ?? 0;
+  render();
+  const overlay = document.getElementById("store-settings-overlay");
+  if (overlay) overlay.scrollTop = top;
+}
+
+function refreshWhereToBuyTryOut() {
+  const out = document.getElementById("wtb-try-out");
+  if (out) out.innerHTML = renderWhereToBuyTryOut();
+}
+
+async function actionImportWhereToBuySites(file: File) {
+  const sites = parseWhereToBuySites(await file.text());
+  if (!sites) {
+    setStatus(t("wtb.importFailed", { file: file.name }));
+    return;
+  }
+  wtbDraft = { ...wtbDraft, sites, button: wtbDraft.button === "off" ? "replace" : wtbDraft.button };
+  wtbEditingSite = null;
+  statusMessage = t("wtb.imported", { file: file.name, count: sites.length });
+  renderKeepingSettingsScroll();
+}
+
+function actionExportWhereToBuySites() {
+  const blob = new Blob([serializeWhereToBuySites(wtbDraft.sites)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "where-to-buy-sites.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function wireWhereToBuyPane() {
+  const d = wtbDraft;
+  document.querySelectorAll<HTMLInputElement>('input[name="wtb-button"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      if (!radio.checked) return;
+      d.button = radio.value as WhereToBuySettings["button"];
+      renderKeepingSettingsScroll(); // shows/hides the "no sites" hint
+    });
+  });
+  const pnSelect = document.getElementById("wtb-pn") as HTMLSelectElement | null;
+  pnSelect?.addEventListener("change", () => {
+    d.partNumber = pnSelect.value as WhereToBuySettings["partNumber"];
+    renderKeepingSettingsScroll(); // the sample number follows the column
+  });
+  const text = (id: string, set: (v: string) => void) => {
+    const input = document.getElementById(id) as HTMLInputElement | null;
+    input?.addEventListener("input", () => {
+      set(input.value);
+      refreshWhereToBuyTryOut();
+    });
+  };
+  text("wtb-alt", (v) => (d.altKey = v));
+  text("wtb-mfr", (v) => (d.manufacturer = v));
+  text("wtb-label", (v) => (d.label = v));
+  text("wtb-try", (v) => (wtbTryNumber = v));
+  document.querySelectorAll<HTMLInputElement>("[data-wtb-on]").forEach((box) => {
+    box.addEventListener("change", () => {
+      const site = d.sites[Number(box.dataset.wtbOn)];
+      if (!site) return;
+      site.enabled = box.checked;
+      box.closest(".wtb-site-row")?.classList.toggle("off", !box.checked);
+      refreshWhereToBuyTryOut();
+    });
+  });
+  document.querySelectorAll<HTMLButtonElement>("[data-wtb-move]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.wtbMove);
+      const j = i + Number(btn.dataset.dir);
+      if (j < 0 || j >= d.sites.length) return;
+      [d.sites[i], d.sites[j]] = [d.sites[j]!, d.sites[i]!];
+      if (wtbEditingSite === i) wtbEditingSite = j;
+      else if (wtbEditingSite === j) wtbEditingSite = i;
+      renderKeepingSettingsScroll();
+    });
+  });
+  document.querySelectorAll<HTMLButtonElement>("[data-wtb-edit]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.wtbEdit);
+      wtbEditingSite = wtbEditingSite === i ? null : i;
+      renderKeepingSettingsScroll();
+    });
+  });
+  document.querySelectorAll<HTMLInputElement>("[data-wtb-field]").forEach((input) => {
+    input.addEventListener("input", () => {
+      const site = d.sites[Number(input.dataset.wtbI)];
+      const key = input.dataset.wtbField as "name" | "kind" | "color" | "searchUrl" | "home";
+      if (!site) return;
+      site[key] = input.value;
+      // Keep the summary line above the open editor in step while typing.
+      const row = input.closest(".wtb-site-edit")?.previousElementSibling;
+      if (key === "name") row?.querySelector(".wtb-site-name")?.replaceChildren(input.value.trim() || t("wtb.site.unnamed"));
+      if (key === "color") (row?.querySelector(".wtb-swatch") as HTMLElement | null)?.style.setProperty("background", input.value);
+      if (key === "searchUrl" || key === "home") row?.querySelector(".wtb-site-url")?.replaceChildren(site.searchUrl || t("wtb.site.noSearch", { home: site.home || "—" }));
+      refreshWhereToBuyTryOut();
+    });
+  });
+  document.querySelectorAll<HTMLButtonElement>("[data-wtb-remove]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      d.sites.splice(Number(btn.dataset.wtbRemove), 1);
+      wtbEditingSite = null;
+      renderKeepingSettingsScroll();
+    });
+  });
+  document.getElementById("wtb-add")?.addEventListener("click", () => {
+    d.sites.push({ name: "", kind: "", color: "", home: "", searchUrl: "", enabled: true });
+    wtbEditingSite = d.sites.length - 1;
+    renderKeepingSettingsScroll();
+    (document.querySelector(`[data-wtb-field="name"][data-wtb-i="${wtbEditingSite}"]`) as HTMLInputElement | null)?.focus();
+  });
+  const fileInput = document.getElementById("wtb-import-file") as HTMLInputElement | null;
+  document.getElementById("wtb-import")?.addEventListener("click", () => fileInput?.click());
+  fileInput?.addEventListener("change", () => {
+    const file = fileInput.files?.[0];
+    if (file) void actionImportWhereToBuySites(file);
+  });
+  document.getElementById("wtb-export")?.addEventListener("click", actionExportWhereToBuySites);
 }
 
 /** "Export PDF…" options — see pdfOptionsDialogOpen's own doc; asked every time so a per-export choice (e.g. "real-size" for one especially dense diagram) doesn't linger unnoticed into the next, ordinary export. The QR placement question is grayed out entirely when the open catalog has no buy_url anywhere — there's nothing for any of the three choices to affect. */
@@ -4189,6 +4482,13 @@ function wireEvents(links: CatalogLink[]) {
   cartBaseUrlInput?.addEventListener("input", () => {
     storeSettingsCartCheckoutBaseUrl = cartBaseUrlInput.value;
   });
+  document.querySelectorAll<HTMLButtonElement>("[data-settings-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      storeSettingsTab = btn.dataset.settingsTab === "wtb" ? "wtb" : "store";
+      render();
+    });
+  });
+  if (storeSettingsOpen && storeSettingsTab === "wtb") wireWhereToBuyPane();
   if (storeSettingsOpen) {
     storeUrlInput?.focus();
     storeUrlInput?.setSelectionRange(storeUrlInput.value.length, storeUrlInput.value.length);

@@ -182,3 +182,34 @@ function safeHttpUrl(url: string): string | null {
 export function isDigitsOnlyPartNumber(pn: string): boolean {
   return /^\d[\d\s-]*$/.test(pn.trim());
 }
+
+/** `format` of a standalone sites file — the editor's "Export list…"/"Import list…". */
+export const WHERE_TO_BUY_SITES_FORMAT = "tapalog-aggregator-sites";
+
+/**
+ * A sites list on its own, to keep outside any catalog and load into another
+ * one. Only `sites` is read back; the rest is there for a person opening it.
+ */
+export function serializeWhereToBuySites(sites: WhereToBuySite[]): string {
+  const file = {
+    format: WHERE_TO_BUY_SITES_FORMAT,
+    version: 1,
+    placeholders: { "{pn}": "part number as written", "{pn_nodash}": "without dashes/spaces", "{pn_lower}": "lower case", "{mfr}": "manufacturer" },
+    sites,
+  };
+  return `${JSON.stringify(file, null, 2)}\n`;
+}
+
+/** Reads a sites file (or a bare array of sites); null when it holds no usable site. */
+export function parseWhereToBuySites(json: string): WhereToBuySite[] | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return null;
+  }
+  const list = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" ? (parsed as { sites?: unknown }).sites : null;
+  if (!Array.isArray(list)) return null;
+  const sites = list.map(readSite).filter((s): s is WhereToBuySite => s !== null);
+  return sites.length ? sites : null;
+}

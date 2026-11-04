@@ -61,6 +61,8 @@ export function captureUndoBefore(db: Database, fn: string, args: unknown[]): Un
         },
       ];
     }
+    case "updateWhereToBuy":
+      return [{ fn, args: [readMeta(db).whereToBuy] }];
     case "updateImage": {
       const image = getImage(db, args[0] as number);
       if (!image) return [];
@@ -138,7 +140,7 @@ export function captureUndoBefore(db: Database, fn: string, args: unknown[]): Un
  * Keys name records, not values: `link:7`, `row:3`, `image:2` (the image
  * exists), `imageprops:2` (its name/folder), `content:2` (which hotspots and
  * rows it holds), `url:p-100` (which hotspots sit on that url) and
- * `rowurl:p-100` (whether a data row sits there — only one can), `settings`.
+ * `rowurl:p-100` (whether a data row sits there — only one can), `settings`, `wheretobuy`.
  *
  * Read from `db` before the edit runs (an add carries everything it needs
  * in its input, which must already have its id). Edits of different records
@@ -231,6 +233,9 @@ export function opFootprint(db: Database, fn: string, args: unknown[]): OpFootpr
     }
     case "updateStoreSettings":
       both("settings");
+      break;
+    case "updateWhereToBuy":
+      both("wheretobuy");
       break;
   }
   return { writes, needs };
