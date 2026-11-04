@@ -34,6 +34,7 @@ import { catalogFileStem } from "./fileName.js";
 import { createTranslator, matchLocale, type MessageParams, type Translate } from "./i18n.js";
 import { VIEWER_LOCALES, VIEWER_LOCALE_NAMES, viewerMessages } from "./locales/viewer/index.js";
 import { bookmarksStorageKey, localBookmarkStore, type Bookmark, type BookmarkStore } from "./bookmarks.js";
+import { BUY_VARIANTS_KEY, catalogHasAnyBuyTarget, expandVariantRows, parseBuyVariants, variantCartKey } from "./buyVariants.js";
 import { buildCartCheckoutUrl, cartStorageKey, catalogHasAnyBuyUrl, loadPersistedCart, parseCartItemId, savePersistedCart } from "./cart.js";
 import { DEFAULT_PDF_EXPORT_OPTIONS, suggestedQrSize, type DiagramPageMode, type PdfContent, type PdfExportOptions, type QrPlacement, type QrSize } from "./pdfExportOptions.js";
 import {
@@ -583,7 +584,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // closing the tab/app entirely — the point being someone can add parts
   // while fully offline and check out later once back in range, without
   // needing to keep the page open the whole time in between.
-  let cartItems = new Set<string>(); // row urls
+  let cartItems = new Set<string>(); // row urls (a variant: its variantCartKey)
+  /** The url of the row whose "Choose variant" dialog is open (see buyVariants.ts), or null. */
+  let variantDialogUrl: string | null = null;
   // Images with hideMarkers (see CatalogImage): the item urls the visitor has
   // found by tapping their invisible markers, per image id. For this visit
   // only; a quiz's saved picks count as found too (see isFound).
@@ -1490,6 +1493,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     quizPicks = loadQuizPicks(quizStorageKeyValue, storage);
     foundUrls = new Map();
     cartOpen = false;
+    variantDialogUrl = null;
     bookmarksOpen = false;
     bookmarkList = [];
     bookmarksKey = bookmarksStorageKey(sourceName, loadedMeta.catalogName);
@@ -1544,6 +1548,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     selectedLinkId = null;
     searchOpen = false;
     cartOpen = false;
+    variantDialogUrl = null;
     bookmarksOpen = false;
     bookmarksKey = null;
     cartItems = new Set();
@@ -1977,11 +1982,52 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   }
 
   function actionToggleCart(rowUrl: string) {
+    // A row with variants is never added as such: the visitor picks one (see buyVariants.ts).
+    if (!cartItems.has(rowUrl) && rowVariants(rowUrl).length > 0) return actionOpenVariantDialog(rowUrl);
+    toggleCartItem(rowUrl);
+  }
+
+  function toggleCartItem(rowUrl: string) {
     if (cartItems.has(rowUrl)) cartItems.delete(rowUrl);
     else cartItems.add(rowUrl);
     if (cartStorageKeyValue) savePersistedCart(cartStorageKeyValue, cartItems, storage);
     render();
     emit("cart", { items: [...cartItems] });
+  }
+
+  /** The variants (see buyVariants.ts) of the first row with this url, [] for an ordinary row or a variant's own cart key. */
+  function rowVariants(rowUrl: string) {
+    const row = db ? catalogRows(db).find((r) => r.url === rowUrl) : undefined;
+    return row ? parseBuyVariants(row.extra) : [];
+  }
+
+  /** Whether picking a variant adds it to the cart (rather than opening its store link at once), the same condition the table's own Add button uses. */
+  function variantsGoToCart(): boolean {
+    return (mode === "full" || showcaseCart) && cartMode === "accumulate" && catalogMode !== "quiz";
+  }
+
+  function actionOpenVariantDialog(rowUrl: string) {
+    variantDialogUrl = rowUrl;
+    render();
+    root.getElementById("variant-close")?.focus();
+  }
+
+  /** Closes the dialog and gives the keyboard back to the row's button that opened it. */
+  function actionCloseVariantDialog() {
+    const url = variantDialogUrl;
+    variantDialogUrl = null;
+    render();
+    if (url === null) return;
+    Array.from(root.querySelectorAll<HTMLButtonElement>("[data-variants-url]")).find((b) => b.dataset.variantsUrl === url)?.focus({ preventScroll: true });
+  }
+
+  function actionPickVariant(sku: string) {
+    const url = variantDialogUrl;
+    const variant = url === null ? undefined : rowVariants(url).find((v) => v.sku === sku);
+    if (!variant) return;
+    if (variantsGoToCart()) toggleCartItem(variantCartKey(sku));
+    else window.open(variant.buyUrl, "_blank", "noopener,noreferrer");
+    actionCloseVariantDialog();
   }
 
   /** Toggles the toolbar's cart review panel (renderCartPanel) open/closed. */
@@ -2280,7 +2326,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const combinableIds: string[] = [];
     const directUrls: string[] = [];
     const items: { url: string; name: string; buyUrl: string }[] = [];
-    for (const r of catalogRows(db)) {
+    for (const r of expandVariantRows(catalogRows(db))) {
       if (!cartItems.has(r.url)) continue;
       const buyUrl = typeof r.extra.buy_url === "string" ? r.extra.buy_url : "";
       if (!buyUrl) continue;
@@ -2324,7 +2370,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; }
     };
     if (!db || cartItems.size === 0) return;
-    const rows = catalogRows(db).filter((r) => cartItems.has(r.url));
+    const rows = expandVariantRows(catalogRows(db)).filter((r) => cartItems.has(r.url));
     const catalogTitle = readMeta(db).catalogName || t("catalog.untitled");
     const items = rows
       .map((r) => {
@@ -2996,6 +3042,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
         ${mode === "full" && updateAddressBar ? renderShareViewDialog() : ""}
         ${renderPdfOptionsDialog()}
+        ${renderVariantDialog()}
         ${renderAgentConfirmDialog()}
         ${renderWhereToBuyDialog()}
     `;
@@ -3061,7 +3108,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         // column (always the table's last column) is visible immediately,
         // without the visitor needing to notice/discover the panel's own
         // horizontal scrollbar.
-        if (activeImage && db && catalogHasAnyBuyUrl(catalogRows(db))) {
+        if (activeImage && db && catalogHasAnyBuyTarget(catalogRows(db))) {
           tablePanel.scrollLeft = tablePanel.scrollWidth;
         }
         if (activeImage) tableAutoScrolledForBuy = true;
@@ -3171,7 +3218,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // A quiz question still open keeps the explanation (and its own keys) to itself, as in the table (see rowHtml).
     const quizOpen = quizNow !== null && quizNow.isQuestion && quizNow.status === "open";
     const entries = Object.entries(row.extra).filter(
-      ([k, v]) => k !== "buy_url" && !(quizNow && QUIZ_HIDDEN_EXTRA_KEYS.includes(k)) && v !== "" && v !== null && v !== undefined,
+      ([k, v]) => k !== "buy_url" && k !== BUY_VARIANTS_KEY && !(quizNow && QUIZ_HIDDEN_EXTRA_KEYS.includes(k)) && v !== "" && v !== null && v !== undefined,
     );
     const showDescription = !quizOpen && row.description && row.description.trim().toLowerCase() !== row.name.trim().toLowerCase();
     // Prev/next over the distinct items on this image (a part drawn several
@@ -3186,7 +3233,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         ? `<div class="showcase-nav"><button type="button" id="btn-showcase-prev" aria-label="${te("showcase.prev")}">‹</button><span>${te("nav.position", { index: at + 1, total: items.length })}</span><button type="button" id="btn-showcase-next" aria-label="${te("showcase.next")}">›</button></div>`
         : "";
     const inCart = cartItems.has(row.url);
-    const buyOnly = !buyUrl
+    const buyOnly = parseBuyVariants(row.extra).length > 0
+      ? variantButton(row, "showcase-buy")
+      : !buyUrl
       ? ""
       : showcaseCart && cartMode === "accumulate"
         ? `<button type="button" class="buy-btn showcase-buy ${inCart ? "in-cart" : ""}" data-cart-url="${escapeHtml(row.url)}">${addLabel(inCart)}</button>`
@@ -3214,7 +3263,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
 
   /** Showcase mode with options.showcaseCart: the cart's checkout (or print, for a list), once the catalog has anything to add. */
   function renderShowcaseCheckout(): string {
-    if (!showcaseCart || cartMode !== "accumulate" || !db || !catalogHasAnyBuyUrl(catalogRows(db))) return "";
+    if (!showcaseCart || cartMode !== "accumulate" || !db || !catalogHasAnyBuyTarget(catalogRows(db))) return "";
     return `<button type="button" id="cart-checkout" class="showcase-checkout" ${cartItems.size === 0 ? "disabled" : ""}>${cartIcon()} ${te("cart.checkout")} (${cartItems.size})</button>`;
   }
 
@@ -3491,7 +3540,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    */
   function renderCartPanel(): string {
     if (!db) return "";
-    const rows = catalogRows(db).filter((r) => cartItems.has(r.url));
+    const rows = expandVariantRows(catalogRows(db)).filter((r) => cartItems.has(r.url));
     const imageNameById = new Map(catalogImages(db).map((i) => [i.id, i.name]));
     return `
       <div class="cart-panel" id="cart-panel">
@@ -3636,6 +3685,48 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   }
   function skuLabel(): string {
     return t("column.sku");
+  }
+
+  /** The control of a row with variants (see buyVariants.ts): opens the chooser, and says how many of its variants are in the cart. */
+  function variantButton(row: CatalogRow, extraClass = ""): string {
+    const variants = parseBuyVariants(row.extra);
+    const picked = variants.filter((v) => cartItems.has(variantCartKey(v.sku))).length;
+    return `<button type="button" class="buy-btn ${picked ? "in-cart" : ""} ${extraClass}" data-variants-url="${escapeHtml(row.url)}">${te("variant.choose", { count: variants.length })}${picked ? ` · ${picked} ✓` : ""}</button>`;
+  }
+
+  /** The "Choose variant" dialog of the row in variantDialogUrl — one line per variant with its own add button; nothing is selected for the visitor. */
+  function renderVariantDialog(): string {
+    if (variantDialogUrl === null || !db) return "";
+    const row = catalogRows(db).find((r) => r.url === variantDialogUrl);
+    const variants = row ? parseBuyVariants(row.extra) : [];
+    if (!row || variants.length === 0) return "";
+    return `
+      <div class="open-overlay" id="variant-overlay">
+        <div class="open-box variant-box" role="dialog" aria-modal="true" aria-labelledby="variant-title">
+          <div class="variant-head">
+            <h2 id="variant-title">${te("variant.title")}</h2>
+            <button type="button" id="variant-close" aria-label="${te("action.close")}">✕</button>
+          </div>
+          <p><strong>${escapeHtml(row.name)}</strong></p>
+          <p class="hint">${te("variant.hint")}</p>
+          ${variants
+            .map((v) => {
+              const inCart = cartItems.has(variantCartKey(v.sku));
+              const control = variantsGoToCart() ? addLabel(inCart) : directOpenLabel();
+              return `
+          <section class="variant-option">
+            <div>
+              <strong>${skuLabel()} ${escapeHtml(v.sku)}</strong>
+              ${v.name && v.name !== row.name ? `<div>${escapeHtml(v.name)}</div>` : ""}
+              <p>${escapeHtml(v.description)}</p>
+            </div>
+            <button type="button" class="buy-btn ${inCart ? "in-cart" : ""}" data-variant-sku="${escapeHtml(v.sku)}">${control}</button>
+          </section>`;
+            })
+            .join("")}
+        </div>
+      </div>
+    `;
   }
 
   // Small dot button rendered inside a table cell's hover popover — copies
@@ -3786,7 +3877,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     const quizHidden = quizNow !== null && quizNow.status === "open";
     const buyUrl = typeof r.extra.buy_url === "string" && r.extra.buy_url ? r.extra.buy_url : null;
     const extra = Object.entries(r.extra)
-      .filter(([k]) => k !== "buy_url" && !(quizNow && QUIZ_HIDDEN_EXTRA_KEYS.includes(k)))
+      .filter(([k]) => k !== "buy_url" && k !== BUY_VARIANTS_KEY && !(quizNow && QUIZ_HIDDEN_EXTRA_KEYS.includes(k)))
       .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(String(v))}`)
       .join(", ");
     // The copy button lives inside .cell-text (so it can center itself
@@ -3800,7 +3891,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // cells, nothing there worth copying.
     const cell = (column: string, text: string) => `<td><span class="cell-text">${text}${copyCellBtn(r.url, column, text)}</span></td>`;
     let buyControl = "";
-    if (buyUrl && cartMode === "accumulate") {
+    if (parseBuyVariants(r.extra).length > 0) {
+      buyControl = variantButton(r);
+    } else if (buyUrl && cartMode === "accumulate") {
       const inCart = cartItems.has(r.url);
       // No title/native tooltip here — it stacked with the cell's own hover
       // popover (.cell-text) into an unreadable double-tooltip mess, and the
@@ -4114,6 +4207,22 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     });
     root.querySelectorAll<HTMLButtonElement>(".wtb-go[data-wtb-site]").forEach((btn) => {
       btn.addEventListener("click", () => actionCopyAndOpenSite(Number(btn.dataset.wtbSite)));
+    });
+    root.querySelectorAll<HTMLButtonElement>(".buy-btn[data-variants-url]").forEach((btn) => {
+      btn.addEventListener("click", (evt) => {
+        evt.stopPropagation(); // don't also trigger the row-select click
+        actionOpenVariantDialog(btn.dataset.variantsUrl!);
+      });
+    });
+    root.getElementById("variant-close")?.addEventListener("click", actionCloseVariantDialog);
+    root.getElementById("variant-overlay")?.addEventListener("click", (evt) => {
+      if (evt.target === evt.currentTarget) actionCloseVariantDialog(); // the shade, not the box
+    });
+    root.getElementById("variant-overlay")?.addEventListener("keydown", (evt) => {
+      if ((evt as KeyboardEvent).key === "Escape") actionCloseVariantDialog();
+    });
+    root.querySelectorAll<HTMLButtonElement>(".buy-btn[data-variant-sku]").forEach((btn) => {
+      btn.addEventListener("click", () => actionPickVariant(btn.dataset.variantSku!));
     });
     root.getElementById("btn-cart")?.addEventListener("click", actionToggleCartPanel);
     root.querySelectorAll<HTMLButtonElement>(".cart-remove-btn[data-remove-url]").forEach((btn) => {

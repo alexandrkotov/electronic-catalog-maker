@@ -21,6 +21,21 @@ const vite = await createViteServer({ root: resolve(here, "harness"), configFile
 await vite.listen();
 const harnessUrl = vite.resolvedUrls.local[0];
 const catalogBytes = readFileSync(resolve(here, "../../demo/furniture.ecatm"));
+// The same catalog with ONE position (shk-001) that has two store products to choose from — see buyVariants.ts.
+const variantRowUrl = "shk-001";
+const variantBytes = await (async () => {
+  const SQL = await createRequire(resolve(here, "../viewer/package.json"))("sql.js")();
+  const db = new SQL.Database(catalogBytes);
+  const row = db.exec(`SELECT extra FROM rows WHERE url = '${variantRowUrl}'`)[0].values[0][0];
+  const extra = { ...JSON.parse(row), buy_variants: JSON.stringify([
+    { sku: "VAR-A", name: "Cornice, early", description: "Up to serial 1000", buy_url: "https://payhip.com/buy?link=aaaa1" },
+    { sku: "VAR-B", name: "Cornice, late", description: "Serial 1001 and up", buy_url: "https://payhip.com/buy?link=bbbb2" },
+  ]) };
+  db.run("UPDATE rows SET extra = ? WHERE url = ?", [JSON.stringify(extra), variantRowUrl]);
+  const bytes = Buffer.from(db.export());
+  db.close();
+  return bytes;
+})();
 // /private/... answers only to `Authorization: Bearer secret` (what a host passes as fetchInit).
 const catalogRequests = [];
 const catalogServer = createHttpServer((req, res) => {
@@ -28,11 +43,12 @@ const catalogServer = createHttpServer((req, res) => {
   if (req.method === "OPTIONS") return void res.writeHead(204, cors).end();
   catalogRequests.push({ url: req.url, authorization: req.headers.authorization });
   if (req.url.startsWith("/private/") && req.headers.authorization !== "Bearer secret") return void res.writeHead(401, cors).end("no");
-  res.writeHead(200, cors).end(catalogBytes);
+  res.writeHead(200, cors).end(req.url.startsWith("/variants/") ? variantBytes : catalogBytes);
 });
 await new Promise((ok) => catalogServer.listen(0, "127.0.0.1", ok));
 const catalogOrigin = `http://127.0.0.1:${catalogServer.address().port}`;
 const catalogUrl = `${catalogOrigin}/furniture.ecatm`;
+const variantsUrl = `${catalogOrigin}/variants/furniture.ecatm`;
 
 const browser = await chromium.launch();
 let failed = false;
@@ -47,7 +63,7 @@ async function boot(contextOptions, { src = true, opts = null, init = null } = {
   page.on("request", (req) => requests.push(req.url()));
   page.on("pageerror", (err) => assert.fail(`page error: ${err.message}`));
   const query = new URLSearchParams();
-  if (src) query.set("src", catalogUrl);
+  if (src) query.set("src", typeof src === "string" ? src : catalogUrl);
   if (opts) query.set("opts", JSON.stringify(opts));
   await page.goto(`${harnessUrl}?${query}`);
   if (src) await page.locator("#stage-img").waitFor();
@@ -339,6 +355,43 @@ try {
   await page.evaluate(() => window.ctrl.search(""));
   assert.equal(await resultCount(), 0, "the query was forgotten");
   say("search / clearSearch: counts, filled panel, host keeps focus, result jumps with a view event");
+  await context.close();
+
+  // Buy variants: one position, several store products — the visitor chooses, nothing is picked for them
+  ({ context, page } = await boot(DESKTOP, { src: variantsUrl, init: () => { window.__opened = []; window.open = (u) => { window.__opened.push(String(u)); return null; }; } }));
+  const variantBtn = () => page.locator(`.buy-btn[data-variants-url="${variantRowUrl}"]`);
+  const cartCount = async () => Number((await page.locator("#btn-cart").textContent()).match(/\((\d+)\)/)[1]);
+  assert.match(await variantBtn().textContent(), /Choose variant \(2\)/, "the row shows Choose variant instead of Add to cart");
+  assert.equal(await page.locator(`.buy-btn[data-cart-url="${variantRowUrl}"]`).count(), 0, "and has no plain Add button");
+  assert.ok(!/buy_variants/.test(await page.locator(`tr[data-url="${variantRowUrl}"]`).first().textContent()), "the raw list is not shown as a characteristic");
+  await variantBtn().click();
+  assert.equal(await page.locator("#variant-overlay [data-variant-sku]").count(), 2, "the dialog lists both variants");
+  assert.match(await page.locator("#variant-overlay").textContent(), /Serial 1001 and up/, "with their descriptions");
+  assert.equal(await page.evaluate(() => document.activeElement?.id), "variant-close", "the cursor starts in the dialog");
+  assert.equal(await cartCount(), 0, "opening the dialog adds nothing");
+  await page.keyboard.press("Escape");
+  assert.equal(await page.locator("#variant-overlay").count(), 0, "Esc closes it");
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("data-variants-url")), variantRowUrl, "and returns to the button that opened it");
+  await variantBtn().click();
+  await page.locator("#variant-overlay").click({ position: { x: 3, y: 3 } });
+  assert.equal(await page.locator("#variant-overlay").count(), 0, "a click on the shade closes it");
+  await variantBtn().click();
+  await page.locator('[data-variant-sku="VAR-B"]').click();
+  assert.equal(await page.locator("#variant-overlay").count(), 0, "choosing a variant closes the dialog");
+  assert.equal(await cartCount(), 1, "and puts exactly that variant in the cart");
+  assert.match(await variantBtn().textContent(), /1 ✓/, "the row says one of its variants is in the cart");
+  await page.locator("#btn-cart").click();
+  assert.equal(await page.locator('#cart-panel li[data-url="variant:VAR-B"]').count(), 1, "the cart lists the chosen variant");
+  assert.match(await page.locator("#cart-panel").textContent(), /VAR-B/, "by its own sku");
+  await page.locator("#cart-checkout").click();
+  const opened = await page.evaluate(() => window.__opened);
+  assert.equal(opened.length, 1, "checkout opens one store page");
+  assert.ok(opened[0].includes("bbbb2") && !opened[0].includes("aaaa1"), `with the chosen variant's product only: ${opened[0]}`);
+  await page.locator("#btn-cart").click();
+  await page.locator('#cart-panel [data-remove-url="variant:VAR-B"]').click();
+  assert.equal(await cartCount(), 0, "✕ takes the variant out of the cart");
+  assert.equal(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("ecm-viewer-cart:")).length), 1, "the cart is kept per catalog as before");
+  say("buy variants: Choose variant dialog (Esc, shade, focus), only the chosen product in the cart and at checkout, ✕ removes it");
   await context.close();
 
   // Bookmarks: the standard viewer keeps them in the browser, per catalog; a host can bring its own store

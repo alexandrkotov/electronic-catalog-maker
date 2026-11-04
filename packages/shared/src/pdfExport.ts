@@ -395,7 +395,7 @@ function extraCellText(row: CatalogRow): string {
     // (the монетизация cold-pitch demos predate this table's own "No."
     // column) stash the same hotspot number here by convention — now
     // redundant with that column, so it's dropped the same way.
-    .filter(([k]) => k !== "buy_url" && k.toLowerCase().replace(/\.$/, "") !== "no")
+    .filter(([k]) => k !== "buy_url" && k !== "buy_variants" && k.toLowerCase().replace(/\.$/, "") !== "no")
     .map(([k, v]) => `${k}: ${String(v)}`)
     .join(", ");
 }

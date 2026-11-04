@@ -1359,6 +1359,53 @@ button:disabled {
   flex: 1 1 auto;
 }
 
+/* "Choose variant" dialog (buyVariants.ts) — the .open-overlay/.open-box shell, wider, one line per variant. */
+.variant-box {
+  width: 40rem;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+}
+
+.variant-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.variant-box p {
+  margin: 0;
+}
+
+.variant-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  border-top: 1px solid var(--border);
+  padding: 0.75rem 0 0;
+}
+
+.variant-option p {
+  white-space: pre-line;
+  margin-top: 0.25rem;
+}
+
+.variant-option .buy-btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 540px) {
+  .variant-option {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .variant-option .buy-btn {
+    align-self: flex-start;
+  }
+}
+
 /* Bookmarks panel — the cart panel's shell; a row is a link back to the saved view. */
 .bookmarks-panel li {
   cursor: pointer;

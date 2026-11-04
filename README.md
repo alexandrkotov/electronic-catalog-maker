@@ -459,6 +459,33 @@ All of this is saved into the catalog file itself (new `meta` keys — see
 `.ecatm` in a different browser, or hand it to someone else, and the Buy
 button behaves the same way for them too.
 
+### One position, several products (variants)
+
+A parts manual often lists one position that is really several different
+products — a cover for engines up to one serial number, another above it —
+each with its own store page. A single `buy_url` would pick one for the
+visitor, which is wrong for a part that has to fit. Put the choices into the
+row's `extra` as `buy_variants`: a JSON list (kept as text, like every
+`extra` value) of
+
+```json
+[
+  {"sku": "A-100", "name": "Cover, early", "description": "Up to serial 1000", "buy_url": "https://store.example/buy?link=a100"},
+  {"sku": "A-200", "name": "Cover, late",  "description": "Serial 1001 and up", "buy_url": "https://store.example/buy?link=a200"}
+]
+```
+
+The row then shows **Choose variant (2)** instead of Buy. It opens a window
+with every variant's sku and description and an add button on each; nothing
+is chosen for the visitor. A chosen variant goes into the cart as its own
+item (the row says how many of its variants are in the cart), and checks out
+by the same rules as any `buy_url`. With "Go straight to payment" the chosen
+variant's page opens instead. A variant needs a `sku` and an http(s)
+`buy_url`; the same `sku` on several rows is one cart item; `buy_variants`
+wins over a `buy_url` on the same row and is not printed as a
+characteristic. Printed QR codes (PDF export) are made from `buy_url` only,
+so a row with variants gets none.
+
 ## Password-protected catalogs
 
 To sell a catalog, or to keep some of your catalogs for a limited circle of
