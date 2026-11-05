@@ -459,21 +459,25 @@ All of this is saved into the catalog file itself (new `meta` keys — see
 `.ecatm` in a different browser, or hand it to someone else, and the Buy
 button behaves the same way for them too.
 
-### One position, several products (variants)
+### One part number, several conditions (new, overhauled, used)
 
-A parts manual often lists one position that is really several different
-products — a cover for engines up to one serial number, another above it —
-each with its own store page. A single `buy_url` would pick one for the
-visitor, which is wrong for a part that has to fit. Put the choices into the
-row's `extra` as `buy_variants`: a JSON list (kept as text, like every
+A store often sells the same part number in more than one condition — new,
+overhauled, used serviceable, as removed — each with its own listing and
+price. A single `buy_url` would pick one for the visitor. Put the offers into
+the row's `extra` as `buy_variants`: a JSON list (kept as text, like every
 `extra` value) of
 
 ```json
 [
-  {"sku": "A-100", "name": "Cover, early", "description": "Up to serial 1000", "buy_url": "https://store.example/buy?link=a100"},
-  {"sku": "A-200", "name": "Cover, late",  "description": "Serial 1001 and up", "buy_url": "https://store.example/buy?link=a200"}
+  {"sku": "A-100-NEW", "name": "Cover, new",        "description": "Factory new",            "buy_url": "https://store.example/buy?link=a100n"},
+  {"sku": "A-100-OH",  "name": "Cover, overhauled", "description": "Overhauled, with tag",   "buy_url": "https://store.example/buy?link=a100o"}
 ]
 ```
+
+Different part numbers for the same position (one cover up to a serial
+number, another above it) are not variants: give each its own row under the
+same marker, see "One callout, several rows" below, so every number is
+searchable, printed and looked up in "Where to buy".
 
 The row then shows **Choose variant (2)** instead of Buy. It opens a window
 with every variant's sku and description and an add button on each; nothing

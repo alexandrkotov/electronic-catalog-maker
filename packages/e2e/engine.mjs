@@ -21,15 +21,15 @@ const vite = await createViteServer({ root: resolve(here, "harness"), configFile
 await vite.listen();
 const harnessUrl = vite.resolvedUrls.local[0];
 const catalogBytes = readFileSync(resolve(here, "../../demo/furniture.ecatm"));
-// The same catalog with ONE position (shk-001) that has two store products to choose from — see buyVariants.ts.
+// The same catalog with ONE position (shk-001) sold in two conditions — see buyVariants.ts.
 const variantRowUrl = "shk-001";
 const variantBytes = await (async () => {
   const SQL = await createRequire(resolve(here, "../viewer/package.json"))("sql.js")();
   const db = new SQL.Database(catalogBytes);
   const row = db.exec(`SELECT extra FROM rows WHERE url = '${variantRowUrl}'`)[0].values[0][0];
   const extra = { ...JSON.parse(row), buy_variants: JSON.stringify([
-    { sku: "VAR-A", name: "Cornice, early", description: "Up to serial 1000", buy_url: "https://payhip.com/buy?link=aaaa1" },
-    { sku: "VAR-B", name: "Cornice, late", description: "Serial 1001 and up", buy_url: "https://payhip.com/buy?link=bbbb2" },
+    { sku: "VAR-A", name: "Cornice, new", description: "Factory new", buy_url: "https://payhip.com/buy?link=aaaa1" },
+    { sku: "VAR-B", name: "Cornice, used", description: "Used, serviceable", buy_url: "https://payhip.com/buy?link=bbbb2" },
   ]) };
   db.run("UPDATE rows SET extra = ? WHERE url = ?", [JSON.stringify(extra), variantRowUrl]);
   const bytes = Buffer.from(db.export());
@@ -375,12 +375,12 @@ try {
   ({ context, page } = await boot(DESKTOP, { src: variantsUrl, init: () => { window.__opened = []; window.open = (u) => { window.__opened.push(String(u)); return null; }; } }));
   const variantBtn = () => page.locator(`.buy-btn[data-variants-url="${variantRowUrl}"]`);
   const cartCount = async () => Number((await page.locator("#btn-cart").textContent()).match(/\((\d+)\)/)[1]);
-  assert.match(await variantBtn().textContent(), /Choose variant \(2\)/, "the row shows Choose variant instead of Add to cart");
+  assert.match(await variantBtn().textContent(), /Choose condition \(2\)/, "the row shows Choose condition instead of Add to cart");
   assert.equal(await page.locator(`.buy-btn[data-cart-url="${variantRowUrl}"]`).count(), 0, "and has no plain Add button");
   assert.ok(!/buy_variants/.test(await page.locator(`tr[data-url="${variantRowUrl}"]`).first().textContent()), "the raw list is not shown as a characteristic");
   await variantBtn().click();
   assert.equal(await page.locator("#variant-overlay [data-variant-sku]").count(), 2, "the dialog lists both variants");
-  assert.match(await page.locator("#variant-overlay").textContent(), /Serial 1001 and up/, "with their descriptions");
+  assert.match(await page.locator("#variant-overlay").textContent(), /Used, serviceable/, "with their descriptions");
   assert.equal(await page.evaluate(() => document.activeElement?.id), "variant-close", "the cursor starts in the dialog");
   assert.equal(await cartCount(), 0, "opening the dialog adds nothing");
   await page.keyboard.press("Escape");
@@ -405,7 +405,7 @@ try {
   await page.locator('#cart-panel [data-remove-url="variant:VAR-B"]').click();
   assert.equal(await cartCount(), 0, "✕ takes the variant out of the cart");
   assert.equal(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("ecm-viewer-cart:")).length), 1, "the cart is kept per catalog as before");
-  say("buy variants: Choose variant dialog (Esc, shade, focus), only the chosen product in the cart and at checkout, ✕ removes it");
+  say("buy variants: Choose condition dialog (Esc, shade, focus), only the chosen product in the cart and at checkout, ✕ removes it");
   await context.close();
 
   // Bookmarks: the standard viewer keeps them in the browser, per catalog; a host can bring its own store

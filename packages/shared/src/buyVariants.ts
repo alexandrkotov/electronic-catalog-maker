@@ -3,14 +3,17 @@ import type { CatalogRow } from "./types.js";
 /**
  * Several store products behind ONE table row — "buy variants".
  *
- * A parts manual lists one position (say a cowl) that is really several
- * different products depending on the engine's power or serial number, each
- * with its own store link. A single `buy_url` would have to pick one for the
- * visitor, which is wrong for a part that has to fit. Instead the row's extra
+ * One part number sold in several conditions — new, overhauled, used
+ * serviceable, as removed — each with its own store listing. A single
+ * `buy_url` would have to pick one for the visitor. Instead the row's extra
  * holds `buy_variants`: a JSON array (stored as a string, like every extra
  * value) of
  *
- *     { "sku": "898103T78", "name": "...", "description": "...", "buy_url": "https://..." }
+ *     { "sku": "A-100-OH", "name": "...", "description": "...", "buy_url": "https://..." }
+ *
+ * Different part numbers at one position of the drawing (by model, power or
+ * serial number) are callout rows instead (callout.ts): each number gets a
+ * row of its own, so it is searched, printed and looked up in Where to buy.
  *
  * The viewer then shows "Choose variant (N)" in place of Add to cart and lets
  * the visitor pick one explicitly; nothing is ever selected automatically. A
