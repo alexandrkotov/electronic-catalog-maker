@@ -2,6 +2,11 @@ import "./style.css";
 import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import pdfFontUrl from "@ecm/shared/assets/fonts/DejaVuSans.ttf?url";
 import {
+  CALLOUT_KEY,
+  calloutOf,
+  groupCalloutRows,
+  markerUrlFor,
+  nextCalloutRowUrl,
   EDITOR_LOCALES,
   EDITOR_LOCALE_NAMES,
   appLocaleCandidates,
@@ -2881,6 +2886,21 @@ function actionAddRow(url: string, name: string, sku: string, description: strin
   setStatus(t("row.added", { url }));
 }
 
+/**
+ * "+ Row for another model": a new row under the marker of the row at `url`
+ * (callout.ts) — a free address `url~n`, the same name to start from, and
+ * `callout` set — opened right away to fill in its number.
+ */
+function actionAddCalloutRow(url: string) {
+  if (!db || activeImageId === null) return;
+  const main = listRowsForImage(db, activeImageId).find((r) => r.url === url);
+  if (!main) return;
+  const newUrl = nextCalloutRowUrl(url, new Set(listAllRows(db).map((r) => r.url)));
+  const id = applyAddAndBroadcast("addRow", addRow, { imageId: activeImageId, url: newUrl, name: main.name, sku: "", description: "", extra: { [CALLOUT_KEY]: url } });
+  setStatus(t("row.callout.added", { name: main.name }));
+  actionEditRow(id);
+}
+
 function actionEditRow(rowId: number) {
   editingRowId = rowId;
   editingLinkId = null;
@@ -2984,7 +3004,8 @@ function render() {
   const images = currentImages();
   const activeImage = images.find((i) => i.id === activeImageId) ?? null;
   const links = db && activeImage ? listLinksForImage(db, activeImage.id) : [];
-  const rows = db && activeImage ? listRowsForImage(db, activeImage.id) : [];
+  // Rows under one marker read as one block (see groupCalloutRows).
+  const rows = db && activeImage ? groupCalloutRows(listRowsForImage(db, activeImage.id)) : [];
   const usedUrls = new Set(rows.map((r) => r.url));
   // Navigation hotspots (#image=<id>, see navLink.ts) never get a row.
   const availableLinks = links.filter((l) => !usedUrls.has(l.url) && !isNavLink(l));
@@ -2997,6 +3018,12 @@ function render() {
   // the same part (a hotspot's matching table row, or vice versa) is easy
   // to lose track of on a dense diagram, so both point back to each other.
   const editingUrl = editingRow?.url ?? editingLink?.url ?? null;
+  // Rows sharing a marker (callout.ts) point to each other too: the marker a
+  // row stands under, and every row under the edited marker.
+  const markerUrls = new Set(links.filter((l) => !isNavLink(l)).map((l) => l.url));
+  const editingMarkerUrl = editingRow ? (markerUrlFor(editingRow, markerUrls) ?? editingRow.url) : (editingLink?.url ?? null);
+  const isRowMatch = (r: CatalogRow) =>
+    r.id !== editingRowId && (r.url === editingUrl || (editingMarkerUrl !== null && markerUrlFor(r, markerUrls) === editingMarkerUrl));
   // Feeds the Extra field's key datalist below — every key already used
   // anywhere in the catalog, not just this image, same reasoning as the
   // search panel's "Extra: <key>" dropdown a few lines further down.
@@ -3100,7 +3127,7 @@ function render() {
                  <div class="crosshair-box" id="crosshair-box"></div>
                  <div class="crosshair-h" id="crosshair-h"></div>
                  <div class="crosshair-v" id="crosshair-v"></div>
-                 ${links.map((l) => hotspotHtml(l, editingUrl)).join("")}
+                 ${links.map((l) => hotspotHtml(l, editingMarkerUrl)).join("")}
                  ${pendingHotspot ? `<div class="hotspot pending" style="top:${pendingHotspot.top}px;left:${pendingHotspot.left}px">${te("hotspot.pending")}</div>` : ""}
                  <div id="editing-balloons">${renderEditingBalloons(links, activeImage.id)}</div>
                </div></div>`
@@ -3117,11 +3144,11 @@ function render() {
       <datalist id="extra-key-options">${extraKeys.map((k) => `<option value="${escapeHtml(k)}"></option>`).join("")}</datalist>
       ${activeImage ? renderImageForm(activeImage, images) : ""}
       ${activeImage ? renderLinkForm(links, images) : ""}
-      ${activeImage ? renderEditLinkForm(editingLink, images) : ""}
+      ${activeImage ? renderEditLinkForm(editingLink, images, !!editingLink && usedUrls.has(editingLink.url) && !isNavLink(editingLink)) : ""}
       ${activeImage ? renderLinksSection(links, editingLinkId, images) : ""}
       ${activeImage ? renderRowForm(availableLinks) : ""}
-      ${activeImage ? renderEditRowForm(editingRow) : ""}
-      ${activeImage ? renderRowsSection(rows, editingRowId, editingUrl) : ""}
+      ${activeImage ? renderEditRowForm(editingRow, editingRow && !markerUrls.has(editingRow.url) ? calloutChoices(rows, links, editingRow) : null, !!editingRow && markerUrls.has(editingRow.url)) : ""}
+      ${activeImage ? renderRowsSection(rows, editingRowId, isRowMatch, (r) => markerUrlFor(r, markerUrls) !== null && !markerUrls.has(r.url)) : ""}
     </div>
 
     ${renderConfirmOverlay()}
@@ -4200,7 +4227,15 @@ function renderLinkForm(links: CatalogLink[], images: CatalogImageInfo[]): strin
   `;
 }
 
-function renderEditLinkForm(link: CatalogLink | null, images: CatalogImageInfo[]): string {
+/** The "+ Row for another model" button (see actionAddCalloutRow) with its one-line explanation. */
+function renderAddCalloutRowButton(url: string): string {
+  return `<div class="field callout-add">
+      <button type="button" class="btn-add-callout-row" data-url="${escapeHtml(url)}">${te("row.callout.add")}</button>
+      <p class="hint">${te("row.callout.addHint")}</p>
+    </div>`;
+}
+
+function renderEditLinkForm(link: CatalogLink | null, images: CatalogImageInfo[], hasRow = false): string {
   if (!link) return "";
   return `
     <section>
@@ -4210,6 +4245,7 @@ function renderEditLinkForm(link: CatalogLink | null, images: CatalogImageInfo[]
         ${renderNavTargetField(images, link.url)}
         <div class="field"><label>${te("link.name")}</label><input name="name" value="${escapeHtml(link.name)}" required /></div>
         <div class="field"><label>${te("link.edit.address")}</label><input name="url" value="${escapeHtml(link.url)}" required /></div>
+        ${hasRow ? renderAddCalloutRowButton(link.url) : ""}
         <div style="display:flex; gap:0.5rem; align-items:center">
           <button type="submit">${te("action.apply")}</button>
           <button type="button" id="btn-cancel-edit">${te("action.cancel")}</button>
@@ -4275,8 +4311,42 @@ function renderRowForm(availableLinks: CatalogLink[]): string {
   `;
 }
 
-function renderEditRowForm(row: CatalogRow | null): string {
+/**
+ * The rows a row without a marker of its own can stand under (callout.ts):
+ * the rows of this image that have one, labelled by that marker's name.
+ */
+function calloutChoices(rows: CatalogRow[], links: CatalogLink[], row: CatalogRow): { url: string; label: string }[] {
+  const markerName = new Map<string, string>();
+  for (const l of links) if (!isNavLink(l) && !markerName.has(l.url)) markerName.set(l.url, l.name);
+  return rows
+    .filter((r) => r.id !== row.id && markerName.has(r.url))
+    .map((r) => ({ url: r.url, label: `${markerName.get(r.url)} — ${r.name}${r.sku ? ` (${r.sku})` : ""}` }));
+}
+
+/**
+ * "Same callout as": picks the row whose marker this row shares — the
+ * `callout` key, without typing an address into Extra (which then leaves that
+ * key out; see the form's submit). Only for a row without a marker of its own.
+ */
+function renderCalloutField(row: CatalogRow, choices: { url: string; label: string }[]): string {
+  const current = calloutOf(row);
+  const missing = current !== null && !choices.some((c) => c.url === current);
+  return `
+    <div class="field">
+      <label for="edit-row-callout">${te("row.callout.label")}</label>
+      <select id="edit-row-callout" name="callout">
+        <option value="">${te("row.callout.none")}</option>
+        ${choices.map((c) => `<option value="${escapeHtml(c.url)}" ${c.url === current ? "selected" : ""}>${escapeHtml(c.label)}</option>`).join("")}
+        ${missing ? `<option value="${escapeHtml(current)}" selected>${te("row.callout.missing", { url: current })}</option>` : ""}
+      </select>
+      <p class="hint">${te("row.callout.hint")}</p>
+    </div>`;
+}
+
+function renderEditRowForm(row: CatalogRow | null, calloutChoicesForRow: { url: string; label: string }[] | null = null, hasMarker = false): string {
   if (!row) return "";
+  // With the "Same callout as" list, Extra leaves `callout` to it.
+  const { [CALLOUT_KEY]: _callout, ...extraWithoutCallout } = row.extra;
   return `
     <section>
       <h2>${te("row.edit.title")}</h2>
@@ -4285,7 +4355,9 @@ function renderEditRowForm(row: CatalogRow | null): string {
         <div class="field"><label>${te("column.name")}</label><input name="name" value="${escapeHtml(row.name)}" /></div>
         <div class="field"><label>${skuLabel()}</label><input name="sku" value="${escapeHtml(row.sku)}" /></div>
         <div class="field"><label>${te("column.description")}</label><input name="description" value="${escapeHtml(row.description)}" /></div>
-        ${renderExtraField(row.extra)}
+        ${calloutChoicesForRow ? renderCalloutField(row, calloutChoicesForRow) : ""}
+        ${hasMarker ? renderAddCalloutRowButton(row.url) : ""}
+        ${renderExtraField(calloutChoicesForRow ? extraWithoutCallout : row.extra)}
         <div style="display:flex; gap:0.5rem; align-items:center">
           <button type="submit">${te("action.apply")}</button>
           <button type="button" id="btn-cancel-edit-row">${te("action.cancel")}</button>
@@ -4303,7 +4375,12 @@ function extraCellText(extra: Record<string, string>): string {
     .join(", ");
 }
 
-function renderRowsSection(rows: ReturnType<typeof listRowsForImage>, editingRowId: number | null, editingUrl: string | null): string {
+function renderRowsSection(
+  rows: ReturnType<typeof listRowsForImage>,
+  editingRowId: number | null,
+  isRowMatchFor: (r: CatalogRow) => boolean,
+  sharesMarker: (r: CatalogRow) => boolean = () => false,
+): string {
   const [urlW, nameW, skuW, descriptionW, extraW] = colWidths.rows;
   return `
     <section>
@@ -4330,14 +4407,14 @@ function renderRowsSection(rows: ReturnType<typeof listRowsForImage>, editingRow
                 // hotspot .row-match highlight (see hotspotHtml above),
                 // just pointed the other direction: hotspot → table row.
                 const isEditing = r.id === editingRowId;
-                const isRowMatch = !isEditing && editingUrl !== null && r.url === editingUrl;
+                const isRowMatch = !isEditing && isRowMatchFor(r);
                 const rowClass = isEditing ? " editing" : isRowMatch ? " row-match" : "";
                 // Extra alone gets the hover-expand treatment (see .extra-cell in
                 // style.css) — it's the column most likely to overflow a
                 // reasonably-sized column, and this is meant for a quick spot-check
                 // across the whole image, not a place to also copy from (that's
                 // still the row's own edit form).
-                return `<tr data-row-id="${r.id}" class="clickable-row${rowClass}"><td>${escapeHtml(r.url)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.sku)}</td><td>${escapeHtml(r.description)}</td><td class="extra-cell"><span class="cell-text">${escapeHtml(extraCellText(r.extra))}</span></td></tr>`;
+                return `<tr data-row-id="${r.id}" class="clickable-row${rowClass}"><td>${escapeHtml(r.url)}</td><td>${sharesMarker(r) ? `<span class="callout-mark" aria-label="${te("row.callout.mark")}">↳</span> ` : ""}${escapeHtml(r.name)}</td><td>${escapeHtml(r.sku)}</td><td>${escapeHtml(r.description)}</td><td class="extra-cell"><span class="cell-text">${escapeHtml(extraCellText(r.extra))}</span></td></tr>`;
               })
               .join("")}
           </tbody>
@@ -4709,9 +4786,18 @@ function wireEvents(links: CatalogLink[]) {
     const name = String(fd.get("name") ?? "");
     const sku = String(fd.get("sku") ?? "");
     const description = String(fd.get("description") ?? "");
-    resolveExtraThen(formEl, (extra) => actionSaveRowEdit(name, sku, description, extra));
+    // The "Same callout as" list, when shown, decides the callout key.
+    const callout = fd.has("callout") ? String(fd.get("callout") ?? "") : null;
+    resolveExtraThen(formEl, (extra) => {
+      if (callout === null) return actionSaveRowEdit(name, sku, description, extra);
+      const { [CALLOUT_KEY]: _typed, ...rest } = extra;
+      actionSaveRowEdit(name, sku, description, callout ? { ...rest, [CALLOUT_KEY]: callout } : rest);
+    });
   });
   document.getElementById("btn-cancel-edit-row")?.addEventListener("click", actionCancelEditRow);
+  document.querySelectorAll<HTMLButtonElement>(".btn-add-callout-row").forEach((btn) => {
+    btn.addEventListener("click", () => actionAddCalloutRow(btn.dataset.url!));
+  });
   document.getElementById("btn-delete-row")?.addEventListener("click", actionDeleteRow);
 
   document.querySelectorAll<HTMLElement>(".extra-field").forEach(wireExtraField);

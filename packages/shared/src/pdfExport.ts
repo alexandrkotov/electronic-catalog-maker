@@ -87,6 +87,7 @@ import fontkit from "@pdf-lib/fontkit";
 import type { Database } from "sql.js";
 import { listImages, listLinksForImage, listRowsForImage, readMeta } from "./db.js";
 import { forwardNavLinks, isNavLink, navTargetImageId } from "./navLink.js";
+import { groupCalloutRows } from "./callout.js";
 import { groupImagesByFolder } from "./images.js";
 import { buildInstantBuyUrl } from "./cart.js";
 import { buildQrMatrix, type QrMatrix } from "./qrcode.js";
@@ -395,7 +396,7 @@ function extraCellText(row: CatalogRow): string {
     // (the монетизация cold-pitch demos predate this table's own "No."
     // column) stash the same hotspot number here by convention — now
     // redundant with that column, so it's dropped the same way.
-    .filter(([k]) => k !== "buy_url" && k !== "buy_variants" && k.toLowerCase().replace(/\.$/, "") !== "no")
+    .filter(([k]) => k !== "buy_url" && k !== "buy_variants" && k !== "callout" && k.toLowerCase().replace(/\.$/, "") !== "no")
     .map(([k, v]) => `${k}: ${String(v)}`)
     .join(", ");
 }
@@ -1168,7 +1169,7 @@ export async function exportCatalogPdf(
       const imageLinks = listLinksForImage(db, image.id);
       let links = imageLinks.filter((l) => !isNavLink(l));
       let navLinks = forwardNavLinks(imageLinks, image.id, imageIds);
-      let rows = listRowsForImage(db, image.id);
+      let rows = groupCalloutRows(listRowsForImage(db, image.id));
       if (options.region) {
         // Only the cut-out is printed: its own hotspots and rows, no markers leading elsewhere.
         const crop = cropToRegion(image, options.region, links, rows);

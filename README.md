@@ -486,6 +486,28 @@ wins over a `buy_url` on the same row and is not printed as a
 characteristic. Printed QR codes (PDF export) are made from `buy_url` only,
 so a row with variants gets none.
 
+### One callout, several rows (one per model)
+
+A manual also lists one number on the drawing with a different part for
+each model: callout 1 is valve 73117 on one engine and LW-13087 on another.
+Each part keeps its own row (its own number, Buy and "Where to buy"), and
+the second row names the first in its `extra`: `callout` = the address of the
+row whose marker it shares. In the viewer the marker then selects both rows,
+a click on either row (or the arrow keys, or a search result) selects the
+marker, and the row picked gets a bar on its edge; in showcase mode the card
+has a button per row to switch between them.
+
+In the editor, click the marker (or its row) and press **+ Row for another
+model**: a new row opens under the same marker, with the name to start from
+and a free address (`p1~2`); type its number. A row that is already there —
+one listed without a number of its own — gets its marker from **Same
+callout as** in its edit form: pick the row it belongs with, or "none" to
+detach it. Rows under another row's marker have a ↳ before the name in the
+editor's table, and the marker lights up all its rows. One level only —
+a `callout` that names a row without a marker of its own, or a row that is
+gone, is ignored, and the row is a plain one again. `callout` is not shown
+as a characteristic, nor printed in the PDF.
+
 ## Password-protected catalogs
 
 To sell a catalog, or to keep some of your catalogs for a limited circle of

@@ -1216,3 +1216,14 @@ td.extra-cell {
 .protect-strength-strong {
   color: #15803d;
 }
+
+/* A row standing under another row's marker (one callout, several rows —
+   callout.ts in shared): a ↳ before its name in the table. */
+.callout-mark {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.callout-add .hint {
+  margin: 0.25rem 0 0;
+}

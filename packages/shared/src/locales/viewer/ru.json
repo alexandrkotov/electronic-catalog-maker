@@ -150,6 +150,7 @@
   "showcase.prev": "Предыдущая позиция",
   "showcase.next": "Следующая позиция",
   "showcase.findHint": "Присмотрись и нажимай на предметы на картинке.",
+  "showcase.sameMarker": "Под этой точкой:",
   "hotspot.aria": "{name} — показать сведения",
   "hotspot.navAria": "{name} — открыть",
   "hotspot.unfoundAria": "Здесь что-то спрятано",

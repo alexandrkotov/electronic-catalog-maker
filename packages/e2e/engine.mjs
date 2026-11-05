@@ -36,6 +36,19 @@ const variantBytes = await (async () => {
   db.close();
   return bytes;
 })();
+// The same catalog with a second row under the Cornice's marker (another model — see callout.ts).
+const calloutRowUrl = "shk-001~2";
+const calloutBytes = await (async () => {
+  const SQL = await createRequire(resolve(here, "../viewer/package.json"))("sql.js")();
+  const db = new SQL.Database(catalogBytes);
+  db.run("INSERT INTO rows (image_id, url, name, sku, description, extra) VALUES (1, ?, 'Cornice, model B', 'SHK-001B', '', ?)", [
+    calloutRowUrl,
+    JSON.stringify({ callout: "shk-001", Model: "B" }),
+  ]);
+  const bytes = Buffer.from(db.export());
+  db.close();
+  return bytes;
+})();
 // /private/... answers only to `Authorization: Bearer secret` (what a host passes as fetchInit).
 const catalogRequests = [];
 const catalogServer = createHttpServer((req, res) => {
@@ -43,12 +56,13 @@ const catalogServer = createHttpServer((req, res) => {
   if (req.method === "OPTIONS") return void res.writeHead(204, cors).end();
   catalogRequests.push({ url: req.url, authorization: req.headers.authorization });
   if (req.url.startsWith("/private/") && req.headers.authorization !== "Bearer secret") return void res.writeHead(401, cors).end("no");
-  res.writeHead(200, cors).end(req.url.startsWith("/variants/") ? variantBytes : catalogBytes);
+  res.writeHead(200, cors).end(req.url.startsWith("/variants/") ? variantBytes : req.url.startsWith("/callout/") ? calloutBytes : catalogBytes);
 });
 await new Promise((ok) => catalogServer.listen(0, "127.0.0.1", ok));
 const catalogOrigin = `http://127.0.0.1:${catalogServer.address().port}`;
 const catalogUrl = `${catalogOrigin}/furniture.ecatm`;
 const variantsUrl = `${catalogOrigin}/variants/furniture.ecatm`;
+const calloutUrl = `${catalogOrigin}/callout/furniture.ecatm`;
 
 const browser = await chromium.launch();
 let failed = false;
@@ -551,6 +565,35 @@ try {
   assert.equal(await selectedRow(), firstRow, "↑ goes back");
   assert.equal(await shownImage(), imageIds[0], "the table keys never switch pictures");
   say("arrow keys: ↑/↓ in the table move the selection between rows");
+  await context.close();
+
+  // ---- one marker, several rows (callout.ts)
+  ({ context, page } = await boot(DESKTOP, { src: calloutUrl }));
+  const selectedRows = () => page.locator(".table-panel tbody tr.selected").evaluateAll((els) => els.map((el) => el.dataset.url));
+  const pickedRow = () => page.locator(".table-panel tbody tr.picked").evaluateAll((els) => els.map((el) => el.dataset.url));
+  const corniceLink = await page.locator('.hotspot[data-url="shk-001"]').first().getAttribute("data-id");
+  await page.locator('.hotspot[data-url="shk-001"]').first().click();
+  assert.deepEqual(await selectedRows(), ["shk-001", calloutRowUrl], "the marker selects both rows");
+  assert.deepEqual(await pickedRow(), ["shk-001"], "the marker's own row is the picked one");
+  await page.locator(`.table-panel tr[data-url="${calloutRowUrl}"]`).click();
+  assert.equal(String((await getView(page)).linkId), corniceLink, "a click on the second row selects the shared marker");
+  assert.deepEqual(await pickedRow(), [calloutRowUrl]);
+  assert.equal(await page.locator(`.table-panel tr[data-url="${calloutRowUrl}"] .extra-cell`).evaluate((td) => td.textContent.includes("callout")), false, "callout is not shown as a characteristic");
+  const tableOrder = await page.locator(".table-panel tbody tr").evaluateAll((els) => els.map((el) => el.dataset.url));
+  assert.equal(tableOrder[tableOrder.indexOf("shk-001") + 1], calloutRowUrl, "the row added last stands right under its callout's row");
+  await page.keyboard.press("ArrowUp");
+  assert.deepEqual(await selectedRows(), ["shk-001", calloutRowUrl], "↑ to the row above keeps the shared marker");
+  assert.deepEqual(await pickedRow(), ["shk-001"]);
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  const afterBlock = tableOrder[tableOrder.indexOf(calloutRowUrl) + 1];
+  assert.deepEqual(await selectedRows(), [afterBlock], "↓ past the block steps to the next marker's row");
+  assert.deepEqual(await pickedRow(), [], "a marker with one row marks no picked row");
+  await page.keyboard.press("Home");
+  await page.keyboard.press("ArrowDown");
+  assert.deepEqual(await pickedRow(), [calloutRowUrl], "the keys reach the row that only shares a marker");
+  assert.equal(String((await getView(page)).linkId), corniceLink);
+  say("callout: one marker selects its rows, each row selects the marker, the keys step through every row");
   await context.close();
 } catch (err) {
   failed = true;

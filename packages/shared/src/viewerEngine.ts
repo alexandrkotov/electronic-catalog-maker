@@ -34,6 +34,7 @@ import { catalogFileStem } from "./fileName.js";
 import { createTranslator, matchLocale, type MessageParams, type Translate } from "./i18n.js";
 import { VIEWER_LOCALES, VIEWER_LOCALE_NAMES, viewerMessages } from "./locales/viewer/index.js";
 import { bookmarksStorageKey, localBookmarkStore, type Bookmark, type BookmarkStore } from "./bookmarks.js";
+import { CALLOUT_KEY, calloutOf, groupCalloutRows, markerUrlFor } from "./callout.js";
 import { BUY_VARIANTS_KEY, catalogHasAnyBuyTarget, expandVariantRows, parseBuyVariants, variantCartKey } from "./buyVariants.js";
 import { buildCartCheckoutUrl, cartStorageKey, catalogHasAnyBuyUrl, loadPersistedCart, parseCartItemId, savePersistedCart } from "./cart.js";
 import { DEFAULT_PDF_EXPORT_OPTIONS, suggestedQrSize, type DiagramPageMode, type PdfContent, type PdfExportOptions, type QrPlacement, type QrSize } from "./pdfExportOptions.js";
@@ -511,6 +512,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // on "whichever hotspot happens to match this url" would jump to the wrong
   // one. The url derived from this link is still what highlights the row.
   let selectedLinkId: number | null = null;
+  /**
+   * Which row of a marker shared by several rows (see callout.ts) was picked —
+   * a click on it, the arrow keys, a search result. null: the marker's own row.
+   * Only read while that marker is the selected one (see render).
+   */
+  let pickedRowUrl: string | null = null;
   /** Target names for navigation markers' labels (see hotspotHtml), refreshed by render(). */
   let imageNamesById = new Map<number, string>();
   let zoom = 1;
@@ -1879,7 +1886,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    * direction — no-op above the mobile breakpoint either way, see
    * mobileTab's declaration.
    */
-  function actionSelectHotspot(linkId: number, toTab: "stage" | "table" = "table") {
+  function actionSelectHotspot(linkId: number, toTab: "stage" | "table" = "table", pickedUrl: string | null = null) {
     // A navigation hotspot (address `#image=<id>`, see navLink.ts) has no row:
     // it opens its target image. A target that no longer exists does nothing.
     // A catalog link (`#catalog=<address>`) opens that catalog in its place.
@@ -1906,6 +1913,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       foundUrls.set(activeImageId, found);
     }
     selectedLinkId = linkId;
+    pickedRowUrl = pickedUrl;
     mobileTab = toTab;
     syncAddressBar();
     render();
@@ -1913,6 +1921,18 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (link && db) {
       emit("select", { imageId: activeImageId, linkId, url: link.url, name: findRowByUrl(db, link.url)?.name ?? link.name });
     }
+  }
+
+  /**
+   * The first marker on `imageId` that stands for the row at `url`: one with
+   * that address, else one with the address its `callout` names (see
+   * callout.ts). Never a navigation marker.
+   */
+  function markerLinkFor(imageId: number, url: string, row = db ? findRowByUrl(db, url) : undefined): CatalogLink | undefined {
+    if (!db) return undefined;
+    const links = [...listLinksForImage(db, imageId)].filter((l) => !isNavLink(l)).sort((a, b) => a.id - b.id);
+    const markerUrl = row ? markerUrlFor(row, new Set(links.map((l) => l.url))) : links.some((l) => l.url === url) ? url : null;
+    return markerUrl === null ? undefined : links.find((l) => l.url === markerUrl);
   }
 
   /**
@@ -1924,14 +1944,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    */
   function actionSelectRowByUrl(url: string) {
     if (!db || activeImageId === null) return;
-    const link = listLinksForImage(db, activeImageId).find((l) => l.url === url);
+    const row = findRowByUrl(db, url);
+    const link = markerLinkFor(activeImageId, url, row);
     if (link) {
-      actionSelectHotspot(link.id, "stage");
+      actionSelectHotspot(link.id, "stage", url);
       return;
     }
     // A row listed through a navigation link (see navTargetRows): open the
     // image it belongs to, with its hotspot selected.
-    const row = findRowByUrl(db, url);
     if (row && row.imageId !== activeImageId) actionGoToSearchResult(row.imageId, url);
   }
 
@@ -2439,8 +2459,9 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     activeImageId = imageId;
     resetZoomForImage(imageId);
     mobileTab = "stage"; // no-op above the mobile breakpoint — see mobileTab's declaration
-    const link = listLinksForImage(db, imageId).find((l) => l.url === url);
+    const link = markerLinkFor(imageId, url);
     selectedLinkId = link ? link.id : null;
+    pickedRowUrl = link ? url : null;
     syncAddressBar();
     render();
     if (link) centerSelection();
@@ -2748,7 +2769,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // overflow-hidden) layout box would only shift it off center.
     if (!(wholeFit && zoom <= fitZoom + 0.001)) hotspotEl?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
     const url = hotspotEl?.getAttribute("data-url");
-    if (url) root.querySelector(`tr[data-url="${cssEscape(url)}"]`)?.scrollIntoView({ block: "nearest" });
+    if (url) (root.querySelector("tbody tr.picked") ?? root.querySelector(`tr[data-url="${cssEscape(url)}"]`))?.scrollIntoView({ block: "nearest" });
   }
 
   /** Press-and-drag anywhere on the image to pan it (cursor turns into a grabbing hand). */
@@ -2797,7 +2818,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     imageNamesById = new Map(images.map((i) => [i.id, i.name]));
     const activeImage = images.find((i) => i.id === activeImageId) ?? null;
     const links = db && activeImage ? listLinksForImage(db, activeImage.id) : [];
-    const allRows = db && activeImage ? listRowsForImage(db, activeImage.id) : [];
+    // Rows under one marker read as one block (see groupCalloutRows).
+    const allRows = db && activeImage ? groupCalloutRows(listRowsForImage(db, activeImage.id)) : [];
     computeQuizState(images, activeImage?.id ?? null, allRows);
     // An image that hides its markers lists only the items found so far — the
     // table would otherwise give away what there is to find.
@@ -2818,6 +2840,15 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // part), while centering (see actionSelectHotspot) targets the one actually
     // clicked.
     const selectedUrl = links.find((l) => l.id === selectedLinkId)?.url ?? null;
+    // Rows sharing the selected marker (see callout.ts) are selected together;
+    // with more than one, the picked one is marked (keys and the card follow it).
+    const markerUrls = new Set(links.filter((l) => !isNavLink(l)).map((l) => l.url));
+    const calloutGroup = selectedUrl ? tableRows.filter((r) => markerUrlFor(r, markerUrls) === selectedUrl) : [];
+    const pickedUrl =
+      calloutGroup.length > 1
+        ? (calloutGroup.find((r) => r.url === pickedRowUrl) ?? calloutGroup.find((r) => r.url === selectedUrl) ?? calloutGroup[0]!).url
+        : null;
+    const groupUrls = new Set(calloutGroup.map((r) => r.url));
     const instances = selectedUrl
       ? links.filter((l) => l.url === selectedUrl).sort((a, b) => a.id - b.id)
       : [];
@@ -3006,7 +3037,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
             ? noDetails
               ? ""
               : `<div class="showcase-divider" id="divider-showcase" title="${te("divider.tip")}"></div>
-               ${renderShowcaseDetails(rows.find((r) => r.url === selectedUrl) ?? null, links)}`
+               ${renderShowcaseDetails(calloutGroup.find((r) => r.url === (pickedUrl ?? selectedUrl)) ?? rows.find((r) => r.url === selectedUrl) ?? null, links, calloutGroup)}`
             : `<div class="panel-divider" id="divider-table" title="${te("divider.tip")}"></div>
 
         <div class="table-panel" tabindex="0" aria-label="${te("table.keysAria")}">
@@ -3021,7 +3052,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                      ${catalogMode === "quiz" ? "" : `<th>${te("column.extra")}<span class="col-resize-handle" data-col="3"></span></th>
                      <th><span class="col-resize-handle" data-col="4"></span></th>`}
                    </tr></thead>
-                   <tbody>${tableRows.map((r) => rowHtml(r, selectedUrl)).join("")}</tbody>
+                   <tbody>${tableRows.map((r) => rowHtml(r, groupUrls.has(r.url) || r.url === selectedUrl, r.url === pickedUrl)).join("")}</tbody>
                  </table>`
               : ""
           }
@@ -3067,7 +3098,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     if (tablePanelNow && savedTableScrollTop !== null) tablePanelNow.scrollTop = savedTableScrollTop;
     // Another picture (arrow keys, a navigation hotspot, a search result): keep its line in sight.
     if (imagesPanel && imageChanged) revealInPanel(imagesPanel, imagesPanel.querySelector<HTMLElement>("li[aria-current]"));
-    if (tablePanelNow && revealSelectedRow) revealInPanel(tablePanelNow, tablePanelNow.querySelector<HTMLElement>("tbody tr.selected"));
+    if (tablePanelNow && revealSelectedRow) revealInPanel(tablePanelNow, tablePanelNow.querySelector<HTMLElement>("tbody tr.picked") ?? tablePanelNow.querySelector<HTMLElement>("tbody tr.selected"));
     revealSelectedRow = false;
 
     // catalog_mode "quiz": the question card is shrunk to the stage's width
@@ -3177,21 +3208,23 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       return;
     }
     if (catalogMode === "quiz") return;
-    const firstLink = new Map<string, number>();
-    for (const l of [...listLinksForImage(db, activeImageId)].sort((a, b) => a.id - b.id)) {
-      if (!isNavLink(l) && !firstLink.has(l.url)) firstLink.set(l.url, l.id);
-    }
-    const urls = Array.from(root.querySelectorAll<HTMLElement>(".table-panel tr[data-url]"), (tr) => tr.dataset.url!).filter((u) => firstLink.has(u));
+    const imageId = activeImageId;
+    // Every row that has a marker here, its own or one it shares (callout.ts).
+    const urls = Array.from(root.querySelectorAll<HTMLElement>(".table-panel tr[data-url]"), (tr) => tr.dataset.url!).filter(
+      (u) => markerLinkFor(imageId, u) !== undefined,
+    );
     if (urls.length === 0) return;
     evt.preventDefault();
-    const selectedUrl = listLinksForImage(db, activeImageId).find((l) => l.id === selectedLinkId)?.url;
-    const at = selectedUrl === undefined ? -1 : urls.indexOf(selectedUrl);
+    const current =
+      root.querySelector<HTMLElement>(".table-panel tbody tr.picked")?.dataset.url ??
+      listLinksForImage(db, imageId).find((l) => l.id === selectedLinkId)?.url;
+    const at = current === undefined ? -1 : urls.indexOf(current);
     // Nothing selected yet: ↓/Home start at the top, ↑/End at the bottom.
     const next = at !== -1 ? urls[stepIndex(at, step, urls.length)] : step === -1 || step === Infinity ? urls[urls.length - 1] : urls[0];
-    if (next === undefined || next === selectedUrl) return;
+    if (next === undefined || next === current) return;
     revealSelectedRow = true;
     container.classList.add("keys-nav"); // hides the hover balloons — see onKeysNavPointer
-    actionSelectHotspot(firstLink.get(next)!, "table");
+    actionSelectHotspot(markerLinkFor(imageId, next)!.id, "table", next);
   }
 
   /** `at` moved by `step` (±1, or ±Infinity for the ends), kept within 0..length-1. */
@@ -3271,7 +3304,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
    * The Buy control is always a plain link — there is no toolbar cart here,
    * so an "add to cart" toggle would lead nowhere.
    */
-  function renderShowcaseDetails(row: CatalogRow | null, imageLinks: { id: number; url: string }[]): string {
+  function renderShowcaseDetails(row: CatalogRow | null, imageLinks: { id: number; url: string }[], calloutGroup: CatalogRow[] = []): string {
     if (!row) {
       const onlyNav = imageLinks.some(isNavLink) && showcaseItems(imageLinks).length === 0;
       // An overview image (only navigation markers — the room photo): list the
@@ -3298,7 +3331,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // A quiz question still open keeps the explanation (and its own keys) to itself, as in the table (see rowHtml).
     const quizOpen = quizNow !== null && quizNow.isQuestion && quizNow.status === "open";
     const entries = Object.entries(row.extra).filter(
-      ([k, v]) => k !== "buy_url" && k !== BUY_VARIANTS_KEY && !(quizNow && QUIZ_HIDDEN_EXTRA_KEYS.includes(k)) && v !== "" && v !== null && v !== undefined,
+      ([k, v]) =>
+        k !== "buy_url" && k !== BUY_VARIANTS_KEY && k !== CALLOUT_KEY && !(quizNow && QUIZ_HIDDEN_EXTRA_KEYS.includes(k)) && v !== "" && v !== null && v !== undefined,
     );
     const showDescription = !quizOpen && row.description && row.description.trim().toLowerCase() !== row.name.trim().toLowerCase();
     // Prev/next over the distinct items on this image (a part drawn several
@@ -3307,7 +3341,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // one precisely is not the only way to reach an item. Not on an image
     // that hides its markers: stepping through would list what is to find.
     const items = hidesMarkers(activeImageId) ? [] : showcaseItems(imageLinks);
-    const at = items.findIndex((l) => l.url === row.url);
+    const at = items.findIndex((l) => l.url === row.url || l.url === calloutOf(row));
     const nav =
       items.length > 1 && at >= 0
         ? `<div class="showcase-nav"><button type="button" id="btn-showcase-prev" aria-label="${te("showcase.prev")}">‹</button><span>${te("nav.position", { index: at + 1, total: items.length })}</span><button type="button" id="btn-showcase-next" aria-label="${te("showcase.next")}">›</button></div>`
@@ -3321,12 +3355,23 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         ? `<button type="button" class="buy-btn showcase-buy ${inCart ? "in-cart" : ""}" data-cart-url="${escapeHtml(row.url)}">${addLabel(inCart)}</button>`
         : `<a class="buy-btn showcase-buy" href="${escapeHtml(buyUrl)}" target="_blank" rel="noopener noreferrer">${directOpenLabel()}</a>`;
     const buyControl = withWhereToBuy(row, buyOnly);
+    // Several rows under this marker (one per model, see callout.ts): switch between them here.
+    const calloutRows =
+      calloutGroup.length > 1
+        ? `<div class="showcase-callout"><span>${te("showcase.sameMarker")}</span>${calloutGroup
+            .map(
+              (g) =>
+                `<button type="button" class="showcase-callout-row" data-url="${escapeHtml(g.url)}" aria-pressed="${g.url === row.url}">${escapeHtml(g.sku || g.name || g.url)}</button>`,
+            )
+            .join("")}</div>`
+        : "";
     return `<section class="showcase-details" role="region" aria-label="${te("showcase.region")}" aria-live="polite">
       ${nav}
       ${renderShowcaseVerdict()}
       <h2>${escapeHtml(row.name)}</h2>
       ${row.sku ? `<p class="showcase-sku">${skuLabel()} ${escapeHtml(row.sku)}</p>` : ""}
       ${showDescription ? `<p class="showcase-desc">${escapeHtml(row.description)}</p>` : ""}
+      ${calloutRows}
       ${
         entries.length
           ? `<dl class="showcase-extra">${entries
@@ -3950,14 +3995,14 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     });
   }
 
-  function rowHtml(r: CatalogRow, selectedUrl: string | null): string {
-    const selected = [r.url === selectedUrl ? "selected" : "", ...quizClasses(r.url)].filter(Boolean).join(" ");
+  function rowHtml(r: CatalogRow, isSelected: boolean, isPicked = false): string {
+    const selected = [isSelected ? "selected" : "", isPicked ? "picked" : "", ...quizClasses(r.url)].filter(Boolean).join(" ");
     // A quiz hides everything but the option's own text until the question is
     // settled — the description is the explanation, and extra may say why.
     const quizHidden = quizNow !== null && quizNow.status === "open";
     const buyUrl = typeof r.extra.buy_url === "string" && r.extra.buy_url ? r.extra.buy_url : null;
     const extra = Object.entries(r.extra)
-      .filter(([k]) => k !== "buy_url" && k !== BUY_VARIANTS_KEY && !(quizNow && QUIZ_HIDDEN_EXTRA_KEYS.includes(k)))
+      .filter(([k]) => k !== "buy_url" && k !== BUY_VARIANTS_KEY && k !== CALLOUT_KEY && !(quizNow && QUIZ_HIDDEN_EXTRA_KEYS.includes(k)))
       .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(String(v))}`)
       .join(", ");
     // The copy button lives inside .cell-text (so it can center itself
@@ -4189,6 +4234,12 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     };
     root.querySelectorAll<HTMLButtonElement>(".showcase-list-item").forEach((btn) => {
       btn.addEventListener("click", () => actionGoToSearchResult(Number(btn.dataset.imageId), btn.dataset.url!));
+    });
+    root.querySelectorAll<HTMLButtonElement>(".showcase-callout-row").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        pickedRowUrl = btn.dataset.url!;
+        render();
+      });
     });
     root.getElementById("btn-showcase-prev")?.addEventListener("click", () => stepShowcase(-1));
     root.getElementById("btn-showcase-next")?.addEventListener("click", () => stepShowcase(1));

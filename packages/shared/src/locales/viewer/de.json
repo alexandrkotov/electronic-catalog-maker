@@ -150,6 +150,7 @@
   "showcase.prev": "Vorheriger Artikel",
   "showcase.next": "Nächster Artikel",
   "showcase.findHint": "Schau genau hin und tippe auf Dinge im Bild.",
+  "showcase.sameMarker": "Unter dieser Markierung:",
   "hotspot.aria": "{name} – Details anzeigen",
   "hotspot.navAria": "{name} – öffnen",
   "hotspot.unfoundAria": "Hier ist etwas versteckt",
