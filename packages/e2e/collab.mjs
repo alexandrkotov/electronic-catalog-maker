@@ -94,7 +94,7 @@ async function scenario() {
     await page.click("#form-row button[type=submit]");
     await page.waitForSelector(`tr[data-row-id]:has-text('${name} row')`);
   }
-  const undoTitle = (page) => page.getAttribute("#btn-undo", "title");
+  const undoTitle = (page) => page.getAttribute("#btn-undo", "data-tip"); // title="" moves here (tooltip.ts)
   const undoEnabled = async (page) => !(await page.$eval("#btn-undo", (b) => b.disabled));
   const joinWithName = async (page, name) => {
     await page.waitForSelector("#collab-name-input");
@@ -158,7 +158,7 @@ async function scenario() {
   await b.click("#btn-delete-row");
   await b.click("#btn-confirm-yes");
   await a.waitForFunction(() => document.querySelectorAll("tr[data-row-id]").length === 3, null, { timeout: 8000 });
-  await a.waitForFunction(() => /add hotspot/i.test(document.getElementById("btn-undo").title), null, { timeout: 8000 });
+  await a.waitForFunction(() => /add hotspot/i.test(document.getElementById("btn-undo").dataset.tip), null, { timeout: 8000 });
   assert.equal(await undoEnabled(a), true, "A's other entries survive");
   await a.click("#btn-undo");
   await expectHotspots(a, ["A1", "B1", "Bolt"]);

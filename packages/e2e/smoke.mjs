@@ -67,8 +67,10 @@ async function runScenario(config) {
   try {
     // 1. A new catalog with one image, saved to a file.
     let page = await freshPage("Smoke catalog", editorUrl);
+    assert.ok(await page.isVisible(".tour-offer"), "a first visit to the empty editor offers the quick tour");
     await page.click("#btn-new");
     await page.waitForSelector("#btn-add-image:not([disabled])");
+    assert.ok(!(await page.isVisible(".tour-offer")), "starting work takes the offer away");
     await page.setInputFiles("#file-image", imagePath);
     await page.waitForSelector("#stage-img", { state: "attached" });
     const first = join(work, `${config.name}-first.ecatm`);
@@ -146,6 +148,32 @@ async function runScenario(config) {
     // The page-view path the counter is given has the per-visit parts taken out.
     const filed = await page.evaluate(() => window.goatcounter.path("/editor/?lang=ru&src=blob%3Ahttps%3A%2F%2Ftapalog.com%2F7b1c"));
     assert.equal(filed, "/editor/?lang=ru&src=blob", "blob: sources are filed under one path");
+
+    // The quick tour (tour.ts): every step to Done, the table step with its
+    // drawing, keys kept from the catalog behind it, Esc closes.
+    await page.click("#btn-tour");
+    await page.waitForSelector(".tour-card");
+    await page.evaluate(() => {
+      window.__keysBehind = 0;
+      document.addEventListener("keydown", () => window.__keysBehind++);
+    });
+    await page.keyboard.press("Delete");
+    assert.equal(await page.evaluate(() => window.__keysBehind), 0, "keys don't reach the editor behind the tour");
+    const tourSteps = [];
+    let sawFigure = false;
+    for (let i = 0; i < 30 && (await page.$(".tour-card")); i++) {
+      tourSteps.push(await page.textContent(".tour-count"));
+      if (await page.$(".tour-figure:not([hidden]) .tf .tf-button")) sawFigure = true;
+      await page.click(".tour-next");
+    }
+    assert.ok(!(await page.$(".tour-card, .tour-hole, .tour-blocker")), "Done closes the tour and leaves nothing behind");
+    assert.ok(tourSteps.length >= (mobile ? 4 : 12), `the tour walks through the editor (${tourSteps.join(", ")})`);
+    if (!mobile) assert.ok(sawFigure, "the table step draws one marker with several rows");
+    await page.click("#btn-tour");
+    await page.waitForSelector(".tour-card");
+    await page.keyboard.press("Escape");
+    assert.ok(!(await page.$(".tour-card")), "Esc closes the tour");
+    say(`quick tour: ${tourSteps.length} steps to Done${mobile ? "" : ", the table step with its drawing"}, Esc closes`);
     await closePage(page);
     say("reopened the saved file in the editor: hotspot and row are there, the undone hotspot is not");
 

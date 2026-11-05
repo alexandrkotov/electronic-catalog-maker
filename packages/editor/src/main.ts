@@ -125,6 +125,8 @@ import {
   type PresenceUser,
 } from "./collab";
 import { clearOutbox, loadOutbox, saveOutbox, type QueuedOp } from "./collabStore";
+import { offerTour, startTour, withdrawTourOffer, type TourStep } from "./tour";
+import { installTooltips } from "./tooltip";
 
 // Applied before the first render so there's no flash of the wrong theme.
 applyTheme(resolveInitialTheme());
@@ -134,6 +136,7 @@ applyTheme(resolveInitialTheme());
 setUpPwa();
 
 const app = document.getElementById("app")!;
+installTooltips(); // every title="" on the page is drawn in the theme's colors (tooltip.ts)
 
 // UI language: saved choice -> browser language -> English (see i18n.ts).
 // The editor is a single-instance page, so this is plain module state
@@ -160,6 +163,21 @@ function t(key: string, params?: MessageParams): string {
   return tMode("commercial", key, params);
 }
 document.title = t("toolbar.title");
+/**
+ * A keyboard shortcut as this computer writes it: ⌘ on a Mac, Ctrl (Strg in
+ * German) elsewhere. The handlers take either key (see the Ctrl/Cmd+S and
+ * undo listeners at the bottom of this file).
+ */
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+function shortcut(action: "save" | "undo" | "redo"): string {
+  if (IS_MAC) return { save: "⌘S", undo: "⌘Z", redo: "⇧⌘Z" }[action];
+  const ctrl = t("keys.ctrl");
+  return { save: `${ctrl}+S`, undo: `${ctrl}+Z`, redo: `${ctrl}+${t("keys.shift")}+Z` }[action];
+}
+function shortcuts(): MessageParams {
+  return { save: shortcut("save"), undo: shortcut("undo"), redo: shortcut("redo") };
+}
+
 /** t() for text/attribute positions inside the HTML templates. */
 function te(key: string, params?: MessageParams): string {
   return escapeHtml(t(key, params));
@@ -765,6 +783,10 @@ async function boot() {
     await loadInitialFromUrl(initialSrcParam);
   } else {
     render();
+    if (!tourSeen()) offerTour(t("tour.offer"), t("tour.offer.yes"), t("tour.offer.no"), (go) => {
+      rememberTourSeen();
+      if (go) actionStartTour();
+    });
   }
 }
 
@@ -2932,6 +2954,96 @@ function actionDeleteRow() {
   });
 }
 
+// ---------- quick tour (tour.ts) ----------
+
+const TOUR_SEEN_KEY = "ecm-editor-tour-seen";
+
+function tourSeen(): boolean {
+  try {
+    return localStorage.getItem(TOUR_SEEN_KEY) === "1";
+  } catch {
+    return true; // nowhere to remember the answer: don't offer it on every visit
+  }
+}
+
+function rememberTourSeen() {
+  try {
+    localStorage.setItem(TOUR_SEEN_KEY, "1");
+  } catch {
+    // localStorage unavailable (privacy mode, etc.)
+  }
+}
+
+/**
+ * The tour of what is on screen now: without a catalog only where to start;
+ * with a picture open the whole editor. Steps whose part isn't shown (no
+ * picture yet, a phone tab) are skipped by startTour.
+ */
+function tourSteps(): TourStep[] {
+  const full = !!db && activeImageId !== null;
+  return [
+    { target: "#btn-new, #btn-open", text: t("tour.start") },
+    { target: "#btn-copy-remote", text: t("tour.copyRemote") },
+    { target: "#btn-add-image", text: t("tour.addImage") },
+    // The × as the image list draws it: red, see .image-list-delete.
+    { target: ".panel-images", text: t("tour.images"), textHtml: te("tour.images").replace("×", `<span class="tour-sign-delete">×</span>`) },
+    { target: "#stage-scroll", text: t("tour.stage") },
+    { target: ".zoom-controls", text: t("tour.zoom") },
+    { target: "[data-tour=link-form]", text: t("tour.linkForm") },
+    { target: "[data-tour=links]", text: t("tour.links") },
+    { target: "[data-tour=row-form]", text: t("tour.rowForm") },
+    { target: "[data-tour=rows]", text: t("tour.callout"), figure: calloutFigureHtml(), width: 680 },
+    // The ● as Save shows it: amber, see .unsaved-dot.
+    { target: "#btn-save, #btn-undo, #btn-redo", text: t("tour.save", shortcuts()), textHtml: te("tour.save", shortcuts()).replace("●", `<span class="unsaved-dot">●</span>`) },
+    { target: "#btn-export, #btn-export-protected, #btn-export-pdf", text: t("tour.export") },
+    { target: "#btn-search", text: t("tour.search") },
+    { target: "#btn-store-settings", text: t("tour.store") },
+    { target: "#btn-start-collab", text: t("tour.collab") },
+    { target: "#lang-select, #btn-theme", text: t("tour.look") },
+    { target: "#btn-tour", text: full ? t("tour.again") : t("tour.more") },
+  ].filter((step) => full || !step.target.startsWith("[data-tour="));
+}
+
+function actionStartTour() {
+  withdrawTourOffer();
+  rememberTourSeen();
+  startTour(tourSteps(), {
+    step: (n, total) => t("tour.step", { n, total }),
+    next: t("tour.next"),
+    back: t("tour.back"),
+    skip: t("tour.skip"),
+    done: t("tour.done"),
+  });
+}
+
+/**
+ * The tour's drawing for "one marker, several rows" (callout.ts), in three
+ * frames built from the editor's own look: the part's row is clicked, "+ Row
+ * for another model" is pressed, the new model's row stands right under the
+ * first one with ↳ while marker 1 lights up the whole block.
+ */
+function calloutFigureHtml(): string {
+  const part = te("tour.callout.part");
+  const other = te("tour.callout.otherPart");
+  const model = te("tour.callout.model");
+  const head = `<tr><th>${te("column.name")}</th><th>${escapeHtml(skuLabel())}</th><th>${te("column.extra")}</th></tr>`;
+  const row = (name: string, sku: string, extra: string, cls = "", shares = false) =>
+    `<tr class="${cls}"><td>${shares ? `<span class="callout-mark">↳</span> ` : ""}${name}</td><td>${sku}</td><td>${extra}</td></tr>`;
+  const picture = (lit: boolean) => `<div class="tf-picture">
+      <svg viewBox="0 0 160 48" aria-hidden="true"><path d="M14 38h52M40 38V14M28 14h24M88 10v28M80 10h16M80 38h16M120 24h28" /><circle cx="134" cy="24" r="8" /></svg>
+      <span class="tf-marker${lit ? " lit" : ""}" style="left:40px;top:14px">1</span>
+      <span class="tf-marker" style="left:88px;top:44px">2</span>
+    </div>`;
+  const frame = (n: number, caption: string, body: string) =>
+    `<figure class="tf-frame"><figcaption><span class="tf-n">${n}</span>${caption}</figcaption>${body}</figure>`;
+  return `<div class="tf">
+    ${frame(1, te("tour.callout.click"), `${picture(false)}<table class="tf-table">${head}${row(part, "10-201", `${model}: A`, "editing")}${row(other, "10-310", "")}</table>`)}
+    ${frame(2, te("tour.callout.press"), `<div class="tf-form"><span></span><span></span><span class="tf-button">${te("row.callout.add")}<svg class="tf-cursor" viewBox="0 0 16 20" aria-hidden="true"><path d="M1 1v15l4-4 3 7 3-1-3-7h6z" /></svg></span><span></span></div>`)}
+    ${frame(3, te("tour.callout.type"), `${picture(true)}<table class="tf-table">${head}${row(part, "10-201", `${model}: A`, "row-match")}${row(part, "10-202", `${model}: B`, "row-match", true)}${row(part, `10-203<span class="tf-caret"></span>`, `${model}: C`, "editing", true)}${row(other, "10-310", "")}</table>`)}
+  </div>
+  <p class="tf-note">${te("tour.callout.note")}</p>`;
+}
+
 // ---------- helpers ----------
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -3073,6 +3185,7 @@ function render() {
   // decide which single panel to show — see mobileTab's declaration. Set on
   // #app itself (not inside innerHTML below) so it survives the wholesale
   // rebuild, same reasoning as applyPanelWidths()'s CSS custom properties.
+  if (db && withdrawTourOffer()) rememberTourSeen(); // started working instead: the ? button still has the tour
   app.setAttribute("data-mobile-tab", mobileTab);
   document.title = (unsavedWorkAtRisk() ? "● " : "") + t("toolbar.title");
   app.innerHTML = `
@@ -3098,6 +3211,7 @@ function render() {
         (l) => `<option value="${l}" ${l === locale ? "selected" : ""}>${escapeHtml(EDITOR_LOCALE_NAMES[l] ?? l)}</option>`,
       ).join("")}</select>
       <button id="btn-theme" title="${te("toolbar.theme.tip")}">${currentTheme() === "dark" ? te("theme.light") : te("theme.dark")}</button>
+      <button id="btn-tour" title="${te("tour.button")}" aria-label="${te("tour.button")}">?</button>
       <span class="hint">${escapeHtml(statusMessage)}</span>
       ${searchOpen ? renderSearchPanel() : ""}
     </div>
@@ -3286,8 +3400,8 @@ function collabStatusText(): { icon: string; label: string; title: string } {
 
 /** Undo/Redo toolbar pair; the tooltips name what each would do. */
 function renderUndoButtons(): string {
-  const undoLabel = canUndo() ? te("undo.tip", { what: t(`undo.op.${undoStack[undoStack.length - 1]!.label}`) }) : te("undo.tip.empty");
-  const redoLabel = canRedo() ? te("redo.tip", { what: t(`undo.op.${redoStack[redoStack.length - 1]!.label}`) }) : te("redo.tip.empty");
+  const undoLabel = canUndo() ? te("undo.tip", { what: t(`undo.op.${undoStack[undoStack.length - 1]!.label}`), keys: shortcut("undo") }) : te("undo.tip.empty");
+  const redoLabel = canRedo() ? te("redo.tip", { what: t(`undo.op.${redoStack[redoStack.length - 1]!.label}`), keys: shortcut("redo") }) : te("redo.tip.empty");
   return `<button id="btn-undo" ${canUndo() ? "" : "disabled"} title="${undoLabel}">${te("toolbar.undo")}</button>
       <button id="btn-redo" ${canRedo() ? "" : "disabled"} title="${redoLabel}">${te("toolbar.redo")}</button>`;
 }
@@ -4199,7 +4313,7 @@ function renderLinkForm(links: CatalogLink[], images: CatalogImageInfo[]): strin
   // hotspot at a part that's already drawn elsewhere (same bolt, another spot).
   const reusable = Array.from(new Map(links.filter((l) => !isNavLink(l)).map((l) => [l.url, l])).values());
   return `
-    <section>
+    <section data-tour="link-form">
       <h2>${te("link.new.title")}</h2>
       <p class="hint">${te("link.new.hint")}</p>
       ${
@@ -4265,7 +4379,7 @@ function renderLinksSection(links: CatalogLink[], editingLinkId: number | null, 
   };
   const [nameW, urlW] = colWidths.links;
   return `
-    <section>
+    <section data-tour="links">
       <h2>${te("links.title", { count: links.length })}</h2>
       <div class="table-scroll">
         <table data-col-key="links" style="table-layout:fixed; width:${colTableTotalWidth("links")}px">
@@ -4291,7 +4405,7 @@ function renderLinksSection(links: CatalogLink[], editingLinkId: number | null, 
 
 function renderRowForm(availableLinks: CatalogLink[]): string {
   return `
-    <section>
+    <section data-tour="row-form">
       <h2>${te("row.new.title")}</h2>
       ${
         availableLinks.length === 0
@@ -4383,7 +4497,7 @@ function renderRowsSection(
 ): string {
   const [urlW, nameW, skuW, descriptionW, extraW] = colWidths.rows;
   return `
-    <section>
+    <section data-tour="rows">
       <h2>${te("rows.title", { count: rows.length })}</h2>
       <div class="table-scroll">
         <table data-col-key="rows" style="table-layout:fixed; width:${colTableTotalWidth("rows")}px">
@@ -4454,6 +4568,7 @@ function wireEvents(links: CatalogLink[]) {
     toggleTheme();
     render();
   });
+  document.getElementById("btn-tour")?.addEventListener("click", () => actionStartTour());
 
   document.getElementById("divider-images")?.addEventListener("pointerdown", (evt) => startPanelResize(evt as PointerEvent, "images"));
   document.getElementById("divider-inspector")?.addEventListener("pointerdown", (evt) => startPanelResize(evt as PointerEvent, "inspector"));

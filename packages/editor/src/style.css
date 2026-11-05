@@ -1227,3 +1227,131 @@ td.extra-cell {
 .callout-add .hint {
   margin: 0.25rem 0 0;
 }
+
+/* ---------- quick tour (tour.ts) ---------- */
+#btn-tour {
+  min-width: 2rem;
+  font-weight: 600;
+}
+.tour-blocker { position: fixed; inset: 0; z-index: 1100; }
+.tour-hole {
+  position: fixed;
+  z-index: 1101;
+  border-radius: 8px;
+  box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.55);
+  outline: 2px solid var(--accent);
+  pointer-events: none;
+  transition: left 0.15s, top 0.15s, width 0.15s, height 0.15s;
+}
+.tour-card, .tour-offer {
+  position: fixed;
+  z-index: 1102;
+  box-sizing: border-box;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  padding: 14px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgb(0 0 0 / 0.35);
+}
+.tour-offer { right: 16px; bottom: 16px; width: min(320px, calc(100vw - 32px)); z-index: 40; }
+.tour-text { margin: 0 0 12px; line-height: 1.45; }
+.tour-sign-delete { color: var(--danger); font-weight: 600; }
+.tour-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; color: var(--muted); font-size: 12px; }
+.tour-skip { border: 0; background: none; padding: 2px 4px; color: var(--muted); text-decoration: underline; }
+.tour-skip:hover:not(:disabled) { background: none; color: var(--text); }
+.tour-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.tour-next { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tour-next:hover:not(:disabled), .tour-next:focus-visible:not(:disabled) { background: var(--accent); filter: brightness(1.1); }
+:root[data-theme="dark"] .tour-next { color: #0b1220; }
+
+/* The drawing of one marker with several rows: three frames of the editor's own look. */
+.tour-figure { margin: 0 0 12px; }
+.tf { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.tf-frame {
+  margin: 0;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+}
+.tf-frame figcaption { font-size: 0.8rem; line-height: 1.35; }
+.tf-n {
+  display: inline-grid;
+  place-items: center;
+  width: 1.3em;
+  height: 1.3em;
+  margin-right: 0.35em;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+:root[data-theme="dark"] .tf-n { color: #0b1220; }
+.tf-picture {
+  position: relative;
+  height: 56px;
+  border-radius: 4px;
+  background: repeating-conic-gradient(var(--stage-a) 0 25%, var(--stage-b) 0 50%) 0 0 / 12px 12px;
+}
+.tf-picture svg { position: absolute; inset: 4px; width: calc(100% - 8px); height: calc(100% - 8px); fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
+.tf-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 0 5px;
+  border: 1px solid var(--hotspot-border);
+  border-radius: 3px;
+  background: var(--hotspot-bg);
+  color: #1a1a1a;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+}
+.tf-marker.lit { background: var(--hotspot-row-match-bg); outline: 2px solid var(--accent); }
+.tf-table { font-size: 0.7rem; background: var(--bg-page); }
+.tf-table th, .tf-table td { padding: 2px 4px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+.tf-table th { color: var(--muted); font-weight: 500; }
+.tf-table tr.editing { background: var(--accent-soft); }
+.tf-table tr.row-match { background: var(--row-match-soft); }
+.tf-form { display: flex; flex-direction: column; gap: 6px; padding: 6px; border-radius: 4px; background: var(--bg-page); }
+.tf-form > span:not(.tf-button) { height: 8px; border-radius: 3px; background: var(--border); }
+.tf-form > span:last-child { width: 55%; }
+.tf-button {
+  position: relative;
+  align-self: flex-start;
+  padding: 3px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.tf-cursor { position: absolute; right: -6px; bottom: -14px; width: 14px; height: 18px; fill: var(--text); stroke: var(--bg-page); stroke-width: 1.2; }
+.tf-caret { display: inline-block; width: 1px; height: 0.9em; margin-left: 1px; vertical-align: -0.1em; background: var(--text); animation: tf-blink 1s steps(1) infinite; }
+@keyframes tf-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .tf-caret { animation: none; } .tour-hole { transition: none; } }
+.tf-note { margin: 10px 0 0; color: var(--muted); font-size: 0.8rem; line-height: 1.4; }
+
+/* Hover hints (tooltip.ts): the page's own colors instead of the browser's black title box. */
+.ecm-tip {
+  position: fixed;
+  z-index: 1200;
+  max-width: min(340px, calc(100vw - 16px));
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  white-space: pre-line;
+  pointer-events: none;
+}
