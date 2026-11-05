@@ -1,5 +1,5 @@
 import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
-import { VIEWER_LOCALES, embedLocaleCandidates, mountViewer, pickLocale, type ViewerController } from "@ecm/shared";
+import { VIEWER_LOCALES, embedLocaleCandidates, mountViewer, pickLocale, toolbarFromHideAttr, type ViewerController } from "@ecm/shared";
 // Reused as-is rather than copied — a second hand-maintained stylesheet
 // would inevitably drift from the real one. `:root` (targets a page's
 // <html>) doesn't mean anything inside a shadow tree; `:host` is the
@@ -74,6 +74,10 @@ const HOST_DEFAULTS_CSS = `
  *   percentage of the widget, e.g. "17,26" (the diagram gets the rest). Makes
  *   this widget ignore the panel widths saved in the visitor's browser (shared
  *   by every page on the site), so each widget keeps its own proportions.
+ * - `hide` — full mode: toolbar controls to leave out, separated by spaces,
+ *   e.g. "open open-remote refresh" for a page that shows one catalog only.
+ *   Names: title, open, open-remote, refresh, language, theme. Search and
+ *   Export PDF always stay.
  *
  * - `cart` — showcase mode: "on" turns each item's store link into an
  *   "Add to cart" toggle and adds a checkout button above the image (see
@@ -133,6 +137,7 @@ class EcmViewerElement extends HTMLElement {
       navTitle: this.getAttribute("nav-title") || undefined,
       panelFractions,
       showcaseCart: this.getAttribute("cart") === "on",
+      toolbar: toolbarFromHideAttr(this.getAttribute("hide")),
       onEvent: (type, detail, cancelable) =>
         this.dispatchEvent(new CustomEvent(`ecm-${type}`, { detail, bubbles: true, composed: true, cancelable })),
       // Never rewrite the *embedding* page's address bar.

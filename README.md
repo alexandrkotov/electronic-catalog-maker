@@ -652,6 +652,11 @@ picture gets a **Checkout** button. The CSS custom property
 `--ecm-showcase-stage-height` on the element sets the picture's height on
 a phone (default `360px`).
 
+Optional: `hide="open open-remote refresh"` leaves those buttons out of the
+full toolbar, for a page that shows one catalog and nothing else. The names
+are `title`, `open`, `open-remote`, `refresh`, `language` and `theme`; Search
+and Export PDF always stay.
+
 Optional: `panels="17,26"` sets the opening widths of the image list and the
 row table as a percentage of the widget (the diagram gets the rest). With it,
 the widget ignores the panel widths a visitor saved in their browser — those
