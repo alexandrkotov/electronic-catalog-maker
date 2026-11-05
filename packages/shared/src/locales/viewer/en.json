@@ -120,6 +120,8 @@
   "tab.table": "Table",
   "images.empty": "Open a .{ext} catalog file, or try a demo catalog: {demos}.",
   "images.loading": "Loading…",
+  "images.keysAria": "Images. The up and down arrow keys switch them.",
+  "table.keysAria": "Parts table. The up and down arrow keys move the selection.",
   "list.separator": ", ",
   "demo.autoParts": "Auto parts",
   "demo.furniture": "Furniture",

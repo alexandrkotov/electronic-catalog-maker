@@ -120,6 +120,8 @@
   "tab.table": "Tabelle",
   "images.empty": "Öffne eine .{ext}-Katalogdatei oder probier einen Demo-Katalog: {demos}.",
   "images.loading": "Wird geladen…",
+  "images.keysAria": "Bilder. Die Pfeiltasten nach oben und unten wechseln sie.",
+  "table.keysAria": "Teiletabelle. Die Pfeiltasten nach oben und unten verschieben die Auswahl.",
   "list.separator": ", ",
   "demo.autoParts": "Autoteile",
   "demo.furniture": "Möbel",

@@ -655,6 +655,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   // 0,0) — tracked so render() can restore the pan position instead of
   // losing it on every unrelated update (selecting a link/row, zooming, ...).
   let lastRenderedImageId: number | null = null;
+  /** Set by the arrow keys in the table: the next render scrolls the selected row into sight. */
+  let revealSelectedRow = false;
   // Whether the table panel has already had its one-time "reveal the Buy
   // column" auto-scroll for the currently loaded catalog (see render() below
   // and the reset in openBytes()). Buy sits in the rightmost table column and
@@ -2825,6 +2827,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // image (rebuilding the container's innerHTML recreates #stage-scroll
     // from scratch, which would otherwise silently snap back to
     // scrollLeft/Top = 0).
+    const imageChanged = activeImageId !== lastRenderedImageId;
     const prevStageScroll = root.getElementById("stage-scroll");
     const savedScroll =
       prevStageScroll && activeImageId === lastRenderedImageId
@@ -2840,6 +2843,11 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // by the next hotspot click.
     const prevTablePanel = root.querySelector<HTMLElement>(".table-panel");
     const savedTableScrollLeft = prevTablePanel ? prevTablePanel.scrollLeft : null;
+    // ...and both side panels' vertical scroll: without this, picking a
+    // picture far down a long list snapped the list back to its top. The
+    // table keeps its place only on the same picture (another one has other rows).
+    const savedImagesScrollTop = root.querySelector<HTMLElement>(".panel-images")?.scrollTop ?? null;
+    const savedTableScrollTop = prevTablePanel && !imageChanged ? prevTablePanel.scrollTop : null;
 
     // Styling hooks live on `container` itself (a class, not a hardcoded id —
     // it might be the standalone app's own #app div, or a plain div created
@@ -2849,6 +2857,10 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     // (keyboard-operable hotspots, a picker, zoom buttons) remember what was
     // focused and put it back afterwards — see the restore below.
     const activeEl = root.activeElement as HTMLElement | null;
+    // The side panels too (put back right after the rebuild, below): a click in
+    // the picture list or the table focuses the panel, and the arrow keys (see
+    // onPanelKey) must keep working after it.
+    const focusedPanel = activeEl?.classList.contains("panel-images") ? ".panel-images" : activeEl?.classList.contains("table-panel") ? ".table-panel" : null;
     const focusedEl = showcase || activeEl?.id === "lang-select" ? activeEl : null;
     const focusKey = focusedEl?.id
       ? `#${focusedEl.id}`
@@ -2918,7 +2930,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
           <button type="button" class="mobile-tab-btn ${mobileTab === "table" ? "active" : ""}" data-tab="table">${te("tab.table")}</button>
         </div>
 
-        <div class="panel-images">
+        <div class="panel-images" tabindex="0" aria-label="${te("images.keysAria")}">
           ${
             images.length === 0
               ? mode === "lite" || !outgoingExtras
@@ -2997,7 +3009,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
                ${renderShowcaseDetails(rows.find((r) => r.url === selectedUrl) ?? null, links)}`
             : `<div class="panel-divider" id="divider-table" title="${te("divider.tip")}"></div>
 
-        <div class="table-panel">
+        <div class="table-panel" tabindex="0" aria-label="${te("table.keysAria")}">
           ${
             activeImage
               ? `<table data-col-key="rows" style="width:${colTableTotalWidth()}px">
@@ -3046,6 +3058,17 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         ${renderAgentConfirmDialog()}
         ${renderWhereToBuyDialog()}
     `;
+
+    // Right after the rebuild, before any second pass below reads them again.
+    if (focusedPanel) root.querySelector<HTMLElement>(focusedPanel)?.focus({ preventScroll: true });
+    const imagesPanel = root.querySelector<HTMLElement>(".panel-images");
+    if (imagesPanel && savedImagesScrollTop !== null) imagesPanel.scrollTop = savedImagesScrollTop;
+    const tablePanelNow = root.querySelector<HTMLElement>(".table-panel");
+    if (tablePanelNow && savedTableScrollTop !== null) tablePanelNow.scrollTop = savedTableScrollTop;
+    // Another picture (arrow keys, a navigation hotspot, a search result): keep its line in sight.
+    if (imagesPanel && imageChanged) revealInPanel(imagesPanel, imagesPanel.querySelector<HTMLElement>("li[aria-current]"));
+    if (tablePanelNow && revealSelectedRow) revealInPanel(tablePanelNow, tablePanelNow.querySelector<HTMLElement>("tbody tr.selected"));
+    revealSelectedRow = false;
 
     // catalog_mode "quiz": the question card is shrunk to the stage's width
     // (never enlarged) until the visitor zooms on purpose, so it fits a phone
@@ -3121,6 +3144,63 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     scheduleViewEvent();
   }
 
+  /**
+   * Scrolls `panel` just enough to show `el` (no-op when it already shows).
+   * Not scrollIntoView: that would also scroll the host page to the widget.
+   */
+  function revealInPanel(panel: HTMLElement, el: HTMLElement | null) {
+    if (!el) return;
+    const p = panel.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    if (p.height === 0) return; // hidden tab (stacked layout)
+    const pad = 8;
+    if (r.top < p.top + pad) panel.scrollTop -= p.top + pad - r.top;
+    else if (r.bottom > p.bottom - pad) panel.scrollTop += r.bottom - (p.bottom - pad);
+  }
+
+  /**
+   * ↑/↓ (and Home/End) in the focused picture list switch pictures; in the
+   * focused table they move the selection between the rows drawn on this
+   * picture — the same rows a click selects. Rows without a marker here
+   * (listed only, or on another picture) are stepped over, as a click on them
+   * selects nothing either. Not in a quiz: there a row pick is an answer.
+   */
+  function onPanelKey(evt: KeyboardEvent, panel: "images" | "table") {
+    if (evt.altKey || evt.ctrlKey || evt.metaKey || evt.shiftKey) return;
+    const step = evt.key === "ArrowDown" ? 1 : evt.key === "ArrowUp" ? -1 : evt.key === "Home" ? -Infinity : evt.key === "End" ? Infinity : 0;
+    if (!step || !db || activeImageId === null) return;
+    if (panel === "images") {
+      const ids = Array.from(root.querySelectorAll<HTMLElement>(".panel-images li[data-id]"), (li) => Number(li.dataset.id));
+      const next = ids[stepIndex(ids.indexOf(activeImageId), step, ids.length)];
+      evt.preventDefault();
+      if (next !== undefined && next !== activeImageId) actionSelectImage(next);
+      return;
+    }
+    if (catalogMode === "quiz") return;
+    const firstLink = new Map<string, number>();
+    for (const l of [...listLinksForImage(db, activeImageId)].sort((a, b) => a.id - b.id)) {
+      if (!isNavLink(l) && !firstLink.has(l.url)) firstLink.set(l.url, l.id);
+    }
+    const urls = Array.from(root.querySelectorAll<HTMLElement>(".table-panel tr[data-url]"), (tr) => tr.dataset.url!).filter((u) => firstLink.has(u));
+    if (urls.length === 0) return;
+    evt.preventDefault();
+    const selectedUrl = listLinksForImage(db, activeImageId).find((l) => l.id === selectedLinkId)?.url;
+    const at = selectedUrl === undefined ? -1 : urls.indexOf(selectedUrl);
+    // Nothing selected yet: ↓/Home start at the top, ↑/End at the bottom.
+    const next = at !== -1 ? urls[stepIndex(at, step, urls.length)] : step === -1 || step === Infinity ? urls[urls.length - 1] : urls[0];
+    if (next === undefined || next === selectedUrl) return;
+    revealSelectedRow = true;
+    container.classList.add("keys-nav"); // hides the hover balloons — see onKeysNavPointer
+    actionSelectHotspot(firstLink.get(next)!, "table");
+  }
+
+  /** `at` moved by `step` (±1, or ±Infinity for the ends), kept within 0..length-1. */
+  function stepIndex(at: number, step: number, length: number): number {
+    if (step === -Infinity) return 0;
+    if (step === Infinity) return length - 1;
+    return Math.min(length - 1, Math.max(0, at + step));
+  }
+
   /** Two-level list: ungrouped images first, then one heading per folder (see images.ts). */
   function renderImageList(images: CatalogImageInfo[]): string {
     return groupImagesByFolder(images)
@@ -3128,7 +3208,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
         const items = group.images
           .map(
             (img) =>
-              `<li data-id="${img.id}" class="${img.id === activeImageId ? "active" : ""}">${imageNameWithBadge(img.name, quizBadge(img.id))}</li>`,
+              `<li data-id="${img.id}" class="${img.id === activeImageId ? "active" : ""}"${img.id === activeImageId ? ` aria-current="true"` : ""}>${imageNameWithBadge(img.name, quizBadge(img.id))}</li>`,
           )
           .join("");
         if (group.folder === "") return `<ul class="image-list">${items}</ul>`;
@@ -4069,6 +4149,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     root.querySelectorAll<HTMLLIElement>(".panel-images li[data-id]").forEach((li) => {
       li.addEventListener("click", () => actionSelectImage(Number(li.dataset.id)));
     });
+    root.querySelector<HTMLElement>(".panel-images")?.addEventListener("keydown", (evt) => onPanelKey(evt, "images"));
+    root.querySelector<HTMLElement>(".table-panel")?.addEventListener("keydown", (evt) => onPanelKey(evt, "table"));
 
     root.querySelectorAll<HTMLButtonElement>(".mobile-tab-btn").forEach((btn) => {
       btn.addEventListener("click", () => actionSetMobileTab(btn.dataset.tab as "images" | "stage" | "table"));
@@ -4357,6 +4439,18 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
     render();
   }
 
+  // The arrow keys in the table put the container in "keys-nav", which hides
+  // the cell balloons a resting pointer would keep open over the selected row
+  // (style.css). A real move of the mouse brings them back; a redraw under a
+  // still pointer can fire mousemove too, so compare positions.
+  let lastPointer = { x: NaN, y: NaN };
+  const onKeysNavPointer = (evt: MouseEvent) => {
+    const moved = evt.clientX !== lastPointer.x || evt.clientY !== lastPointer.y;
+    lastPointer = { x: evt.clientX, y: evt.clientY };
+    if (moved && container.classList.contains("keys-nav")) container.classList.remove("keys-nav");
+  };
+  container.addEventListener("mousemove", onKeysNavPointer);
+
   // Esc disarms the Area tool.
   const onRegionKey = (evt: Event) => {
     if ((evt as KeyboardEvent).key === "Escape" && regionMode) actionToggleRegionMode();
@@ -4406,6 +4500,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       agentTools.clear();
       container.innerHTML = "";
       root.removeEventListener("keydown", onRegionKey);
+      container.removeEventListener("mousemove", onKeysNavPointer);
       root.removeEventListener("keydown", onBookmarksDismiss);
       ownerDocument.removeEventListener("click", onBookmarksDismiss);
       ownerDocument.removeEventListener("keydown", onWhereToBuyKey);
@@ -4413,7 +4508,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       Object.assign(listCache, { db: null, images: null, rows: null });
       resizeObserver?.disconnect();
       quizObserverDisconnect?.();
-      container.classList.remove("ecm-viewer-app", "mode-full", "mode-lite", "mode-showcase");
+      container.classList.remove("ecm-viewer-app", "mode-full", "mode-lite", "mode-showcase", "keys-nav");
     },
   };
 }

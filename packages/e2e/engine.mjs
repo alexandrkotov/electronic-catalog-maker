@@ -520,6 +520,38 @@ try {
   assert.ok(withAuth.every((r) => r.authorization === "Bearer secret"), "Refresh sends the host's headers again");
   say("openUrl: Refresh reuses the host's fetch options");
   await context.close();
+
+  // ---- arrow keys: a click in the picture list or the table, then ↑/↓/Home/End
+  ({ context, page } = await boot(DESKTOP));
+  const shownImage = async () => (await getView(page)).imageId;
+  const listItems = page.locator(".panel-images li[data-id]");
+  const imageIds = await listItems.evaluateAll((els) => els.map((el) => Number(el.dataset.id)));
+  await listItems.nth(0).click();
+  await page.keyboard.press("ArrowDown");
+  assert.equal(await shownImage(), imageIds[1], "↓ opens the next picture");
+  await page.keyboard.press("ArrowDown");
+  assert.equal(await shownImage(), imageIds[2], "focus survives the redraw: ↓ again opens the one after");
+  await page.keyboard.press("End");
+  assert.equal(await shownImage(), imageIds.at(-1), "End opens the last picture");
+  await page.keyboard.press("ArrowDown");
+  assert.equal(await shownImage(), imageIds.at(-1), "↓ on the last picture stays there");
+  await page.keyboard.press("Home");
+  assert.equal(await shownImage(), imageIds[0], "Home opens the first picture");
+  say("arrow keys: ↑/↓/Home/End in the picture list switch pictures");
+
+  const tableRows = page.locator(".table-panel tbody tr[data-url]");
+  const selectedRow = () => page.locator(".table-panel tbody tr.selected").getAttribute("data-url");
+  await tableRows.nth(0).click();
+  const firstRow = await selectedRow();
+  await page.keyboard.press("ArrowDown");
+  const secondRow = await selectedRow();
+  assert.ok(secondRow && secondRow !== firstRow, `↓ selects the next row: ${firstRow} -> ${secondRow}`);
+  assert.equal((await getView(page)).linkId !== undefined, true, "the row's marker is selected on the picture");
+  await page.keyboard.press("ArrowUp");
+  assert.equal(await selectedRow(), firstRow, "↑ goes back");
+  assert.equal(await shownImage(), imageIds[0], "the table keys never switch pictures");
+  say("arrow keys: ↑/↓ in the table move the selection between rows");
+  await context.close();
 } catch (err) {
   failed = true;
   console.error(err);
