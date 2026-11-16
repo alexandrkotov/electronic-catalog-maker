@@ -652,7 +652,8 @@ A third mode, `mode="showcase"`, is for marketing pages and games: no
 toolbar, image list or table — the picture is fitted whole and the chosen
 item shows as a card next to it (under it on a phone). With `cart="on"`,
 an item's Buy link becomes an **Add to cart** toggle and the bar above the
-picture gets a **Checkout** button. The CSS custom property
+picture gets a **Cart** button: it lists what was added, with a ✕ per item,
+**Clear cart** and **Checkout**. The CSS custom property
 `--ecm-showcase-stage-height` on the element sets the picture's height on
 a phone (default `360px`).
 

@@ -80,7 +80,8 @@ const HOST_DEFAULTS_CSS = `
  *   Export PDF always stay.
  *
  * - `cart` — showcase mode: "on" turns each item's store link into an
- *   "Add to cart" toggle and adds a checkout button above the image (see
+ *   "Add to cart" toggle and adds a cart button above the image, which lists
+ *   the cart with a ✕ per item, Clear cart and Checkout (see
  *   MountViewerOptions.showcaseCart).
  *
  * Events: the element dispatches `ecm-load`, `ecm-locked`, `ecm-image`,

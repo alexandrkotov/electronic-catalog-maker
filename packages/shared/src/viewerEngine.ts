@@ -337,10 +337,10 @@ export interface MountViewerOptions {
   onLocaleChange?: (locale: string) => void;
   /**
    * Showcase mode: an item with a buy_url gets an "Add to cart" toggle
-   * instead of a plain store link, and the bar above the image a checkout
-   * button — the cart of the full viewer, for an embed whose visitors pick
-   * several items (a candy bag, a shopping list). Ignored under cart_mode
-   * "instant". Default false.
+   * instead of a plain store link, and the bar above the image a cart
+   * button that opens the full viewer's cart panel (remove an item, clear,
+   * check out) — for an embed whose visitors pick several items (a candy
+   * bag, a shopping list). Ignored under cart_mode "instant". Default false.
    */
   showcaseCart?: boolean;
   /**
@@ -3387,9 +3387,15 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   }
 
   /** Showcase mode with options.showcaseCart: the cart's checkout (or print, for a list), once the catalog has anything to add. */
+  /**
+   * Showcase mode's cart button: opens the same review panel as the full
+   * viewer's toolbar cart (renderCartPanel), so a visitor can see what they
+   * picked and take an item out before checking out, not only by finding its
+   * marker again. The panel hangs from the bar, over the picture.
+   */
   function renderShowcaseCheckout(): string {
     if (!showcaseCart || cartMode !== "accumulate" || !db || !catalogHasAnyBuyTarget(catalogRows(db))) return "";
-    return `<button type="button" id="cart-checkout" class="showcase-checkout" ${cartItems.size === 0 ? "disabled" : ""}>${cartIcon()} ${te("cart.checkout")} (${cartItems.size})</button>`;
+    return `<button type="button" id="showcase-cart" class="showcase-checkout" aria-expanded="${cartOpen}" title="${te("cart.tip")}" ${cartItems.size === 0 ? "disabled" : ""}>${cartIcon()} ${cartLabel()} (${cartItems.size})</button>${cartOpen ? renderCartPanel() : ""}`;
   }
 
   /** Showcase mode's quiz verdict, at the top of the card (the explanation is the card's own description). */
@@ -4358,6 +4364,7 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       btn.addEventListener("click", () => actionPickVariant(btn.dataset.variantSku!));
     });
     root.getElementById("btn-cart")?.addEventListener("click", actionToggleCartPanel);
+    root.getElementById("showcase-cart")?.addEventListener("click", actionToggleCartPanel);
     root.querySelectorAll<HTMLButtonElement>(".cart-remove-btn[data-remove-url]").forEach((btn) => {
       btn.addEventListener("click", (evt) => {
         evt.stopPropagation();
@@ -4525,6 +4532,22 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
   };
   root.addEventListener("keydown", onBookmarksDismiss);
   ownerDocument.addEventListener("click", onBookmarksDismiss);
+  // Showcase: the cart panel lies over the picture, so Esc or a click outside it closes it, as the
+  // Bookmarks panel does. Esc is marked handled so a host page that closes the whole widget on Esc
+  // can leave it to this first.
+  const onShowcaseCartDismiss = (evt: Event) => {
+    if (mode !== "showcase" || !cartOpen) return;
+    if (evt.type === "keydown") {
+      if ((evt as KeyboardEvent).key !== "Escape") return;
+      evt.preventDefault();
+    } else if (evt.composedPath().some((n) => n instanceof Element && (n.id === "cart-panel" || n.id === "showcase-cart"))) {
+      return;
+    }
+    cartOpen = false;
+    render();
+  };
+  root.addEventListener("keydown", onShowcaseCartDismiss);
+  ownerDocument.addEventListener("click", onShowcaseCartDismiss);
   // Esc closes the "Where to buy" popup wherever focus is (a re-render after
   // picking another number drops focus out of the dialog).
   const onWhereToBuyKey = (evt: KeyboardEvent) => {
@@ -4554,6 +4577,8 @@ export function mountViewer(options: MountViewerOptions): ViewerController {
       container.removeEventListener("mousemove", onKeysNavPointer);
       root.removeEventListener("keydown", onBookmarksDismiss);
       ownerDocument.removeEventListener("click", onBookmarksDismiss);
+      root.removeEventListener("keydown", onShowcaseCartDismiss);
+      ownerDocument.removeEventListener("click", onShowcaseCartDismiss);
       ownerDocument.removeEventListener("keydown", onWhereToBuyKey);
       imageSrcs.clear();
       Object.assign(listCache, { db: null, images: null, rows: null });
